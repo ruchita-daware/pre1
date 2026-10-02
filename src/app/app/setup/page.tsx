@@ -145,7 +145,12 @@ export default function SetupPage() {
     try {
       const res = await fetch('/api/v1/setup/status')
       const j = await res.json()
-      if (j.success) setStatus(j.data)
+      if (j.success) {
+        setStatus(j.data)
+      } else if (res.status === 401 || j.error?.code === 'AUTH_001') {
+        document.cookie = 'preone_session=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;'
+        window.location.href = '/'
+      }
     } catch {
       // ignore network errors on unmount
     }
@@ -323,6 +328,7 @@ export default function SetupPage() {
       <PageHead
         eyebrow="PRESCHOOL SETUP & READINESS"
         title="Preschool Setup & Configuration"
+        sub="Configure foundation, academic structure, daily operations, and business rules."
         actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <button className="btn btn-outline" onClick={() => { setDepOpen(true); if (!deps) loadDeps() }}>
@@ -340,7 +346,16 @@ export default function SetupPage() {
               </button>
             )}
             {nextStep && (
-              <a className="btn btn-primary" href={`/app/setup/${nextStep.key}`}>
+              <a
+                className="btn btn-primary"
+                href={
+                  nextStep.key === 'branding'
+                    ? '/app/setup/branding'
+                    : nextStep.key === 'templates'
+                    ? '/app/setup/templates'
+                    : `/app/setup/${nextStep.key}`
+                }
+              >
                 <PlayCircle size={14} /> Step Guide ({nextStep.label}) <ChevronRight size={14} />
               </a>
             )}
@@ -405,7 +420,13 @@ export default function SetupPage() {
                     return (
                       <SetupStepTile
                         key={s.key}
-                        href={`/app/setup/${s.key}`}
+                        href={
+                          s.key === 'branding'
+                            ? '/app/setup/branding'
+                            : s.key === 'templates'
+                            ? '/app/setup/templates'
+                            : `/app/setup/${s.key}`
+                        }
                         name={s.label}
                         status={s.status}
                         icon={<Icon size={16} />}
