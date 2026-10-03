@@ -85,6 +85,10 @@ model Tenant {
   stockIssues            StockIssue[]
   stockReturns           StockReturn[]
   stockAdjustments       StockAdjustment[]
+  feeStructures          FeeStructure[]
+  feeSchedules           StudentFeeSchedule[]
+  studentDeposits        StudentDeposit[]
+  refunds                Refund[]
 
   // HR Relations
   staffDocuments         StaffDocument[]
@@ -112,6 +116,8 @@ model Tenant {
   studentTransportAssignments StudentTransportAssignment[]
   transportTrips              TransportTrip[]
   transportIncidents          TransportIncident[]
+  pickupAuthorizations        TransportPickupAuthorization[]
+  transportSecurityEvents     TransportSecurityEvent[]
 
   // Reports & Analytics Relations
   savedReports                SavedReport[]
@@ -174,6 +180,8 @@ model Branch {
   studentTransportAssignments StudentTransportAssignment[]
   transportTrips              TransportTrip[]
   transportIncidents          TransportIncident[]
+  pickupAuthorizations        TransportPickupAuthorization[]
+  transportSecurityEvents     TransportSecurityEvent[]
 
   // Reports & Analytics Relations
   savedReports                SavedReport[]
@@ -280,6 +288,8 @@ model AcademicSession {
   purchaseOrders      PurchaseOrder[]
   stockIssues         StockIssue[]
   studentTransportAssignments StudentTransportAssignment[]
+  feeStructures       FeeStructure[]
+  feeSchedules        StudentFeeSchedule[]
 
   @@unique([tenantId, name])
   @@map("academic_sessions")
@@ -317,6 +327,8 @@ model Classroom {
   stockIssues       StockIssue[]
   leaveCoverages    LeaveCoverage[]
   subjectMappings   ClassroomSubject[]
+  feeStructures     FeeStructure[]
+  feeSchedules      StudentFeeSchedule[]
 
   @@unique([tenantId, code])
   @@index([branchId])
@@ -358,6 +370,11 @@ model Student {
   transportAssignments StudentTransportAssignment[]
   tripManifestItems    TripManifestItem[]
   transportIncidents   TransportIncident[]
+  pickupAuthorizations TransportPickupAuthorization[]
+  transportSecurityEvents TransportSecurityEvent[]
+  feeSchedules         StudentFeeSchedule[]
+  deposits             StudentDeposit[]
+  refunds              Refund[]
 
   @@unique([tenantId, admissionNo])
   @@index([tenantId, branchId])
@@ -385,6 +402,7 @@ model Guardian {
   user             User?             @relation("GuardianPortalUser", fields: [userId], references: [id])
   studentLinks     StudentGuardian[]
   applications     AdmissionApplication[]
+  pickupAuthorizations TransportPickupAuthorization[]
 
   @@index([tenantId, phone])
   @@map("guardians")
@@ -568,6 +586,7 @@ model FeeHead {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   planItems   FeePlanItem[]
+  feeItems    FeeItem[]
   tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, code])
@@ -659,30 +678,33 @@ model InvoiceItem {
 }
 
 model Payment {
-  id             String        @id @default(uuid())
+  id             String              @id @default(uuid())
   tenantId       String
   invoiceId      String?
+  feeScheduleId  String?
   studentId      String?
   vendorId       String?
   paymentNumber  String
   amountCents    Int
   method         PaymentMethod
   transactionRef String?
-  status         PaymentStatus @default(SUCCESS)
-  paymentDate    DateTime      @default(now())
+  status         PaymentStatus       @default(SUCCESS)
+  paymentDate    DateTime            @default(now())
   receivedById   String?
   notes          String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  invoice        Invoice?      @relation(fields: [invoiceId], references: [id])
-  student        Student?      @relation(fields: [studentId], references: [id])
-  vendor         Vendor?       @relation(fields: [vendorId], references: [id])
-  tenant         Tenant        @relation(fields: [tenantId], references: [id])
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  invoice        Invoice?            @relation(fields: [invoiceId], references: [id])
+  feeSchedule    StudentFeeSchedule? @relation(fields: [feeScheduleId], references: [id])
+  student        Student?            @relation(fields: [studentId], references: [id])
+  vendor         Vendor?             @relation(fields: [vendorId], references: [id])
+  tenant         Tenant              @relation(fields: [tenantId], references: [id])
   receipt        Receipt?
 
   @@unique([tenantId, paymentNumber])
   @@index([tenantId, status])
   @@index([studentId])
+  @@index([feeScheduleId])
   @@index([vendorId])
   @@map("payments")
 }
@@ -699,6 +721,186 @@ model Receipt {
 
   @@unique([tenantId, receiptNumber])
   @@map("receipts")
+}
+
+// =========================================================================
+// PREONE CANONICAL FEE STRUCTURE, SCHEDULE, DEPOSIT & REFUND ENGINE
+// =========================================================================
+
+enum FeeStructureStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum FeeType {
+  REGULAR
+  REFUNDABLE_DEPOSIT
+}
+
+enum FeeScheduleStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum DepositStatus {
+  HELD
+  REFUNDED
+  PARTIALLY_REFUNDED
+  ADJUSTED
+}
+
+model FeeStructure {
+  id                String             @id @default(uuid())
+  tenantId          String
+  branchId          String?
+  academicSessionId String?
+  programId         String?
+  classroomId       String?
+  programType       ProgramType?
+  name              String
+  description       String?
+  status            FeeStructureStatus @default(DRAFT)
+  effectiveFrom     DateTime?
+  effectiveTo       DateTime?
+  createdById       String?
+  updatedById       String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  deletedAt         DateTime?
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  academicSession   AcademicSession?   @relation(fields: [academicSessionId], references: [id])
+  classroom         Classroom?         @relation(fields: [classroomId], references: [id])
+  program           Program?           @relation(fields: [programId], references: [id])
+  items             FeeItem[]
+  schedules         StudentFeeSchedule[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, academicSessionId, classroomId])
+  @@map("fee_structures")
+}
+
+model FeeItem {
+  id                 String               @id @default(uuid())
+  tenantId           String
+  feeStructureId     String
+  feeHeadId          String?
+  name               String
+  description        String?
+  feeType            FeeType              @default(REGULAR)
+  amountCents        Int
+  currency           String               @default("INR")
+  frequency          FeeFrequency         @default(ONE_TIME)
+  dueRule            String?
+  dueDate            DateTime?
+  lateFeeApplicable  Boolean              @default(false)
+  lateFeeAmountCents Int                  @default(0)
+  isRefundable       Boolean              @default(false)
+  sortOrder          Int                  @default(0)
+  status             String               @default("ACTIVE")
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  feeStructure       FeeStructure         @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+  feeHead            FeeHead?             @relation(fields: [feeHeadId], references: [id], onDelete: SetNull)
+  schedules          StudentFeeSchedule[]
+  deposits           StudentDeposit[]
+
+  @@index([feeStructureId])
+  @@map("fee_items")
+}
+
+model StudentFeeSchedule {
+  id                   String            @id @default(uuid())
+  tenantId             String
+  studentId            String
+  enrollmentId         String?
+  classroomId          String?
+  feeStructureId       String
+  feeItemId            String
+  academicSessionId    String?
+  period               String
+  amountDueCents       Int
+  amountPaidCents      Int               @default(0)
+  remainingAmountCents Int
+  dueDate              DateTime
+  status               FeeScheduleStatus @default(PENDING)
+  feeType              FeeType           @default(REGULAR)
+  isRefundable         Boolean           @default(false)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  tenant               Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student              Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classroom            Classroom?        @relation(fields: [classroomId], references: [id], onDelete: SetNull)
+  feeStructure         FeeStructure      @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+  feeItem              FeeItem           @relation(fields: [feeItemId], references: [id], onDelete: Cascade)
+  academicSession      AcademicSession?  @relation(fields: [academicSessionId], references: [id], onDelete: SetNull)
+  payments             Payment[]
+  deposits             StudentDeposit[]
+  refunds              Refund[]
+
+  @@unique([studentId, feeItemId, period])
+  @@index([tenantId, status])
+  @@index([tenantId, studentId])
+  @@index([dueDate])
+  @@map("student_fee_schedules")
+}
+
+model StudentDeposit {
+  id                   String              @id @default(uuid())
+  tenantId             String
+  studentId            String
+  feeScheduleId        String?
+  feeItemId            String?
+  name                 String              @default("Security Deposit")
+  totalAmountCents     Int
+  refundedAmountCents  Int                 @default(0)
+  adjustedAmountCents  Int                 @default(0)
+  remainingAmountCents Int
+  status               DepositStatus       @default(HELD)
+  notes                String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  tenant               Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student              Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feeSchedule          StudentFeeSchedule? @relation(fields: [feeScheduleId], references: [id], onDelete: SetNull)
+  feeItem              FeeItem?            @relation(fields: [feeItemId], references: [id], onDelete: SetNull)
+  refunds              Refund[]
+
+  @@index([tenantId, studentId])
+  @@index([tenantId, status])
+  @@map("student_deposits")
+}
+
+model Refund {
+  id             String              @id @default(uuid())
+  tenantId       String
+  studentId      String
+  depositId      String?
+  feeScheduleId  String?
+  amountCents    Int
+  refundDate     DateTime            @default(now())
+  refundMode     PaymentMethod       @default(BANK_TRANSFER)
+  reference      String?
+  reason         String
+  approvedById   String?
+  processedById  String?
+  createdAt      DateTime            @default(now())
+
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student        Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  deposit        StudentDeposit?     @relation(fields: [depositId], references: [id], onDelete: SetNull)
+  feeSchedule    StudentFeeSchedule? @relation(fields: [feeScheduleId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, studentId])
+  @@map("refunds")
 }
 
 model Announcement {
@@ -985,6 +1187,7 @@ model Program {
   applications   AdmissionApplication[]
   curriculums    Curriculum[]
   subjectMappings ProgramSubject[]
+  feeStructures  FeeStructure[]
   tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, code])
@@ -1685,6 +1888,7 @@ model ClassroomActivity {
   learningGoalId    String?
   teacherId         String?
   title             String
+  activityType      String?         @default("ACTIVITY")
   description       String?
   activityDate      DateTime
   startTime         String?
@@ -3058,6 +3262,9 @@ enum TransportTripType {
 }
 
 enum TransportAssignmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
   ACTIVE
   SUSPENDED
   CANCELLED
@@ -3078,6 +3285,8 @@ enum TripStatus {
 enum ManifestItemStatus {
   EXPECTED
   BOARDED
+  ARRIVAL_SUBMITTED
+  ARRIVAL_VERIFIED
   DROPPED
   ABSENT
   MISSED
@@ -3196,6 +3405,7 @@ model StudentTransportAssignment {
   branchId           String?
   academicSessionId  String
   studentId          String
+  requestedByGuardianId String?
   routeId            String
   pickupStopId       String
   dropStopId         String
@@ -3314,6 +3524,103 @@ model TransportIncident {
   @@index([tenantId, status])
   @@index([tenantId, severity])
   @@map("transport_incidents")
+}
+
+enum PickupAuthorizationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  USED
+  EXPIRED
+  CANCELLED
+}
+
+enum TransportSecurityEventType {
+  QR_SCAN
+  PIN_VERIFICATION_SUCCESS
+  PIN_VERIFICATION_FAILED
+  UNAUTHORIZED_PICKUP_ATTEMPT
+  UNAUTHORIZED_DROP_ATTEMPT
+  UNKNOWN_PERSON_DETECTED
+  AUTHORIZATION_APPROVED
+  AUTHORIZATION_REJECTED
+  DRIVER_LOGIN
+  DRIVER_MISMATCH
+  DUPLICATE_PICKUP_ATTEMPT
+  DUPLICATE_DROP_ATTEMPT
+  ARRIVAL_SUBMITTED
+  ARRIVAL_VERIFIED
+  ARRIVAL_REJECTED
+  MANUAL_OVERRIDE
+}
+
+/// Temporary Authorized Pickup Person (Unknown/Alternate Pickup Workflow)
+model TransportPickupAuthorization {
+  id                 String                    @id @default(uuid())
+  tenantId           String
+  branchId           String?
+  studentId          String
+  guardianId         String?                   // Requesting guardian
+  personName         String
+  phone              String
+  relationship       String
+  actionType         String                    @default("PICKUP")
+  reason             String
+  validFrom          DateTime                  @db.Date
+  validUntil         DateTime                  @db.Date
+  isOneTime          Boolean                   @default(true)
+  status             PickupAuthorizationStatus @default(PENDING)
+  approvedById       String?
+  approvedByName     String?
+  approvedAt         DateTime?
+  rejectionReason    String?
+  usedAt             DateTime?
+  usedById           String?
+  usedByName         String?
+  remarks            String?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+
+  tenant             Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch             Branch?                   @relation(fields: [branchId], references: [id])
+  student            Student                   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  guardian           Guardian?                 @relation(fields: [guardianId], references: [id])
+
+  @@index([tenantId, studentId])
+  @@index([tenantId, status])
+  @@map("transport_pickup_authorizations")
+}
+
+/// Audit and Security Event Log for Child Transport Safety
+model TransportSecurityEvent {
+  id                 String                     @id @default(uuid())
+  tenantId           String
+  branchId           String?
+  eventType          TransportSecurityEventType
+  studentId          String?
+  driverProfileId    String?
+  vehicleId          String?
+  routeId            String?
+  tripId             String?
+  authorizationId    String?
+  actorId            String
+  actorName          String
+  actorRole          String
+  action             String
+  result             String                     @default("SUCCESS")
+  reason             String?
+  ipAddress          String?
+  userAgent          String?
+  metadata           Json?
+  createdAt          DateTime                   @default(now())
+
+  tenant             Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch             Branch?                    @relation(fields: [branchId], references: [id])
+  student            Student?                   @relation(fields: [studentId], references: [id])
+
+  @@index([tenantId, eventType])
+  @@index([tenantId, createdAt])
+  @@map("transport_security_events")
 }
 
 /// Saved Custom Report Definition
