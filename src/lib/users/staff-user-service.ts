@@ -43,7 +43,7 @@ export class StaffUserService {
   /**
    * Authoritative Flow 1: Create or Invite a Staff Member
    */
-  static async createStaff(ctx: StaffContext, input: StaffCreateInput) {
+  static async createStaff(ctx: StaffContext, input: StaffCreateInput, externalTx?: any) {
     if (!ctx.tenantId) throw new Error('Tenant identifier is required')
 
     // 1. Validation
@@ -105,7 +105,7 @@ export class StaffUserService {
     }
 
     // 4. Atomic transaction
-    const result = await db.$transaction(async (tx) => {
+    const executeLogic = async (tx: any) => {
       // Step A: Create or resolve User identity
       const { user } = await UserIdentityService.resolveOrCreateUser(tx, {
         fullName: input.fullName,
@@ -118,13 +118,24 @@ export class StaffUserService {
         avatarUrl: input.avatarUrl || null,
       })
 
-      // Step B: Create TenantUser membership
+      // Step B: Create or update TenantUser membership (preserving existing role if unsupplied)
+      const existingMembership = await tx.tenantUser.findFirst({
+        where: { tenantId: ctx.tenantId, userId: user.id, deletedAt: null },
+      })
+      const hasExplicitRole = Boolean(input.role || input.roles?.length || input.primaryRole || input.additionalRoles?.length)
+      const targetRole = hasExplicitRole ? primaryRole : existingMembership?.role || primaryRole
+      const targetRoles = hasExplicitRole
+        ? assignedRoles
+        : existingMembership?.roles && existingMembership.roles.length > 0
+        ? existingMembership.roles
+        : [targetRole]
+
       const membership = await UserIdentityService.createOrUpdateMembership(tx, {
         tenantId: ctx.tenantId,
         userId: user.id,
-        role: primaryRole,
-        roles: assignedRoles,
-        branchId: input.branchId || null,
+        role: targetRole,
+        roles: targetRoles,
+        branchId: input.branchId !== undefined ? (input.branchId || null) : existingMembership?.branchId || null,
         status: initialStatus,
       })
 
@@ -194,7 +205,9 @@ export class StaffUserService {
         staffProfile,
         classroom: assignedClassroom,
       }
-    })
+    }
+
+    const result = externalTx ? await executeLogic(externalTx) : await db.$transaction(executeLogic)
 
     // 5. Emit audit log
     await recordAudit({

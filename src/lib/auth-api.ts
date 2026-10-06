@@ -18,6 +18,26 @@ export async function requireApi(
   const session = await getSession(req)
   if (!session) return Errors.unauthorized()
 
+  if (session.tenantId) {
+    const tenantExists = await db.tenant.findUnique({ where: { id: session.tenantId }, select: { id: true } })
+    if (!tenantExists) {
+      return Errors.unauthorized('Invalid or expired session. Please log in again.')
+    }
+  }
+
+  // Enforce mandatory password change (Phase 2)
+  if (session.mustChangePassword) {
+    const path = req.nextUrl?.pathname || ''
+    const allowedPaths = ['/api/v1/auth/password', '/api/v1/auth/logout', '/api/v1/auth/me']
+    if (!allowedPaths.some((p) => path.startsWith(p))) {
+      return Errors.business(
+        'PASSWORD_CHANGE_REQUIRED',
+        'Mandatory password change required before accessing other features.',
+        403
+      )
+    }
+  }
+
   const effectiveRoles = session.roles && session.roles.length > 0 ? session.roles : [session.role]
   if (permission && !can(effectiveRoles, permission)) {
     // Record security event for unauthorized attempt

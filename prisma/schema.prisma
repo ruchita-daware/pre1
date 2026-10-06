@@ -47,6 +47,10 @@ model Tenant {
   facilities             Facility[]
   feeHeads               FeeHead[]
   feePlans               FeePlan[]
+  feeStructures          FeeStructure[]
+  studentFeeSchedules    StudentFeeSchedule[]
+  studentDeposits        StudentDeposit[]
+  refunds                Refund[]
   followUps              FollowUp[]
   guardians              Guardian[]
   invoices               Invoice[]
@@ -112,10 +116,15 @@ model Tenant {
   studentTransportAssignments StudentTransportAssignment[]
   transportTrips              TransportTrip[]
   transportIncidents          TransportIncident[]
+  pickupAuthorizations        TransportPickupAuthorization[]
+  transportSecurityEvents     TransportSecurityEvent[]
 
   // Reports & Analytics Relations
   savedReports                SavedReport[]
   reportSchedules             ReportSchedule[]
+  bulkDocumentJobs            BulkDocumentJob[]
+  generatedProfileDocuments   GeneratedProfileDocument[]
+  studentReportCards          StudentReportCard[]
 
   // Notifications & Communication Relations
   inAppNotifications          InAppNotification[]
@@ -125,6 +134,7 @@ model Tenant {
   subjects                    Subject[]
   programSubjects             ProgramSubject[]
   classroomSubjects           ClassroomSubject[]
+  activityProgresses          ActivityProgress[]
 
   @@map("tenants")
 }
@@ -174,9 +184,13 @@ model Branch {
   studentTransportAssignments StudentTransportAssignment[]
   transportTrips              TransportTrip[]
   transportIncidents          TransportIncident[]
+  pickupAuthorizations        TransportPickupAuthorization[]
+  transportSecurityEvents     TransportSecurityEvent[]
 
   // Reports & Analytics Relations
   savedReports                SavedReport[]
+  bulkDocumentJobs            BulkDocumentJob[]
+  studentReportCards          StudentReportCard[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -192,6 +206,7 @@ model User {
   fullName        String
   avatarUrl       String?
   status          UserStatus    @default(ACTIVE)
+  mustChangePassword Boolean   @default(false)
   locale          String        @default("en-IN")
   preferences     Json?
   lastLoginAt     DateTime?
@@ -266,6 +281,8 @@ model AcademicSession {
   attendances     Attendance[]
   calendarEvents  CalendarEvent[]
   classrooms      Classroom[]
+  feeStructures   FeeStructure[]
+  feeSchedules    StudentFeeSchedule[]
   invoices        Invoice[]
   observations    Observation[]
   allocations     StudentAllocation[]
@@ -280,6 +297,7 @@ model AcademicSession {
   purchaseOrders      PurchaseOrder[]
   stockIssues         StockIssue[]
   studentTransportAssignments StudentTransportAssignment[]
+  studentReportCards          StudentReportCard[]
 
   @@unique([tenantId, name])
   @@map("academic_sessions")
@@ -311,12 +329,15 @@ model Classroom {
   followUps         FollowUp[]
   observations      Observation[]
   allocations       StudentAllocation[]
+  feeStructures     FeeStructure[]
+  feeSchedules      StudentFeeSchedule[]
   students          Student[]           @relation("StudentCurrentClassroom")
   activities        ClassroomActivity[]
   materialRequests  MaterialRequest[]
   stockIssues       StockIssue[]
   leaveCoverages    LeaveCoverage[]
   subjectMappings   ClassroomSubject[]
+  studentReportCards StudentReportCard[]
 
   @@unique([tenantId, code])
   @@index([branchId])
@@ -337,6 +358,10 @@ model Student {
   admissionDate      DateTime            @default(now())
   photoUrl           String?
   bloodGroup         BloodGroup?
+  allergies          String?
+  medicalAlerts      String?
+  dietaryRestrictions String?
+  emergencyMedicalInstructions String?
   address            String?
   currentClassroomId String?
   seatNumber         String?
@@ -348,6 +373,9 @@ model Student {
   invoices           Invoice[]
   observations       Observation[]
   payments           Payment[]
+  feeSchedules       StudentFeeSchedule[]
+  deposits           StudentDeposit[]
+  refunds            Refund[]
   allocations        StudentAllocation[]
   guardians          StudentGuardian[]
   currentClassroom   Classroom?          @relation("StudentCurrentClassroom", fields: [currentClassroomId], references: [id])
@@ -358,6 +386,11 @@ model Student {
   transportAssignments StudentTransportAssignment[]
   tripManifestItems    TripManifestItem[]
   transportIncidents   TransportIncident[]
+  pickupAuthorizations TransportPickupAuthorization[]
+  transportSecurityEvents TransportSecurityEvent[]
+  generatedDocuments      GeneratedProfileDocument[]
+  reportCards             StudentReportCard[]
+  activityProgress        ActivityProgress[]
 
   @@unique([tenantId, admissionNo])
   @@index([tenantId, branchId])
@@ -385,6 +418,7 @@ model Guardian {
   user             User?             @relation("GuardianPortalUser", fields: [userId], references: [id])
   studentLinks     StudentGuardian[]
   applications     AdmissionApplication[]
+  pickupAuthorizations TransportPickupAuthorization[]
 
   @@index([tenantId, phone])
   @@map("guardians")
@@ -568,6 +602,7 @@ model FeeHead {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   planItems   FeePlanItem[]
+  feeItems    FeeItem[]
   tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, code])
@@ -662,6 +697,7 @@ model Payment {
   id             String        @id @default(uuid())
   tenantId       String
   invoiceId      String?
+  feeScheduleId  String?
   studentId      String?
   vendorId       String?
   paymentNumber  String
@@ -675,6 +711,7 @@ model Payment {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   invoice        Invoice?      @relation(fields: [invoiceId], references: [id])
+  feeSchedule    StudentFeeSchedule? @relation(fields: [feeScheduleId], references: [id])
   student        Student?      @relation(fields: [studentId], references: [id])
   vendor         Vendor?       @relation(fields: [vendorId], references: [id])
   tenant         Tenant        @relation(fields: [tenantId], references: [id])
@@ -683,6 +720,7 @@ model Payment {
   @@unique([tenantId, paymentNumber])
   @@index([tenantId, status])
   @@index([studentId])
+  @@index([feeScheduleId])
   @@index([vendorId])
   @@map("payments")
 }
@@ -700,6 +738,187 @@ model Receipt {
   @@unique([tenantId, receiptNumber])
   @@map("receipts")
 }
+
+// =========================================================================
+// PREONE CANONICAL FEE STRUCTURE, SCHEDULE, DEPOSIT & REFUND ENGINE
+// =========================================================================
+
+enum FeeStructureStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum FeeType {
+  REGULAR
+  REFUNDABLE_DEPOSIT
+}
+
+enum FeeScheduleStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum DepositStatus {
+  HELD
+  REFUNDED
+  PARTIALLY_REFUNDED
+  ADJUSTED
+}
+
+model FeeStructure {
+  id                String             @id @default(uuid())
+  tenantId          String
+  branchId          String?
+  academicSessionId String?
+  programId         String?
+  classroomId       String?
+  programType       ProgramType?
+  name              String
+  description       String?
+  status            FeeStructureStatus @default(DRAFT)
+  effectiveFrom     DateTime?
+  effectiveTo       DateTime?
+  createdById       String?
+  updatedById       String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  deletedAt         DateTime?
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  academicSession   AcademicSession?   @relation(fields: [academicSessionId], references: [id])
+  classroom         Classroom?         @relation(fields: [classroomId], references: [id])
+  program           Program?           @relation(fields: [programId], references: [id])
+  items             FeeItem[]
+  schedules         StudentFeeSchedule[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, academicSessionId, classroomId])
+  @@map("fee_structures")
+}
+
+model FeeItem {
+  id                 String               @id @default(uuid())
+  tenantId           String
+  feeStructureId     String
+  feeHeadId          String?
+  name               String
+  description        String?
+  feeType            FeeType              @default(REGULAR)
+  amountCents        Int
+  currency           String               @default("INR")
+  frequency          FeeFrequency         @default(ONE_TIME)
+  dueRule            String?
+  dueDate            DateTime?
+  lateFeeApplicable  Boolean              @default(false)
+  lateFeeAmountCents Int                  @default(0)
+  isRefundable       Boolean              @default(false)
+  sortOrder          Int                  @default(0)
+  status             String               @default("ACTIVE")
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  feeStructure       FeeStructure         @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+  feeHead            FeeHead?             @relation(fields: [feeHeadId], references: [id], onDelete: SetNull)
+  schedules          StudentFeeSchedule[]
+  deposits           StudentDeposit[]
+
+  @@index([feeStructureId])
+  @@map("fee_items")
+}
+
+model StudentFeeSchedule {
+  id                   String            @id @default(uuid())
+  tenantId             String
+  studentId            String
+  enrollmentId         String?
+  classroomId          String?
+  feeStructureId       String
+  feeItemId            String
+  academicSessionId    String?
+  period               String
+  amountDueCents       Int
+  amountPaidCents      Int               @default(0)
+  remainingAmountCents Int
+  dueDate              DateTime
+  status               FeeScheduleStatus @default(PENDING)
+  feeType              FeeType           @default(REGULAR)
+  isRefundable         Boolean           @default(false)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  tenant               Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student              Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classroom            Classroom?        @relation(fields: [classroomId], references: [id], onDelete: SetNull)
+  feeStructure         FeeStructure      @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+  feeItem              FeeItem           @relation(fields: [feeItemId], references: [id], onDelete: Cascade)
+  academicSession      AcademicSession?  @relation(fields: [academicSessionId], references: [id], onDelete: SetNull)
+  payments             Payment[]
+  deposits             StudentDeposit[]
+  refunds              Refund[]
+
+  @@unique([studentId, feeItemId, period])
+  @@index([tenantId, status])
+  @@index([tenantId, studentId])
+  @@index([dueDate])
+  @@map("student_fee_schedules")
+}
+
+model StudentDeposit {
+  id                   String              @id @default(uuid())
+  tenantId             String
+  studentId            String
+  feeScheduleId        String?
+  feeItemId            String?
+  name                 String              @default("Security Deposit")
+  totalAmountCents     Int
+  refundedAmountCents  Int                 @default(0)
+  adjustedAmountCents  Int                 @default(0)
+  remainingAmountCents Int
+  status               DepositStatus       @default(HELD)
+  notes                String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  tenant               Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student              Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feeSchedule          StudentFeeSchedule? @relation(fields: [feeScheduleId], references: [id], onDelete: SetNull)
+  feeItem              FeeItem?            @relation(fields: [feeItemId], references: [id], onDelete: SetNull)
+  refunds              Refund[]
+
+  @@index([tenantId, studentId])
+  @@index([tenantId, status])
+  @@map("student_deposits")
+}
+
+model Refund {
+  id             String              @id @default(uuid())
+  tenantId       String
+  studentId      String
+  depositId      String?
+  feeScheduleId  String?
+  amountCents    Int
+  refundDate     DateTime            @default(now())
+  refundMode     PaymentMethod       @default(BANK_TRANSFER)
+  reference      String?
+  reason         String
+  approvedById   String?
+  processedById  String?
+  createdAt      DateTime            @default(now())
+
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student        Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  deposit        StudentDeposit?     @relation(fields: [depositId], references: [id], onDelete: SetNull)
+  feeSchedule    StudentFeeSchedule? @relation(fields: [feeScheduleId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, studentId])
+  @@map("refunds")
+}
+
 
 model Announcement {
   id          String             @id @default(uuid())
@@ -904,6 +1123,8 @@ model DocumentTemplate {
   updatedAt   DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bulkJobs BulkDocumentJob[]
+  reportCards StudentReportCard[]
 
   @@unique([tenantId, type, name])
   @@map("document_templates")
@@ -985,6 +1206,7 @@ model Program {
   applications   AdmissionApplication[]
   curriculums    Curriculum[]
   subjectMappings ProgramSubject[]
+  feeStructures  FeeStructure[]
   tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, code])
@@ -1116,6 +1338,7 @@ model StaffProfile {
 
   // HR Relations
   documents             StaffDocument[]
+  generatedDocuments    GeneratedProfileDocument[]
   qualifications        StaffQualification[]
   bankDetails           StaffBankDetail?
   trainings             StaffTraining[]
@@ -1685,6 +1908,7 @@ model ClassroomActivity {
   learningGoalId    String?
   teacherId         String?
   title             String
+  activityType      String?         @default("ACTIVITY")
   description       String?
   activityDate      DateTime
   startTime         String?
@@ -1708,6 +1932,8 @@ model ClassroomActivity {
   tenant            Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   observations      Observation[]
   materialRequests  MaterialRequest[]
+
+  activityProgress  ActivityProgress[]
 
   @@index([tenantId, academicSessionId, classroomId])
   @@index([activityDate])
@@ -1737,6 +1963,35 @@ model StudentProgress {
   @@index([tenantId, studentId])
   @@index([tenantId, academicSessionId])
   @@map("student_progress")
+}
+
+enum LearningContentStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+model ActivityProgress {
+  id                   String                @id @default(uuid())
+  tenantId             String
+  activityId           String
+  studentId            String
+  status               LearningContentStatus @default(NOT_STARTED)
+  progressPercentage   Int                   @default(0)
+  playbackPositionSecs Int                   @default(0)
+  lastAccessedAt       DateTime              @default(now())
+  completedAt          DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  activity             ClassroomActivity     @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  student              Student               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, activityId, studentId])
+  @@index([tenantId, studentId])
+  @@index([tenantId, activityId])
+  @@map("activity_progress")
 }
 
 // ====================================================================
@@ -3058,6 +3313,9 @@ enum TransportTripType {
 }
 
 enum TransportAssignmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
   ACTIVE
   SUSPENDED
   CANCELLED
@@ -3078,6 +3336,8 @@ enum TripStatus {
 enum ManifestItemStatus {
   EXPECTED
   BOARDED
+  ARRIVAL_SUBMITTED
+  ARRIVAL_VERIFIED
   DROPPED
   ABSENT
   MISSED
@@ -3196,6 +3456,7 @@ model StudentTransportAssignment {
   branchId           String?
   academicSessionId  String
   studentId          String
+  requestedByGuardianId String?
   routeId            String
   pickupStopId       String
   dropStopId         String
@@ -3316,6 +3577,103 @@ model TransportIncident {
   @@map("transport_incidents")
 }
 
+enum PickupAuthorizationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  USED
+  EXPIRED
+  CANCELLED
+}
+
+enum TransportSecurityEventType {
+  QR_SCAN
+  PIN_VERIFICATION_SUCCESS
+  PIN_VERIFICATION_FAILED
+  UNAUTHORIZED_PICKUP_ATTEMPT
+  UNAUTHORIZED_DROP_ATTEMPT
+  UNKNOWN_PERSON_DETECTED
+  AUTHORIZATION_APPROVED
+  AUTHORIZATION_REJECTED
+  DRIVER_LOGIN
+  DRIVER_MISMATCH
+  DUPLICATE_PICKUP_ATTEMPT
+  DUPLICATE_DROP_ATTEMPT
+  ARRIVAL_SUBMITTED
+  ARRIVAL_VERIFIED
+  ARRIVAL_REJECTED
+  MANUAL_OVERRIDE
+}
+
+/// Temporary Authorized Pickup Person (Unknown/Alternate Pickup Workflow)
+model TransportPickupAuthorization {
+  id                 String                    @id @default(uuid())
+  tenantId           String
+  branchId           String?
+  studentId          String
+  guardianId         String?                   // Requesting guardian
+  personName         String
+  phone              String
+  relationship       String
+  actionType         String                    @default("PICKUP")
+  reason             String
+  validFrom          DateTime                  @db.Date
+  validUntil         DateTime                  @db.Date
+  isOneTime          Boolean                   @default(true)
+  status             PickupAuthorizationStatus @default(PENDING)
+  approvedById       String?
+  approvedByName     String?
+  approvedAt         DateTime?
+  rejectionReason    String?
+  usedAt             DateTime?
+  usedById           String?
+  usedByName         String?
+  remarks            String?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+
+  tenant             Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch             Branch?                   @relation(fields: [branchId], references: [id])
+  student            Student                   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  guardian           Guardian?                 @relation(fields: [guardianId], references: [id])
+
+  @@index([tenantId, studentId])
+  @@index([tenantId, status])
+  @@map("transport_pickup_authorizations")
+}
+
+/// Audit and Security Event Log for Child Transport Safety
+model TransportSecurityEvent {
+  id                 String                     @id @default(uuid())
+  tenantId           String
+  branchId           String?
+  eventType          TransportSecurityEventType
+  studentId          String?
+  driverProfileId    String?
+  vehicleId          String?
+  routeId            String?
+  tripId             String?
+  authorizationId    String?
+  actorId            String
+  actorName          String
+  actorRole          String
+  action             String
+  result             String                     @default("SUCCESS")
+  reason             String?
+  ipAddress          String?
+  userAgent          String?
+  metadata           Json?
+  createdAt          DateTime                   @default(now())
+
+  tenant             Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch             Branch?                    @relation(fields: [branchId], references: [id])
+  student            Student?                   @relation(fields: [studentId], references: [id])
+
+  @@index([tenantId, eventType])
+  @@index([tenantId, createdAt])
+  @@map("transport_security_events")
+}
+
 /// Saved Custom Report Definition
 model SavedReport {
   id             String           @id @default(uuid())
@@ -3368,6 +3726,106 @@ model ReportSchedule {
   @@map("report_schedules")
 }
 
+/// Bulk Document Generation Job for Reports & Analytics
+model BulkDocumentJob {
+  id              String                    @id @default(uuid())
+  tenantId        String
+  branchId        String?
+  title           String
+  templateId      String
+  templateVersion Int                       @default(1)
+  templateName    String
+  documentType    String                    // STUDENT_ID_CARD, STAFF_ID_CARD, CERTIFICATE, etc.
+  status          String                    @default("QUEUED") // DRAFT, QUEUED, RUNNING, COMPLETED, PARTIALLY_COMPLETED, FAILED, CANCEL_REQUESTED, CANCELLED
+  filters         Json?                     // { academicYear, branchId, programId, classroomId, staffCategory, status }
+  totalCount      Int                       @default(0)
+  processedCount  Int                       @default(0)
+  successCount    Int                       @default(0)
+  failedCount     Int                       @default(0)
+  zipUrl          String?
+  zipSizeBytes    Int?
+  errorMessage    String?
+  createdById     String
+  createdByName   String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  tenant          Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch          Branch?                   @relation(fields: [branchId], references: [id])
+  template        DocumentTemplate          @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  items           BulkDocumentJobItem[]
+  generatedDocs   GeneratedProfileDocument[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, documentType])
+  @@index([tenantId, createdAt])
+  @@map("bulk_document_jobs")
+}
+
+/// Bulk Document Generation Job Item (Record level)
+model BulkDocumentJobItem {
+  id              String                    @id @default(uuid())
+  jobId           String
+  tenantId        String
+  entityType      String                    // "STUDENT" | "STAFF"
+  entityId        String                    // studentId or staffProfileId
+  entityName      String
+  identifier      String                    // admissionNo or employeeCode
+  status          String                    @default("PENDING") // PENDING, PROCESSING, SUCCESS, FAILED, SKIPPED
+  documentId      String?
+  fileUrl         String?
+  errorMessage    String?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  job             BulkDocumentJob           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  document        GeneratedProfileDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([jobId, status])
+  @@index([tenantId, entityId])
+  @@map("bulk_document_job_items")
+}
+
+/// Logical Generated Document referenced by Profile Libraries and Bulk Jobs
+model GeneratedProfileDocument {
+  id              String                    @id @default(uuid())
+  tenantId        String
+  branchId        String?
+  entityType      String                    // "STUDENT" | "STAFF"
+  studentId       String?
+  staffProfileId  String?
+  jobId           String?
+  templateId      String?
+  templateVersion Int?
+  documentType    String                    // STUDENT_ID_CARD, STAFF_ID_CARD, CERTIFICATE, etc.
+  title           String
+  fileName        String
+  fileUrl         String
+  fileSizeBytes   Int                       @default(0)
+  mimeType        String                    // e.g. "application/pdf"
+  metadata        Json?
+  createdById     String?
+  createdByName   String?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  deletedAt       DateTime?
+
+  tenant          Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student         Student?                  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  staffProfile    StaffProfile?             @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+  job             BulkDocumentJob?          @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  jobItems        BulkDocumentJobItem[]
+  studentReportCards StudentReportCard[]
+
+  @@index([tenantId, entityType, studentId])
+  @@index([tenantId, entityType, staffProfileId])
+  @@index([tenantId, documentType])
+  @@map("generated_profile_documents")
+}
+
+
 /// Central In-App Notification Aggregate
 model InAppNotification {
   id             String           @id @default(uuid())
@@ -3415,5 +3873,46 @@ model NotificationDeliveryLog {
   @@index([tenantId, createdAt])
   @@map("notification_delivery_logs")
 }
+
+/// Student Report Card evaluation record for a term and academic session
+model StudentReportCard {
+  id                 String                    @id @default(uuid())
+  tenantId           String
+  branchId           String?
+  academicSessionId  String
+  studentId          String
+  classroomId        String?
+  term               String                    // e.g. "TERM_1", "TERM_2", "FINAL"
+  templateId         String                    // points to DocumentTemplate.id
+  templateVersion    Int                       @default(1)
+  status             String                    @default("DRAFT") // DRAFT, REVIEWED, PUBLISHED
+  evaluatorId        String?
+  evaluatorName      String?
+  remarks            String?
+  overallGrade       String?
+  attendancePct      Int?
+  fieldValues        Json                      // Record of { [fieldKey: string]: { label: string, type: string, value: any, ordering?: number } }
+  documentId         String?                   // Reference to GeneratedProfileDocument when generated
+  publishedAt        DateTime?
+  publishedById      String?
+  publishedByName    String?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+
+  tenant             Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch             Branch?                   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  academicSession    AcademicSession           @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
+  student            Student                   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classroom          Classroom?                @relation(fields: [classroomId], references: [id], onDelete: SetNull)
+  documentTemplate   DocumentTemplate          @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  document           GeneratedProfileDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, academicSessionId, term, studentId, templateId])
+  @@index([tenantId, studentId])
+  @@index([tenantId, classroomId])
+  @@index([tenantId, academicSessionId, term])
+  @@map("student_report_cards")
+}
+
 
 

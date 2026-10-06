@@ -15,6 +15,7 @@ import { requireApi, isResponse, requireBranchAccess, requireCanAssignRole } fro
 import { recordAudit, getRequestMeta } from '@/lib/audit'
 import { UserRole, Relationship, UserStatus } from '@prisma/client'
 import { FamilyUserService } from '@/lib/users/family-user-service'
+import { normalizeFamilyCreateInput } from '@/lib/users/user-validation'
 import { normalizeRole } from '@/lib/roles'
 
 /** GET /api/v1/users — directory with role/search filtering & pagination (users:read) */
@@ -146,50 +147,7 @@ export const GET = withApi(async (req: NextRequest) => {
     skipStatus: activeTab === 'PENDING',
   })
 
-  const countByRole = (role: UserRole) =>
-    db.tenantUser.count({ where: { ...baseWhere, OR: [{ role }, { roles: { has: role } }] } })
-
-  const tabAllP = db.tenantUser.count({ where: baseWhere })
-  const tabStaffP = db.tenantUser.count({
-    where: {
-      ...baseWhere,
-      AND: [
-        { role: { notIn: ['PARENT', 'GUARDIAN'] } },
-        { NOT: { roles: { hasSome: ['PARENT', 'GUARDIAN'] } } },
-      ],
-    },
-  })
-  const tabTeacherP = countByRole('TEACHER')
-  const tabParentP = countByRole('PARENT')
-  const tabGuardianP = countByRole('GUARDIAN')
-  const tabPrincipalP = countByRole('PRINCIPAL')
-  const tabCoordinatorP = countByRole('COORDINATOR')
-  const tabAccountsP = countByRole('ACCOUNTS')
-  const tabReceptionistP = countByRole('RECEPTIONIST')
-  const tabAttendantP = countByRole('ATTENDANT')
-  const tabDriverP = countByRole('DRIVER')
-  const tabPendingP = db.tenantUser.count({ where: { ...baseWhere, status: 'PENDING' } })
-
-  const [
-    total,
-    members,
-    activeCount,
-    pendingCount,
-    suspendedCount,
-    inactiveCount,
-    tabAll,
-    tabStaff,
-    tabTeacher,
-    tabParent,
-    tabGuardian,
-    tabPrincipal,
-    tabCoordinator,
-    tabAccounts,
-    tabReceptionist,
-    tabAttendant,
-    tabDriver,
-    tabPending,
-  ] = await Promise.all([
+  const [total, members, countsGrouped] = await Promise.all([
     db.tenantUser.count({ where }),
     db.tenantUser.findMany({
       where,
@@ -218,51 +176,35 @@ export const GET = withApi(async (req: NextRequest) => {
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
-    db.tenantUser.count({
-      where: {
-        tenantId: session.tenantId,
-        deletedAt: null,
-        status: 'ACTIVE',
-        ...(effectiveBranchId ? { branchId: effectiveBranchId } : {}),
-      },
+    db.tenantUser.groupBy({
+      by: ['role', 'status'],
+      where: baseWhere,
+      _count: { _all: true },
     }),
-    db.tenantUser.count({
-      where: {
-        tenantId: session.tenantId,
-        deletedAt: null,
-        status: 'PENDING',
-        ...(effectiveBranchId ? { branchId: effectiveBranchId } : {}),
-      },
-    }),
-    db.tenantUser.count({
-      where: {
-        tenantId: session.tenantId,
-        deletedAt: null,
-        status: 'SUSPENDED',
-        ...(effectiveBranchId ? { branchId: effectiveBranchId } : {}),
-      },
-    }),
-    db.tenantUser.count({
-      where: {
-        tenantId: session.tenantId,
-        deletedAt: null,
-        status: 'INACTIVE',
-        ...(effectiveBranchId ? { branchId: effectiveBranchId } : {}),
-      },
-    }),
-    tabAllP,
-    tabStaffP,
-    tabTeacherP,
-    tabParentP,
-    tabGuardianP,
-    tabPrincipalP,
-    tabCoordinatorP,
-    tabAccountsP,
-    tabReceptionistP,
-    tabAttendantP,
-    tabDriverP,
-    tabPendingP,
   ])
+
+  let activeCount = 0
+  let pendingCount = 0
+  let suspendedCount = 0
+  let inactiveCount = 0
+  let tabAll = 0
+  let tabStaff = 0
+  let tabPending = 0
+  const roleCounts: Record<string, number> = {}
+
+  for (const g of countsGrouped) {
+    const count = g._count._all
+    tabAll += count
+    if (g.status === 'ACTIVE') activeCount += count
+    else if (g.status === 'PENDING') pendingCount += count
+    else if (g.status === 'SUSPENDED') suspendedCount += count
+    else if (g.status === 'INACTIVE') inactiveCount += count
+
+    if (g.status === 'PENDING') tabPending += count
+    if (!['PARENT', 'GUARDIAN'].includes(g.role)) tabStaff += count
+
+    roleCounts[g.role] = (roleCounts[g.role] || 0) + count
+  }
 
   return ok(
     members.map((m) => {
@@ -331,15 +273,15 @@ export const GET = withApi(async (req: NextRequest) => {
       tabs: {
         ALL: tabAll,
         STAFF: tabStaff,
-        TEACHER: tabTeacher,
-        PARENT: tabParent,
-        GUARDIAN: tabGuardian,
-        PRINCIPAL: tabPrincipal,
-        COORDINATOR: tabCoordinator,
-        ACCOUNTS: tabAccounts,
-        RECEPTIONIST: tabReceptionist,
-        ATTENDANT: tabAttendant,
-        DRIVER: tabDriver,
+        TEACHER: roleCounts['TEACHER'] || 0,
+        PARENT: roleCounts['PARENT'] || 0,
+        GUARDIAN: roleCounts['GUARDIAN'] || 0,
+        PRINCIPAL: roleCounts['PRINCIPAL'] || 0,
+        COORDINATOR: roleCounts['COORDINATOR'] || 0,
+        ACCOUNTS: roleCounts['ACCOUNTS'] || 0,
+        RECEPTIONIST: roleCounts['RECEPTIONIST'] || 0,
+        ATTENDANT: roleCounts['ATTENDANT'] || 0,
+        DRIVER: roleCounts['DRIVER'] || 0,
         PENDING: tabPending,
       },
     }
@@ -431,7 +373,10 @@ export const POST = withApi(async (req: NextRequest) => {
     throw errValidation('fullName, email, and at least one role are required', 'fullName')
   }
 
-  const effectivePassword = password && password.length >= 6 ? password : 'PreOneUser@2026'
+  const isGeneratedPassword = !password || password.trim().length < 8
+  const effectivePassword = isGeneratedPassword
+    ? `PreOne@${crypto.randomBytes(4).toString('hex')}`
+    : password.trim()
 
   // Primary role defaults to primaryRole if in assignedRoles, else first role in array, else input role
   const normPrimaryRole = primaryRole ? (normalizeRole(primaryRole) as UserRole) : undefined
@@ -451,6 +396,64 @@ export const POST = withApi(async (req: NextRequest) => {
   }
 
   const initialStatus: UserStatus = inputStatus || (isInvite ? 'PENDING' : 'ACTIVE')
+
+  const isFamilyFlow =
+    assignedRoles.length === 1 &&
+    (assignedRoles.includes('PARENT') || assignedRoles.includes('GUARDIAN')) &&
+    Boolean(
+      (body as any).childMode ||
+      (body as any).newChild ||
+      (body as any).studentFullName ||
+      (body as any).studentDateOfBirth ||
+      (body as any).childFirstName ||
+      (body as any).studentId ||
+      (body as any).studentAdmissionNo ||
+      (body as any).existingChild ||
+      (body as any).parentGuardianFullName
+    )
+
+  if (isFamilyFlow) {
+    const familyInput = normalizeFamilyCreateInput({
+      ...body,
+      fullName: fullName || (body as any).parentGuardianFullName,
+      email: email || (body as any).parentGuardianEmail,
+      phone: phone || (body as any).parentGuardianPhone,
+      role: finalPrimaryRole,
+      password: effectivePassword,
+      status: initialStatus,
+      branchId: branchId || undefined,
+    })
+
+    const familyResult = await FamilyUserService.createFamilyUser(
+      {
+        tenantId: session.tenantId!,
+        actorId: session.userId,
+        actorName: session.fullName,
+        actorRole: session.role,
+        actorBranchId: session.branchId,
+        reqMeta: getRequestMeta(req),
+      },
+      familyInput
+    )
+
+    return ok(
+      {
+        id: familyResult.user.id,
+        email: familyResult.user.email,
+        fullName: familyResult.user.fullName,
+        username: familyResult.user.username,
+        role: finalPrimaryRole,
+        roles: assignedRoles,
+        status: familyResult.user.status,
+        membershipId: familyResult.membership?.id,
+        guardianId: familyResult.guardian?.id,
+        studentId: familyResult.student?.id,
+        student: familyResult.student,
+        isNewStudent: familyResult.isNewStudent,
+      },
+      { status: 201 }
+    )
+  }
 
   const emailNorm = email.toLowerCase().trim()
   const phoneNorm = phone?.trim() || null
@@ -502,6 +505,7 @@ export const POST = withApi(async (req: NextRequest) => {
           phone: phoneNorm,
           avatarUrl: avatarUrl?.trim() || null,
           passwordHash: await bcrypt.hash(effectivePassword, 10),
+          mustChangePassword: isGeneratedPassword,
           status: initialStatus,
         },
       })
