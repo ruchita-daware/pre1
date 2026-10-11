@@ -2,6 +2,7 @@ import {
   Home, LayoutDashboard, Users, ClipboardList, IndianRupee,
   Sparkles, Megaphone, Settings, ScrollText, Building2, Rocket,
   HeartPulse, UserCheck, CalendarCheck, Package, Bus, BarChart3,
+  GraduationCap,
 } from 'lucide-react'
 import type { Role } from './auth'
 import { can } from './auth'
@@ -19,13 +20,13 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { key: 'home', label: 'Home', href: '/app/home', icon: Home, grad: 'g-blue' },
   { key: 'dashboard', label: 'Dashboard', href: '/app/dashboard', icon: LayoutDashboard, grad: 'g-blue' },
+  { key: 'daily-diary', label: 'Daily Diary', href: '/app/daily-diary', icon: CalendarCheck, grad: 'g-emerald', perm: 'attendance:read' },
   { key: 'users', label: 'Users', href: '/app/users', icon: UserCheck, grad: 'g-violet', perm: 'users:read' },
   { key: 'hr', label: 'HR & Workforce', href: '/app/hr', icon: Users, grad: 'g-indigo', perm: 'users:read' },
   { key: 'setup', label: 'Setup', href: '/app/setup', icon: Rocket, grad: 'g-violet', perm: 'settings:read' },
   { key: 'admissions', label: 'Admissions', href: '/app/admissions', icon: ClipboardList, grad: 'g-pink', perm: 'admissions:read' },
-  { key: 'academics', label: 'Academics', href: '/app/academics', icon: Sparkles, grad: 'g-purple', perm: 'academics:read' },
   { key: 'students', label: 'Students', href: '/app/students', icon: Users, grad: 'g-blue', perm: 'students:read' },
-  { key: 'attendance', label: 'Attendance', href: '/app/attendance', icon: CalendarCheck, grad: 'g-cyan', perm: 'attendance:read' },
+  { key: 'learning', label: 'PreO Learning', href: '/app/learning', icon: GraduationCap, grad: 'g-violet' },
   { key: 'operations', label: 'Operations', href: '/app/operations', icon: HeartPulse, grad: 'g-red', perm: 'operations:read' },
   { key: 'transport', label: 'Transport', href: '/app/transport', icon: Bus, grad: 'g-orange', perm: 'transport:read' },
   { key: 'inventory', label: 'Inventory', href: '/app/inventory', icon: Package, grad: 'g-emerald', perm: 'inventory:read' },

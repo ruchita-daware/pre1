@@ -3,6 +3,7 @@
 import React from 'react'
 import Link from 'next/link'
 import { ArrowRight, ChevronRight, CheckCircle2, AlertTriangle, Sparkles, Clock, Circle } from 'lucide-react'
+import { AnimatedCheckmark } from './TactileMotion'
 
 export interface MetricCardProps {
   label: string
@@ -126,7 +127,7 @@ export function SetupPhaseCard({
           </span>
         </div>
         <h3 className="setup-phase-title">{title}</h3>
-        <p className="setup-phase-desc">{description}</p>
+        {description && <p className="setup-phase-desc">{description}</p>}
         <div
           className="setup-phase-progress-bar"
           role="progressbar"
@@ -195,7 +196,7 @@ export function SetupStepTile({
     : ''
 
   const defaultIcon = isComplete ? (
-    <CheckCircle2 size={16} />
+    <AnimatedCheckmark size={16} animate={false} />
   ) : isBlocked ? (
     <AlertTriangle size={16} />
   ) : isSkipped ? (

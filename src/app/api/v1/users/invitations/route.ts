@@ -4,6 +4,8 @@ import { db } from '@/lib/db'
 import { ok, bad, notFound, forbidden, serverError } from '@/lib/api'
 import { requireApi, isResponse } from '@/lib/auth-api'
 import { recordAudit, getRequestMeta } from '@/lib/audit'
+import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit'
+import { emailService } from '@/lib/email/email-service'
 
 /**
  * GET /api/v1/users/invitations — list pending invitations
@@ -55,6 +57,16 @@ async function _GET(req: NextRequest) {
  * POST /api/v1/users/invitations — resend or cancel pending invitation
  */
 async function _POST(req: NextRequest) {
+  // Rate limit invitation operations (resend / cancel / activate) to 25/min per IP
+  const rl = await checkRateLimit(req, {
+    windowMs: 60 * 1000,
+    max: 25,
+    keyPrefix: 'user_invitations',
+  })
+  if (!rl.allowed) {
+    return rateLimitResponse(rl.retryAfterSeconds, 'Too many invitation requests. Please wait before retrying.')
+  }
+
   const session = await requireApi(req, 'users:write')
   if (isResponse(session)) return session
   if (!session.tenantId) return bad('Tenant required', 'TENANT_REQUIRED')
@@ -124,6 +136,16 @@ async function _POST(req: NextRequest) {
           data: { updatedAt: new Date() },
         })
       })
+
+      if (member.user.email) {
+        await emailService.send({
+          to: member.user.email,
+          subject: 'Welcome to PreOne — Staff Invitation',
+          html: `<div style="font-family:sans-serif;padding:24px;"><h2>Welcome to PreOne</h2><p>Hello ${member.user.fullName},</p><p>You have been invited to join the school staff workspace as a <strong>${member.role}</strong>.</p><p>Please log in using your registered credentials.</p></div>`,
+          text: `Hello ${member.user.fullName},\n\nYou have been invited to join PreOne as a ${member.role}.\n\nPlease log in at ${req.headers.get('origin') || 'http://localhost:3000'}.`,
+          tenantId: session.tenantId,
+        })
+      }
 
       await recordAudit({
         tenantId: session.tenantId,

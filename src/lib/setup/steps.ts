@@ -13,9 +13,10 @@
  */
 
 export type StepKey =
-  // Phase 1 — Foundation (4)
+  // Phase 1 — Foundation (5)
   | 'school_profile'
   | 'branch'
+  | 'classroom_foundation'
   | 'branding'
   | 'roles'
   // Phase 2 — Academic Structure (5)
@@ -39,10 +40,13 @@ export type Applicability = 'MANDATORY' | 'OPTIONAL' | 'RECOMMENDED'
 
 export type StepPhase = 'FOUNDATION' | 'ACADEMIC_STRUCTURE' | 'OPERATIONS' | 'BUSINESS_RULES'
 
+export type StepScope = 'TENANT' | 'BRANCH'
+
 export interface StepDef {
   key: StepKey
   label: string
   phase: StepPhase
+  scope: StepScope
   applicability: Applicability
   /** blocking dependencies — all must be COMPLETE or SKIPPED before this step unlocks */
   deps: StepKey[]
@@ -58,6 +62,7 @@ export const SETUP_STEPS: StepDef[] = [
     key: 'school_profile',
     label: 'School Profile',
     phase: 'FOUNDATION',
+    scope: 'TENANT',
     applicability: 'MANDATORY',
     deps: [],
     icon: 'School',
@@ -67,15 +72,17 @@ export const SETUP_STEPS: StepDef[] = [
     key: 'branch',
     label: 'Branch / Campus',
     phase: 'FOUNDATION',
+    scope: 'TENANT',
     applicability: 'MANDATORY',
     deps: ['school_profile'],
     icon: 'Building2',
-    description: 'At least one operating campus with address, operating timings and physical room infrastructure.',
+    description: 'At least one operating campus with address, contact details and operating capacity.',
   },
   {
     key: 'branding',
     label: 'Branding & Theme',
     phase: 'FOUNDATION',
+    scope: 'TENANT',
     applicability: 'RECOMMENDED',
     deps: ['school_profile'],
     icon: 'Palette',
@@ -85,10 +92,11 @@ export const SETUP_STEPS: StepDef[] = [
     key: 'roles',
     label: 'Roles & Permissions',
     phase: 'FOUNDATION',
-    applicability: 'MANDATORY',
+    scope: 'TENANT',
+    applicability: 'OPTIONAL',
     deps: ['school_profile'],
     icon: 'ShieldCheck',
-    description: 'Identity & access readiness: active school owner account plus at least one operating staff account.',
+    description: 'Roles & Permissions: deferred for future implementation (non-blocking).',
   },
 
   // ── PHASE 2 — ACADEMIC STRUCTURE ─────────────────────────────────────
@@ -96,33 +104,27 @@ export const SETUP_STEPS: StepDef[] = [
     key: 'academic_year',
     label: 'Academic Year',
     phase: 'ACADEMIC_STRUCTURE',
+    scope: 'BRANCH',
     applicability: 'MANDATORY',
     deps: ['branch'],
     icon: 'CalendarRange',
     description: 'Operating academic session (with start/end dates) that rosters, admissions, attendance and fees hang from.',
   },
   {
-    key: 'curriculum',
-    label: 'Curriculum Approach',
-    phase: 'ACADEMIC_STRUCTURE',
-    applicability: 'MANDATORY',
-    deps: ['academic_year'],
-    icon: 'BookOpen',
-    description: 'Pedagogical methodology (EYFS, Montessori, Reggio Emilia, NEP 2020) and core developmental learning areas.',
-  },
-  {
     key: 'programs',
     label: 'Program',
     phase: 'ACADEMIC_STRUCTURE',
+    scope: 'BRANCH',
     applicability: 'MANDATORY',
     deps: ['school_profile'],
     icon: 'Blocks',
-    description: 'Preschool programs offered (Playgroup, Nursery, Jr KG, Sr KG, Daycare) with age bands and capacities.',
+    description: 'Preschool programs offered (Playgroup, Nursery, Jr KG, Sr KG, Daycare) with age bands and campus availability mappings.',
   },
   {
     key: 'classroom',
     label: 'Classroom',
     phase: 'ACADEMIC_STRUCTURE',
+    scope: 'BRANCH',
     applicability: 'MANDATORY',
     deps: ['academic_year', 'programs', 'branch'],
     icon: 'LayoutGrid',
@@ -132,64 +134,29 @@ export const SETUP_STEPS: StepDef[] = [
     key: 'subject',
     label: 'Subject',
     phase: 'ACADEMIC_STRUCTURE',
+    scope: 'BRANCH',
     applicability: 'MANDATORY',
-    deps: ['programs', 'curriculum'],
+    deps: ['programs'],
     icon: 'GraduationCap',
     description: 'Academic subjects and activity disciplines (Core, Optional, Activity) mapped to programs and classrooms.',
   },
 
-  // ── PHASE 3 — OPERATIONS ──────────────────────────────────────────────
-  {
-    key: 'mood_environment',
-    label: 'Mood & Environment',
-    phase: 'OPERATIONS',
-    applicability: 'RECOMMENDED',
-    deps: ['classroom'],
-    icon: 'Sun',
-    description: 'Child wellbeing framework (Happy, Calm, Energetic, Cranky) and classroom environment tracking parameters.',
-  },
-  {
-    key: 'health_settings',
-    label: 'Health Settings',
-    phase: 'OPERATIONS',
-    applicability: 'MANDATORY',
-    deps: ['school_profile'],
-    icon: 'Cross',
-    description: 'Daily health-check rules, allergy categories, medical incident triage, and emergency escalation paths.',
-  },
-  {
-    key: 'daily_operations',
-    label: 'Daily Operations',
-    phase: 'OPERATIONS',
-    applicability: 'MANDATORY',
-    deps: ['branch', 'classroom'],
-    icon: 'Clock',
-    description: 'Attendance rules, arrival/pickup grace windows, working days, daily care record types, and authorized pickup verification.',
-  },
-  {
-    key: 'observation',
-    label: 'Observation',
-    phase: 'OPERATIONS',
-    applicability: 'MANDATORY',
-    deps: ['curriculum'],
-    icon: 'ClipboardCheck',
-    description: 'Early learning observation categories, milestone evaluation methods, and pedagogical concern triage levels.',
-  },
-
-  // ── PHASE 4 — BUSINESS RULES ─────────────────────────────────────────
+  // ── PHASE 3 — BUSINESS RULES (Phase 3 Operations removed) ────────────
   {
     key: 'fees_setup',
     label: 'Fees Setup',
     phase: 'BUSINESS_RULES',
+    scope: 'BRANCH',
     applicability: 'MANDATORY',
     deps: ['programs', 'academic_year'],
     icon: 'IndianRupee',
-    description: 'Active fee plans with integer paise terms, payment due day offsets, and fee structures per program.',
+    description: 'Complete fee structure governance: tuition, deposits, frequencies, fee schedules, receipts and payments per program and campus.',
   },
   {
     key: 'templates',
     label: 'Templates',
     phase: 'BUSINESS_RULES',
+    scope: 'TENANT',
     applicability: 'RECOMMENDED',
     deps: ['school_profile'],
     icon: 'FileText',
@@ -199,6 +166,7 @@ export const SETUP_STEPS: StepDef[] = [
     key: 'communication',
     label: 'Communication',
     phase: 'BUSINESS_RULES',
+    scope: 'TENANT',
     applicability: 'MANDATORY',
     deps: ['school_profile'],
     icon: 'Megaphone',
@@ -208,6 +176,7 @@ export const SETUP_STEPS: StepDef[] = [
     key: 'promotion',
     label: 'Promotion',
     phase: 'BUSINESS_RULES',
+    scope: 'BRANCH',
     applicability: 'RECOMMENDED',
     deps: ['programs', 'academic_year'],
     icon: 'ArrowRight',
@@ -221,9 +190,8 @@ export const STEP_MAP: Record<string, StepDef> = Object.fromEntries(
 
 export const PHASES: { key: StepPhase; label: string; sub: string }[] = [
   { key: 'FOUNDATION', label: 'Foundation', sub: 'Who the school is and who operates it' },
-  { key: 'ACADEMIC_STRUCTURE', label: 'Academic Structure', sub: 'Year, curriculum, programs, classrooms and subjects' },
-  { key: 'OPERATIONS', label: 'Operations', sub: 'Daily routines, wellbeing, health settings and formative observation' },
-  { key: 'BUSINESS_RULES', label: 'Business Rules', sub: 'Fees, templates, communication and academic promotion' },
+  { key: 'ACADEMIC_STRUCTURE', label: 'Academic Structure', sub: 'Year, programs, classrooms and subjects' },
+  { key: 'BUSINESS_RULES', label: 'Business Rules', sub: 'Fees setup, templates, communication and academic promotion' },
 ]
 
 export function isUnlocked(
