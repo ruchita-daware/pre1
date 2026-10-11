@@ -42,6 +42,7 @@ export default function LoginPage() {
   const [capsLockActive, setCapsLockActive] = useState<boolean>(false)
   const [showForgotModal, setShowForgotModal] = useState(false)
   const [useUsername, setUseUsername] = useState(false)
+  const [branding, setBranding] = useState<{ logoUrl: string | null; schoolName?: string; primaryColor?: string } | null>(null)
 
   // OTP specific state
   const [otp, setOtp] = useState<string[]>(['', '', '', ''])
@@ -51,12 +52,33 @@ export default function LoginPage() {
 
   const identifierInputRef = useRef<HTMLInputElement>(null)
 
+  // Fetch school branding for login surface
+  useEffect(() => {
+    const queryCode = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('code') || '' : ''
+    if (queryCode && !schoolCode) {
+      setSchoolCode(queryCode)
+    }
+    const codeToFetch = queryCode || schoolCode
+    fetch(`/api/v1/auth/branding?code=${encodeURIComponent(codeToFetch)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j?.success && j.data) {
+          setBranding(j.data)
+        }
+      })
+      .catch(() => {})
+  }, [schoolCode])
+
   // Auto redirect if already logged in
   useEffect(() => {
     fetch('/api/v1/me')
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
-        if (j?.success) router.replace('/app/dashboard')
+        if (j?.success) {
+          router.replace('/app/dashboard')
+        } else {
+          document.cookie = 'preone_session=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;'
+        }
       })
       .catch(() => {})
   }, [router])
@@ -188,7 +210,11 @@ export default function LoginPage() {
           <AuthCard>
             
             {/* Hero Brand Anchor — Unboxed with breathing room */}
-            <AuthBrand tagline="Nurturing Little Futures" />
+            <AuthBrand
+              tagline="Nurturing Little Futures"
+              logoUrl={branding?.logoUrl}
+              schoolName={branding?.schoolName}
+            />
 
             {/* ══════════════════════════════════════════════════════════
                 MODE 1: LOGIN VIEW

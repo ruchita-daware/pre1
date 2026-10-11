@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import {
   Search,
@@ -12,11 +12,16 @@ import {
   Ban,
   ChevronRight,
   ChevronDown,
+  Languages,
+  Globe,
 } from 'lucide-react'
 import { enumLabel, timeAgo } from '@/lib/format'
 import type { Role } from '@/lib/auth'
 import { FullscreenButton } from './FullscreenButton'
 import { HelpButton } from './HelpButton'
+import type { BrandingConfig } from '@/lib/branding-types'
+import { useI18n } from '@/lib/i18n/context'
+import { SUPPORTED_LOCALES, SupportedLocale } from '@/lib/i18n/types'
 
 export interface GlobalWorkspaceHeaderProps {
   user: {
@@ -52,6 +57,7 @@ export interface GlobalWorkspaceHeaderProps {
   avatarRef: React.RefObject<HTMLButtonElement | null>
   onOpenProfile: () => void
   pathname?: string
+  branding?: BrandingConfig
 }
 
 /**
@@ -65,6 +71,7 @@ export interface GlobalWorkspaceHeaderProps {
  */
 export function GlobalWorkspaceHeader({
   user,
+  branding,
   theme,
   onToggleTheme,
   onOpenSearch,
@@ -89,6 +96,22 @@ export function GlobalWorkspaceHeader({
 }: GlobalWorkspaceHeaderProps) {
   const [scrolled, setScrolled] = useState(false)
   const [isMac, setIsMac] = useState(false)
+  const [langOpen, setLangOpen] = useState(false)
+  const langRef = useRef<HTMLDivElement>(null)
+  const { locale, setLocale, t } = useI18n()
+
+  // Close language popover on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (langRef.current && !langRef.current.contains(e.target as Node)) {
+        setLangOpen(false)
+      }
+    }
+    if (langOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [langOpen])
 
   // Scroll compression detection
   useEffect(() => {
@@ -98,6 +121,7 @@ export function GlobalWorkspaceHeader({
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
+
 
   // OS detection for keyboard shortcut rendering
   useEffect(() => {
@@ -130,7 +154,7 @@ export function GlobalWorkspaceHeader({
       <div className="workspace-search-left">
         <Search className="workspace-search-icon" aria-hidden="true" />
         <span className="workspace-search-placeholder">
-          Search students, staff, invoices, classes…
+          {t('header.searchPlaceholder')}
         </span>
       </div>
       <kbd className="workspace-search-kbd">
@@ -142,7 +166,7 @@ export function GlobalWorkspaceHeader({
   return (
     <div className="workspace-header-wrapper">
       <header
-        className={`workspace-header workspace-floating-surface app-header ${scrolled ? 'scrolled' : ''}`}
+        className={`workspace-header workspace-floating-surface premium-header app-header ${scrolled ? 'scrolled' : ''}`}
       >
         {/* ── Main Horizontal Row (Desktop: Full Row / Mobile: Top Utility Row) ── */}
         <div className="workspace-header-main-row">
@@ -150,39 +174,48 @@ export function GlobalWorkspaceHeader({
           <div className="workspace-header-left">
             <Link
               href="/app/home"
+              prefetch={true}
               className="workspace-sparkle-anchor"
               aria-label="PreOne OS Home"
               title="PreOne OS Home"
             >
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                className="transform-gpu transition-transform duration-200 hover:rotate-12"
-                aria-hidden="true"
-              >
-                <path
-                  d="M12 2C12 7.52 7.52 12 2 12C7.52 12 12 16.48 12 22C12 16.48 16.48 12 22 12C16.48 12 12 7.52 12 2Z"
-                  fill="url(#workspaceHeaderSparkleGrad)"
+              {branding?.logoUrl ? (
+                <img
+                  src={branding.logoUrl}
+                  alt={user.tenantName || 'School Logo'}
+                  className="h-6 w-6 object-contain rounded drop-shadow-xs transition-transform duration-200 hover:scale-105"
                 />
-                <circle cx="18.5" cy="5.5" r="1.5" fill="#F59E0B" />
-                <circle cx="5.5" cy="18.5" r="1.2" fill="#38BDF8" opacity="0.85" />
-                <defs>
-                  <linearGradient
-                    id="workspaceHeaderSparkleGrad"
-                    x1="2"
-                    y1="2"
-                    x2="22"
-                    y2="22"
-                    gradientUnits="userSpaceOnUse"
-                  >
-                    <stop stopColor="#9333EA" />
-                    <stop offset="0.5" stopColor="#7C3AED" />
-                    <stop offset="1" stopColor="#A855F7" />
-                  </linearGradient>
-                </defs>
-              </svg>
+              ) : (
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="transform-gpu transition-transform duration-200 hover:rotate-12"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M12 2C12 7.52 7.52 12 2 12C7.52 12 12 16.48 12 22C12 16.48 16.48 12 22 12C16.48 12 12 7.52 12 2Z"
+                    fill="url(#workspaceHeaderSparkleGrad)"
+                  />
+                  <circle cx="18.5" cy="5.5" r="1.5" fill="#F59E0B" />
+                  <circle cx="5.5" cy="18.5" r="1.2" fill="#38BDF8" opacity="0.85" />
+                  <defs>
+                    <linearGradient
+                      id="workspaceHeaderSparkleGrad"
+                      x1="2"
+                      y1="2"
+                      x2="22"
+                      y2="22"
+                      gradientUnits="userSpaceOnUse"
+                    >
+                      <stop stopColor="#9333EA" />
+                      <stop offset="0.5" stopColor="#7C3AED" />
+                      <stop offset="1" stopColor="#A855F7" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              )}
             </Link>
           </div>
 
@@ -199,22 +232,77 @@ export function GlobalWorkspaceHeader({
             {/* 2. Full Screen Button */}
             <FullscreenButton className="hidden md:inline-flex" />
 
-        {/* 3. Theme Toggle Button */}
-        <button
-          suppressHydrationWarning
-          type="button"
-          className="workspace-action-btn"
-          aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
-          title={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
-          onClick={onToggleTheme}
-        >
-          {theme === 'light' ? (
-            <Moon size={16} aria-hidden="true" />
-          ) : (
-            <Sun size={16} aria-hidden="true" />
-          )}
-          <span className="workspace-action-label">Theme</span>
-        </button>
+            {/* 2.5 Language Selector */}
+            <div ref={langRef} style={{ position: 'relative' }}>
+              <button
+                suppressHydrationWarning
+                type="button"
+                className={`workspace-action-btn ${langOpen ? 'active' : ''}`}
+                aria-label={t('header.language')}
+                title={t('header.language')}
+                onClick={() => setLangOpen((prev) => !prev)}
+              >
+                <Languages size={16} aria-hidden="true" />
+                <span className="workspace-action-label">
+                  {locale === 'hi-IN' ? 'हिंदी' : locale === 'mr-IN' ? 'मराठी' : 'EN'}
+                </span>
+              </button>
+
+              {langOpen && (
+                <div
+                  role="menu"
+                  className="dropdown-menu absolute right-0 mt-2 w-40 rounded-xl bg-white dark:bg-slate-900 shadow-xl border border-slate-200 dark:border-slate-800 py-1.5 z-50 animate-in fade-in zoom-in-95"
+                >
+                  <div className="px-3 py-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                    {t('header.language')}
+                  </div>
+                  {SUPPORTED_LOCALES.map((loc) => {
+                    const isSelected = locale === loc.code
+                    return (
+                      <button
+                        key={loc.code}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setLocale(loc.code)
+                          setLangOpen(false)
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 text-sm text-left transition-colors ${
+                          isSelected
+                            ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-medium'
+                            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span>{loc.nativeName}</span>
+                        </span>
+                        {isSelected && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400" />
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 3. Theme Toggle Button */}
+            <button
+              suppressHydrationWarning
+              type="button"
+              className="workspace-action-btn"
+              aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
+              title={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
+              onClick={onToggleTheme}
+            >
+              {theme === 'light' ? (
+                <Moon size={16} aria-hidden="true" />
+              ) : (
+                <Sun size={16} aria-hidden="true" />
+              )}
+              <span className="workspace-action-label">{t('header.theme')}</span>
+            </button>
+
 
         {/* 4. Inbox (Needs Attention) Action & Popover */}
         <div style={{ position: 'relative' }}>

@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import Link from 'next/link'
-import { Search, X, LogOut } from 'lucide-react'
+import { Search, X, LogOut, Sparkles } from 'lucide-react'
 import type { Role } from '@/lib/auth'
 import { homeModules, type HomeModule, SEMANTIC_THEME_TOKENS } from '@/lib/modules'
 import { StartMenuIllustration } from '@/components/preone'
 import type { ShellUser } from './AppShell'
+import { useI18n } from '@/lib/i18n/context'
 
 export interface StartMenuProps {
   isOpen: boolean
@@ -43,11 +44,50 @@ export function StartMenu({
   const internalMenuRef = useRef<HTMLDivElement>(null)
   const menuRef = externalMenuRef || internalMenuRef
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const { t } = useI18n()
+
+  // Helper to get localized module label
+  const getModuleLabel = useCallback(
+    (key: string, defaultLabel: string) => {
+      const keyMap: Record<string, string> = {
+        home: 'nav.home',
+        dashboard: 'nav.dashboard',
+        'daily-diary': 'nav.dailyDiary',
+        users: 'nav.users',
+        hr: 'nav.hr',
+        setup: 'nav.setup',
+        admissions: 'nav.admissions',
+        students: 'nav.students',
+        learning: 'nav.learning',
+        'preo-learning': 'nav.learning',
+        preo_learning: 'nav.learning',
+        operations: 'nav.operations',
+        transport: 'nav.transport',
+        inventory: 'nav.inventory',
+        finance: 'nav.finance',
+        fees: 'nav.finance',
+        reports: 'nav.reports',
+        reports_analytics: 'nav.reports',
+        communication: 'nav.communication',
+        announcements: 'nav.communication',
+        settings: 'nav.settings',
+        audit: 'nav.audit',
+        audit_logs: 'nav.audit',
+        platform: 'nav.platform',
+      }
+      const navKey = keyMap[key]
+      return navKey ? t(navKey) : defaultLabel
+    },
+    [t]
+  )
 
   // Canonical authorized modules for user's role
   const allModules = useMemo<HomeModule[]>(() => {
-    return homeModules(user.role)
-  }, [user.role])
+    return homeModules(user.role).map((m) => ({
+      ...m,
+      label: getModuleLabel(m.key, m.label),
+    }))
+  }, [user.role, getModuleLabel])
 
   // Real-time RBAC-filtered search against name, description, and key
   const filteredModules = useMemo<HomeModule[]>(() => {
@@ -59,14 +99,16 @@ export function StartMenu({
       const matchDesc = m.description.toLowerCase().includes(q)
       const matchKey = m.key.toLowerCase().includes(q)
 
-      // Keyword aliases (e.g. "fee" -> Fees, "staff" -> Users, HR, "student" -> Students, Academics, Users)
+      // Keyword aliases (e.g. "fee" -> Fees, "staff" -> Users, HR, "student" -> Students, Daily Diary, Admissions)
       const matchAlias =
         (q.includes('fee') && (m.key === 'finance' || m.key === 'home')) ||
         (q.includes('staff') && (m.key === 'users' || m.key === 'hr')) ||
-        (q.includes('teacher') && (m.key === 'users' || m.key === 'hr')) ||
-        (q.includes('student') && (m.key === 'students' || m.key === 'academics' || m.key === 'admissions')) ||
+        (q.includes('teacher') && (m.key === 'users' || m.key === 'hr' || m.key === 'daily-diary')) ||
+        (q.includes('student') && (m.key === 'students' || m.key === 'daily-diary' || m.key === 'admissions')) ||
         (q.includes('bus') && m.key === 'transport') ||
-        (q.includes('book') && (m.key === 'academics' || m.key === 'inventory')) ||
+        (q.includes('diary') && m.key === 'daily-diary') ||
+        (q.includes('activity') && m.key === 'daily-diary') ||
+        (q.includes('timetable') && m.key === 'daily-diary') ||
         (q.includes('bill') && m.key === 'finance')
 
       return matchName || matchDesc || matchKey || matchAlias
@@ -198,10 +240,12 @@ export function StartMenu({
           {pinnedModules.map((m) => {
             const Icon = m.icon
             const theme = SEMANTIC_THEME_TOKENS[m.semanticTheme] || SEMANTIC_THEME_TOKENS.lavender
+            const imageSrc = m.animation ? m.animation.replace(/\.json$/, '.webp') : null
             return (
               <Link
                 key={`pinned-${m.key}`}
                 href={m.href}
+                prefetch={true}
                 className="sm-tile"
                 role="menuitem"
                 onClick={onClose}
@@ -209,12 +253,28 @@ export function StartMenu({
                 <span
                   className="tico"
                   style={{
-                    backgroundColor: theme.iconBg,
+                    backgroundColor: imageSrc ? 'transparent' : theme.iconBg,
                     color: theme.iconColor,
-                    borderColor: theme.iconBorder,
+                    borderColor: imageSrc ? 'transparent' : theme.iconBorder,
+                    overflow: 'hidden',
+                    position: 'relative',
                   }}
                 >
-                  <Icon size={22} />
+                  {imageSrc ? (
+                    <img
+                      src={imageSrc}
+                      alt={m.label}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        transform: 'scale(1.22)',
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  ) : (
+                    <Icon size={22} />
+                  )}
                 </span>
                 <span className="sm-tile-label">{m.label}</span>
               </Link>
@@ -241,10 +301,12 @@ export function StartMenu({
               {filteredModules.map((m) => {
                 const Icon = m.icon
                 const theme = SEMANTIC_THEME_TOKENS[m.semanticTheme] || SEMANTIC_THEME_TOKENS.lavender
+                const imageSrc = m.animation ? m.animation.replace(/\.json$/, '.webp') : null
                 return (
                   <Link
                     key={`all-${m.key}`}
                     href={m.href}
+                    prefetch={true}
                     className="nav-item"
                     role="menuitem"
                     onClick={onClose}
@@ -252,11 +314,27 @@ export function StartMenu({
                     <span
                       className="sm-list-icon"
                       style={{
-                        backgroundColor: theme.iconBg,
+                        backgroundColor: imageSrc ? 'transparent' : theme.iconBg,
                         color: theme.iconColor,
+                        overflow: 'hidden',
+                        position: 'relative',
                       }}
                     >
-                      <Icon size={15} />
+                      {imageSrc ? (
+                        <img
+                          src={imageSrc}
+                          alt={m.label}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'contain',
+                            transform: 'scale(1.22)',
+                            pointerEvents: 'none',
+                          }}
+                        />
+                      ) : (
+                        <Icon size={15} />
+                      )}
                     </span>
                     <span className="sm-list-text">{m.label}</span>
                   </Link>
@@ -276,18 +354,30 @@ export function StartMenu({
             <span>{user.email}</span>
           </div>
         </div>
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm sm-logout-btn"
-          onClick={() => {
-            onClose()
-            onLogout()
-          }}
-          aria-label="Sign out"
-        >
-          <LogOut size={14} aria-hidden="true" />
-          <span>Sign out</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Link
+            href="/app/settings?tab=preferences"
+            onClick={onClose}
+            className="btn btn-ghost btn-sm sm-logout-btn"
+            title="Appearance & Glow Preferences"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+          >
+            <Sparkles size={14} aria-hidden="true" style={{ color: 'var(--primary)' }} />
+            <span>Theme &amp; Glow</span>
+          </Link>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm sm-logout-btn"
+            onClick={() => {
+              onClose()
+              onLogout()
+            }}
+            aria-label="Sign out"
+          >
+            <LogOut size={14} aria-hidden="true" />
+            <span>Sign out</span>
+          </button>
+        </div>
       </div>
     </div>
   )
