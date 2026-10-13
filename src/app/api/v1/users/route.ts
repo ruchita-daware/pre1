@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 import {
@@ -13,7 +14,8 @@ import {
 } from '@/lib/api'
 import { requireApi, isResponse, requireBranchAccess, requireCanAssignRole } from '@/lib/auth-api'
 import { recordAudit, getRequestMeta } from '@/lib/audit'
-import { UserRole, Relationship, UserStatus } from '@prisma/client'
+import { UserRole, Relationship, UserStatus, Gender } from '@prisma/client'
+import { normalizeFamilyCreateInput, normalizeBloodGroup, formatBloodGroup } from '@/lib/users/user-validation'
 import { FamilyUserService } from '@/lib/users/family-user-service'
 import { normalizeRole } from '@/lib/roles'
 
@@ -146,50 +148,7 @@ export const GET = withApi(async (req: NextRequest) => {
     skipStatus: activeTab === 'PENDING',
   })
 
-  const countByRole = (role: UserRole) =>
-    db.tenantUser.count({ where: { ...baseWhere, OR: [{ role }, { roles: { has: role } }] } })
-
-  const tabAllP = db.tenantUser.count({ where: baseWhere })
-  const tabStaffP = db.tenantUser.count({
-    where: {
-      ...baseWhere,
-      AND: [
-        { role: { notIn: ['PARENT', 'GUARDIAN'] } },
-        { NOT: { roles: { hasSome: ['PARENT', 'GUARDIAN'] } } },
-      ],
-    },
-  })
-  const tabTeacherP = countByRole('TEACHER')
-  const tabParentP = countByRole('PARENT')
-  const tabGuardianP = countByRole('GUARDIAN')
-  const tabPrincipalP = countByRole('PRINCIPAL')
-  const tabCoordinatorP = countByRole('COORDINATOR')
-  const tabAccountsP = countByRole('ACCOUNTS')
-  const tabReceptionistP = countByRole('RECEPTIONIST')
-  const tabAttendantP = countByRole('ATTENDANT')
-  const tabDriverP = countByRole('DRIVER')
-  const tabPendingP = db.tenantUser.count({ where: { ...baseWhere, status: 'PENDING' } })
-
-  const [
-    total,
-    members,
-    activeCount,
-    pendingCount,
-    suspendedCount,
-    inactiveCount,
-    tabAll,
-    tabStaff,
-    tabTeacher,
-    tabParent,
-    tabGuardian,
-    tabPrincipal,
-    tabCoordinator,
-    tabAccounts,
-    tabReceptionist,
-    tabAttendant,
-    tabDriver,
-    tabPending,
-  ] = await Promise.all([
+  const [total, members, countsGrouped] = await Promise.all([
     db.tenantUser.count({ where }),
     db.tenantUser.findMany({
       where,
@@ -218,51 +177,45 @@ export const GET = withApi(async (req: NextRequest) => {
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
-    db.tenantUser.count({
-      where: {
-        tenantId: session.tenantId,
-        deletedAt: null,
-        status: 'ACTIVE',
-        ...(effectiveBranchId ? { branchId: effectiveBranchId } : {}),
-      },
+    db.tenantUser.groupBy({
+      by: ['role', 'status'],
+      where: baseWhere,
+      _count: { _all: true },
     }),
-    db.tenantUser.count({
-      where: {
-        tenantId: session.tenantId,
-        deletedAt: null,
-        status: 'PENDING',
-        ...(effectiveBranchId ? { branchId: effectiveBranchId } : {}),
-      },
-    }),
-    db.tenantUser.count({
-      where: {
-        tenantId: session.tenantId,
-        deletedAt: null,
-        status: 'SUSPENDED',
-        ...(effectiveBranchId ? { branchId: effectiveBranchId } : {}),
-      },
-    }),
-    db.tenantUser.count({
-      where: {
-        tenantId: session.tenantId,
-        deletedAt: null,
-        status: 'INACTIVE',
-        ...(effectiveBranchId ? { branchId: effectiveBranchId } : {}),
-      },
-    }),
-    tabAllP,
-    tabStaffP,
-    tabTeacherP,
-    tabParentP,
-    tabGuardianP,
-    tabPrincipalP,
-    tabCoordinatorP,
-    tabAccountsP,
-    tabReceptionistP,
-    tabAttendantP,
-    tabDriverP,
-    tabPendingP,
   ])
+
+  let activeCount = 0
+  let pendingCount = 0
+  let suspendedCount = 0
+  let inactiveCount = 0
+  let tabAll = 0
+  let tabStaff = 0
+  let tabStaffActive = 0
+  let tabFamily = 0
+  let tabFamilyActive = 0
+  let tabPending = 0
+  const roleCounts: Record<string, number> = {}
+
+  for (const g of countsGrouped) {
+    const count = g._count._all
+    tabAll += count
+    if (g.status === 'ACTIVE') activeCount += count
+    else if (g.status === 'PENDING') pendingCount += count
+    else if (g.status === 'SUSPENDED') suspendedCount += count
+    else if (g.status === 'INACTIVE') inactiveCount += count
+
+    if (g.status === 'PENDING') tabPending += count
+    const isFamily = ['PARENT', 'GUARDIAN'].includes(g.role)
+    if (!isFamily) {
+      tabStaff += count
+      if (g.status === 'ACTIVE') tabStaffActive += count
+    } else {
+      tabFamily += count
+      if (g.status === 'ACTIVE') tabFamilyActive += count
+    }
+
+    roleCounts[g.role] = (roleCounts[g.role] || 0) + count
+  }
 
   return ok(
     members.map((m) => {
@@ -281,6 +234,7 @@ export const GET = withApi(async (req: NextRequest) => {
         branchId: m.branchId,
         lastLoginAt: m.user.lastLoginAt,
         createdAt: m.createdAt,
+        locale: m.user.locale,
         staffProfile: m.user.staffProfile
           ? {
               employeeCode: m.user.staffProfile.employeeCode,
@@ -296,6 +250,22 @@ export const GET = withApi(async (req: NextRequest) => {
                 : null,
               gender: m.user.staffProfile.gender,
               currentAddress: m.user.staffProfile.currentAddress,
+              permanentAddress: m.user.staffProfile.permanentAddress,
+              maritalStatus: m.user.staffProfile.maritalStatus,
+              bloodGroup: formatBloodGroup(m.user.staffProfile.bloodGroup),
+              emergencyContactName: m.user.staffProfile.emergencyContactName,
+              emergencyContactPhone: m.user.staffProfile.emergencyContactPhone,
+              panNumber: m.user.staffProfile.panNumber,
+              aadhaarNumber: m.user.staffProfile.aadhaarNumber,
+              uanNumber: m.user.staffProfile.uanNumber,
+              esiNumber: m.user.staffProfile.esiNumber,
+              probationEndDate: m.user.staffProfile.probationEndDate
+                ? m.user.staffProfile.probationEndDate.toISOString()
+                : null,
+              confirmationDate: m.user.staffProfile.confirmationDate
+                ? m.user.staffProfile.confirmationDate.toISOString()
+                : null,
+              noticePeriodDays: m.user.staffProfile.noticePeriodDays,
             }
           : null,
         taughtClasses: m.user.taughtClasses,
@@ -303,6 +273,9 @@ export const GET = withApi(async (req: NextRequest) => {
           ? {
               id: m.user.guardianProfile.id,
               relationship: m.user.guardianProfile.relationship,
+              occupation: m.user.guardianProfile.occupation,
+              isPrimaryContact: m.user.guardianProfile.isPrimaryContact,
+              pickupPin: m.user.guardianProfile.pickupPin ? '••••' : null,
               students: m.user.guardianProfile.studentLinks.map((sl) => ({
                 id: sl.student.id,
                 name: `${sl.student.firstName} ${sl.student.lastName || ''}`.trim(),
@@ -331,20 +304,46 @@ export const GET = withApi(async (req: NextRequest) => {
       tabs: {
         ALL: tabAll,
         STAFF: tabStaff,
-        TEACHER: tabTeacher,
-        PARENT: tabParent,
-        GUARDIAN: tabGuardian,
-        PRINCIPAL: tabPrincipal,
-        COORDINATOR: tabCoordinator,
-        ACCOUNTS: tabAccounts,
-        RECEPTIONIST: tabReceptionist,
-        ATTENDANT: tabAttendant,
-        DRIVER: tabDriver,
+        STAFF_ACTIVE: tabStaffActive,
+        FAMILY: tabFamily,
+        FAMILY_ACTIVE: tabFamilyActive,
+        TEACHER: roleCounts['TEACHER'] || 0,
+        PARENT: roleCounts['PARENT'] || 0,
+        GUARDIAN: roleCounts['GUARDIAN'] || 0,
+        PRINCIPAL: roleCounts['PRINCIPAL'] || 0,
+        COORDINATOR: roleCounts['COORDINATOR'] || 0,
+        ACCOUNTS: roleCounts['ACCOUNTS'] || 0,
+        RECEPTIONIST: roleCounts['RECEPTIONIST'] || 0,
+        ATTENDANT: roleCounts['ATTENDANT'] || 0,
+        DRIVER: roleCounts['DRIVER'] || 0,
         PENDING: tabPending,
       },
     }
   )
 }, { module: 'users' })
+
+/**
+ * Generates a cryptographically secure initial password.
+ * Uses only CSPRNG sources (Node.js crypto.randomBytes, Web Crypto getRandomValues, or randomUUID).
+ * Never uses Math.random. Fails safely if secure entropy is unavailable.
+ */
+function generateSecureInitialPassword(): string {
+  if (typeof crypto?.randomBytes === 'function') {
+    return `PreOne@${crypto.randomBytes(6).toString('hex')}`
+  }
+  if (typeof globalThis.crypto?.getRandomValues === 'function') {
+    const bytes = new Uint8Array(6)
+    globalThis.crypto.getRandomValues(bytes)
+    return `PreOne@${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`
+  }
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return `PreOne@${globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`
+  }
+  throw errBusiness(
+    ErrorCodes.SYSTEM_INTERNAL_ERROR,
+    'Cryptographically secure random number generator is unavailable.'
+  )
+}
 
 /** POST /api/v1/users — create/invite user with role and relations (users:write) */
 export const POST = withApi(async (req: NextRequest) => {
@@ -384,6 +383,21 @@ export const POST = withApi(async (req: NextRequest) => {
     joiningDate,
     status: inputStatus,
     isInvite,
+    emergencyContactName,
+    emergencyContactPhone,
+    maritalStatus,
+    bloodGroup,
+    currentAddress,
+    permanentAddress,
+    panNumber,
+    aadhaarNumber,
+    uanNumber,
+    esiNumber,
+    probationEndDate,
+    confirmationDate,
+    noticePeriodDays,
+    occupation,
+    locale,
   } = body as {
     fullName: string
     email: string
@@ -413,7 +427,26 @@ export const POST = withApi(async (req: NextRequest) => {
     joiningDate?: string
     status?: UserStatus
     isInvite?: boolean
+    emergencyContactName?: string
+    emergencyContactPhone?: string
+    maritalStatus?: string
+    bloodGroup?: any
+    currentAddress?: string
+    permanentAddress?: string
+    panNumber?: string
+    aadhaarNumber?: string
+    uanNumber?: string
+    esiNumber?: string
+    probationEndDate?: string
+    confirmationDate?: string
+    noticePeriodDays?: number
+    occupation?: string
+    locale?: string
   }
+
+  const effectiveFullName = (fullName || (body as any).parentName || (body as any).parentGuardianFullName || '').trim()
+  const effectiveEmail = (email || (body as any).parentEmail || (body as any).parentGuardianEmail || '').trim().toLowerCase()
+  const effectivePhone = phone || (body as any).parentPhone || (body as any).parentGuardianPhone
 
   // Determine roles array and primary role
   let assignedRoles: UserRole[] = []
@@ -423,15 +456,22 @@ export const POST = withApi(async (req: NextRequest) => {
     const primary = normalizeRole(primaryRole || role || ('TEACHER' as UserRole)) as UserRole
     const others = inputAdditionalRoles.map((r) => normalizeRole(r) as UserRole)
     assignedRoles = [...new Set([primary, ...others])]
+  } else if (primaryRole) {
+    assignedRoles = [normalizeRole(primaryRole) as UserRole]
   } else if (role) {
     assignedRoles = [normalizeRole(role) as UserRole]
+  } else if ((body as any).userType === 'FAMILY' || (body as any).parentName || (body as any).childMode) {
+    assignedRoles = ['PARENT']
   }
 
-  if (!fullName || !email || assignedRoles.length === 0) {
+  if (!effectiveFullName || !effectiveEmail || assignedRoles.length === 0) {
     throw errValidation('fullName, email, and at least one role are required', 'fullName')
   }
 
-  const effectivePassword = password && password.length >= 6 ? password : 'PreOneUser@2026'
+  const isGeneratedPassword = !password || password.trim().length < 8
+  const effectivePassword = isGeneratedPassword
+    ? generateSecureInitialPassword()
+    : password.trim()
 
   // Primary role defaults to primaryRole if in assignedRoles, else first role in array, else input role
   const normPrimaryRole = primaryRole ? (normalizeRole(primaryRole) as UserRole) : undefined
@@ -448,9 +488,77 @@ export const POST = withApi(async (req: NextRequest) => {
   if (branchId) {
     const branchErr = requireBranchAccess(session, branchId)
     if (branchErr) return branchErr
+
+    const branchExists = await db.branch.findFirst({
+      where: { id: branchId, tenantId: session.tenantId },
+    })
+    if (!branchExists) {
+      throw errNotFound('Selected campus branch was not found in this school', ErrorCodes.NOT_FOUND_RESOURCE, 'branchId')
+    }
   }
 
   const initialStatus: UserStatus = inputStatus || (isInvite ? 'PENDING' : 'ACTIVE')
+
+  const isFamilyFlow =
+    assignedRoles.length === 1 &&
+    (assignedRoles.includes('PARENT') || assignedRoles.includes('GUARDIAN')) &&
+    Boolean(
+      (body as any).childMode ||
+      (body as any).newChild ||
+      (body as any).studentFullName ||
+      (body as any).studentDateOfBirth ||
+      (body as any).childFirstName ||
+      (body as any).studentId ||
+      (body as any).studentAdmissionNo ||
+      (body as any).existingChild ||
+      (body as any).parentGuardianFullName
+    )
+
+  if (isFamilyFlow) {
+    const familyInput = normalizeFamilyCreateInput({
+      ...body,
+      fullName: effectiveFullName,
+      email: effectiveEmail,
+      phone: effectivePhone,
+      role: finalPrimaryRole,
+      password: effectivePassword,
+      status: initialStatus,
+      branchId: branchId || undefined,
+    })
+
+    const familyResult = await FamilyUserService.createFamilyUser(
+      {
+        tenantId: session.tenantId!,
+        actorId: (session as any).userId || session.uid,
+        actorName: (session as any).fullName || session.name,
+        actorRole: session.role,
+        actorBranchId: session.branchId,
+        reqMeta: getRequestMeta(req),
+      },
+      familyInput
+    )
+
+    return ok(
+      {
+        id: familyResult.user.id,
+        userId: familyResult.user.id,
+        email: familyResult.user.email,
+        fullName: familyResult.user.fullName,
+        username: familyResult.user.username,
+        role: finalPrimaryRole,
+        roles: assignedRoles,
+        status: familyResult.user.status,
+        membershipId: familyResult.membership?.id,
+        guardianId: familyResult.guardian?.id,
+        studentId: familyResult.student?.id,
+        student: familyResult.student,
+        parent: familyResult.user,
+        isNewStudent: familyResult.isNewStudent,
+      },
+      undefined,
+      201
+    )
+  }
 
   const emailNorm = email.toLowerCase().trim()
   const phoneNorm = phone?.trim() || null
@@ -489,6 +597,42 @@ export const POST = withApi(async (req: NextRequest) => {
     }
   }
 
+  // Check username uniqueness if provided
+  const rawUsername = (body as any).username?.trim()
+  if (rawUsername) {
+    const existingUsername = await db.user.findFirst({
+      where: {
+        username: { equals: rawUsername, mode: 'insensitive' },
+        deletedAt: null,
+      },
+    })
+    if (existingUsername) {
+      throw errConflict(
+        `Username "${rawUsername}" is already taken. Please choose another username.`,
+        ErrorCodes.CONFLICT_DUPLICATE_RECORD,
+        'username'
+      )
+    }
+  }
+
+  // Check employee code uniqueness within tenant if provided
+  const rawEmployeeCode = employeeCode?.trim()
+  if (rawEmployeeCode) {
+    const existingCode = await db.staffProfile.findFirst({
+      where: {
+        tenantId: session.tenantId,
+        employeeCode: rawEmployeeCode,
+      },
+    })
+    if (existingCode) {
+      throw errConflict(
+        `A staff member with employee code "${rawEmployeeCode}" already exists in this school`,
+        ErrorCodes.CONFLICT_DUPLICATE_RECORD,
+        'employeeCode'
+      )
+    }
+  }
+
   // Run creation inside an atomic transaction
   const result = await db.$transaction(async (tx) => {
     let user = await tx.user.findUnique({ where: { email: emailNorm } })
@@ -502,7 +646,9 @@ export const POST = withApi(async (req: NextRequest) => {
           phone: phoneNorm,
           avatarUrl: avatarUrl?.trim() || null,
           passwordHash: await bcrypt.hash(effectivePassword, 10),
+          mustChangePassword: isGeneratedPassword,
           status: initialStatus,
+          locale: locale || 'en-IN',
         },
       })
     } else {
@@ -514,6 +660,7 @@ export const POST = withApi(async (req: NextRequest) => {
           ...(phoneNorm ? { phone: phoneNorm } : {}),
           ...((body as any).username ? { username: (body as any).username.trim() } : {}),
           ...(avatarUrl ? { avatarUrl: avatarUrl.trim() } : {}),
+          ...(locale ? { locale } : {}),
           status: initialStatus,
         },
       })
@@ -616,6 +763,7 @@ export const POST = withApi(async (req: NextRequest) => {
               pickupPin: pickupPin?.trim() || null,
               userId: user.id,
               isPrimaryContact: Boolean(isPrimary),
+              occupation: occupation?.trim() || null,
             },
           })
         }
@@ -737,27 +885,78 @@ export const POST = withApi(async (req: NextRequest) => {
           finalEmpCode = existingProfile.employeeCode
         } else {
           const prefix = assignedRoles.includes('TEACHER') ? 'TCH' : 'EMP'
-          const count = await tx.staffProfile.count({ where: { tenantId: session.tenantId! } })
-          finalEmpCode = `${prefix}-${String(count + 1).padStart(4, '0')}`
+          let candidateIndex = (await tx.staffProfile.count({ where: { tenantId: session.tenantId! } })) + 1
+          let candidate = `${prefix}-${String(candidateIndex).padStart(4, '0')}`
+          while (await tx.staffProfile.findFirst({ where: { tenantId: session.tenantId!, employeeCode: candidate } })) {
+            candidateIndex++
+            candidate = `${prefix}-${String(candidateIndex).padStart(4, '0')}`
+          }
+          finalEmpCode = candidate
+        }
+      } else {
+        const codeInTx = await tx.staffProfile.findFirst({
+          where: {
+            tenantId: session.tenantId!,
+            employeeCode: finalEmpCode,
+            userId: { not: user.id },
+          },
+        })
+        if (codeInTx) {
+          throw errConflict(
+            `A staff member with employee code "${finalEmpCode}" already exists in this school`,
+            ErrorCodes.CONFLICT_DUPLICATE_RECORD,
+            'employeeCode'
+          )
         }
       }
 
-      const parsedDob = dateOfBirth ? new Date(dateOfBirth) : undefined
-      const parsedJoining = joiningDate ? new Date(joiningDate) : undefined
+      const safeParseDate = (d?: any): Date | undefined => {
+        if (!d) return undefined
+        const parsed = new Date(d)
+        return isNaN(parsed.getTime()) ? undefined : parsed
+      }
+
+      const parsedDob = safeParseDate(dateOfBirth)
+      const parsedJoining = safeParseDate(joiningDate)
+      const parsedProbation = safeParseDate(probationEndDate)
+      const parsedConfirmation = safeParseDate(confirmationDate)
+      const noticePeriod =
+        noticePeriodDays !== undefined && noticePeriodDays !== null && !isNaN(Number(noticePeriodDays))
+          ? Number(noticePeriodDays)
+          : undefined
+
+      const normGender = gender
+        ? ['MALE', 'FEMALE', 'OTHER', 'UNSPECIFIED'].includes(String(gender).toUpperCase().trim())
+          ? (String(gender).toUpperCase().trim() as Gender)
+          : null
+        : null
 
       if (existingProfile) {
         await tx.staffProfile.update({
           where: { id: existingProfile.id },
           data: {
             employeeCode: finalEmpCode,
-            designation: designation?.trim() || existingProfile.designation,
-            department: department?.trim() || existingProfile.department,
-            qualification: qualification?.trim() || existingProfile.qualification,
+            designation: designation !== undefined ? (designation?.trim() || null) : existingProfile.designation,
+            department: department !== undefined ? (department?.trim() || null) : existingProfile.department,
+            qualification: qualification !== undefined ? (qualification?.trim() || null) : existingProfile.qualification,
             employmentType: employmentType || existingProfile.employmentType,
             branchId: branchId || existingProfile.branchId,
             ...(parsedDob ? { dateOfBirth: parsedDob } : {}),
-            ...(gender ? { gender } : {}),
+            ...(normGender ? { gender: normGender } : {}),
             ...(parsedJoining ? { joiningDate: parsedJoining } : {}),
+            ...(emergencyContactName !== undefined ? { emergencyContactName: emergencyContactName?.trim() || null } : {}),
+            ...(emergencyContactPhone !== undefined ? { emergencyContactPhone: emergencyContactPhone?.trim() || null } : {}),
+            ...(maritalStatus !== undefined ? { maritalStatus: maritalStatus?.trim() || null } : {}),
+            ...(bloodGroup !== undefined ? { bloodGroup: normalizeBloodGroup(bloodGroup) } : {}),
+            ...(currentAddress !== undefined ? { currentAddress: currentAddress?.trim() || null } : {}),
+            ...(permanentAddress !== undefined ? { permanentAddress: permanentAddress?.trim() || null } : {}),
+            ...(panNumber !== undefined ? { panNumber: panNumber?.trim() || null } : {}),
+            ...(aadhaarNumber !== undefined ? { aadhaarNumber: aadhaarNumber?.trim() || null } : {}),
+            ...(uanNumber !== undefined ? { uanNumber: uanNumber?.trim() || null } : {}),
+            ...(esiNumber !== undefined ? { esiNumber: esiNumber?.trim() || null } : {}),
+            ...(parsedProbation ? { probationEndDate: parsedProbation } : {}),
+            ...(parsedConfirmation ? { confirmationDate: parsedConfirmation } : {}),
+            ...(noticePeriod !== undefined ? { noticePeriodDays: noticePeriod } : {}),
           },
         })
       } else {
@@ -769,11 +968,24 @@ export const POST = withApi(async (req: NextRequest) => {
             designation: designation?.trim() || null,
             department: department?.trim() || null,
             qualification: qualification?.trim() || null,
-            employmentType: employmentType || 'REGULAR',
+            employmentType: employmentType || 'FULL_TIME',
             branchId: branchId || null,
             dateOfBirth: parsedDob || null,
-            gender: gender || null,
+            gender: normGender,
             joiningDate: parsedJoining || null,
+            emergencyContactName: emergencyContactName?.trim() || null,
+            emergencyContactPhone: emergencyContactPhone?.trim() || null,
+            maritalStatus: maritalStatus?.trim() || null,
+            bloodGroup: normalizeBloodGroup(bloodGroup),
+            currentAddress: currentAddress?.trim() || null,
+            permanentAddress: permanentAddress?.trim() || null,
+            panNumber: panNumber?.trim() || null,
+            aadhaarNumber: aadhaarNumber?.trim() || null,
+            uanNumber: uanNumber?.trim() || null,
+            esiNumber: esiNumber?.trim() || null,
+            probationEndDate: parsedProbation || null,
+            confirmationDate: parsedConfirmation || null,
+            noticePeriodDays: noticePeriod !== undefined ? noticePeriod : 60,
           },
         })
       }
@@ -829,6 +1041,8 @@ export const POST = withApi(async (req: NextRequest) => {
       membershipId: result.membership.id,
       fullName: result.user.fullName,
       email: result.user.email,
+      username: result.user.username,
+      avatarUrl: result.user.avatarUrl,
       phone: result.user.phone,
       role: result.finalPrimaryRole,
       roles: result.assignedRoles,

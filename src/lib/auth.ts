@@ -21,6 +21,7 @@ export interface SessionPayload {
   branchId?: string | null
   role: Role // Canonical primary role
   roles?: Role[] // All assigned roles
+  mustChangePassword?: boolean
 }
 
 // ── RBAC — permission bundles per role (PRD §7 + API Catalog §5.3) ──
@@ -194,6 +195,7 @@ export function can(roleOrRoles: Role | Role[] | undefined | null, permission: s
 export async function signSession(payload: SessionPayload): Promise<string> {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
+    .setJti(crypto.randomUUID())
     .setIssuedAt()
     .setIssuer('preone')
     .setExpirationTime('7d')

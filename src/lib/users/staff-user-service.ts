@@ -1,6 +1,6 @@
 import { db } from '@/lib/db'
 import { UserRole, UserStatus } from '@prisma/client'
-import { StaffCreateInput, validateStaffInput } from './user-validation'
+import { StaffCreateInput, validateStaffInput, normalizeBloodGroup } from './user-validation'
 import { UserIdentityService } from './user-identity-service'
 import { recordAudit } from '@/lib/audit'
 import { nextNumber } from '@/lib/sequence'
@@ -43,7 +43,7 @@ export class StaffUserService {
   /**
    * Authoritative Flow 1: Create or Invite a Staff Member
    */
-  static async createStaff(ctx: StaffContext, input: StaffCreateInput) {
+  static async createStaff(ctx: StaffContext, input: StaffCreateInput, externalTx?: any) {
     if (!ctx.tenantId) throw new Error('Tenant identifier is required')
 
     // 1. Validation
@@ -105,7 +105,7 @@ export class StaffUserService {
     }
 
     // 4. Atomic transaction
-    const result = await db.$transaction(async (tx) => {
+    const executeLogic = async (tx: any) => {
       // Step A: Create or resolve User identity
       const { user } = await UserIdentityService.resolveOrCreateUser(tx, {
         fullName: input.fullName,
@@ -116,15 +116,27 @@ export class StaffUserService {
         status: initialStatus,
         usernameType: 'STAFF',
         avatarUrl: input.avatarUrl || null,
+        locale: input.locale,
       })
 
-      // Step B: Create TenantUser membership
+      // Step B: Create or update TenantUser membership (preserving existing role if unsupplied)
+      const existingMembership = await tx.tenantUser.findFirst({
+        where: { tenantId: ctx.tenantId, userId: user.id, deletedAt: null },
+      })
+      const hasExplicitRole = Boolean(input.role || input.roles?.length || input.primaryRole || input.additionalRoles?.length)
+      const targetRole = hasExplicitRole ? primaryRole : existingMembership?.role || primaryRole
+      const targetRoles = hasExplicitRole
+        ? assignedRoles
+        : existingMembership?.roles && existingMembership.roles.length > 0
+        ? existingMembership.roles
+        : [targetRole]
+
       const membership = await UserIdentityService.createOrUpdateMembership(tx, {
         tenantId: ctx.tenantId,
         userId: user.id,
-        role: primaryRole,
-        roles: assignedRoles,
-        branchId: input.branchId || null,
+        role: targetRole,
+        roles: targetRoles,
+        branchId: input.branchId !== undefined ? (input.branchId || null) : existingMembership?.branchId || null,
         status: initialStatus,
       })
 
@@ -140,20 +152,39 @@ export class StaffUserService {
 
       const parsedDob = input.dateOfBirth ? new Date(input.dateOfBirth) : undefined
       const parsedJoining = input.joiningDate ? new Date(input.joiningDate) : undefined
+      const parsedProbation = input.probationEndDate ? new Date(input.probationEndDate) : undefined
+      const parsedConfirmation = input.confirmationDate ? new Date(input.confirmationDate) : undefined
+      const noticePeriod =
+        input.noticePeriodDays !== undefined && input.noticePeriodDays !== null
+          ? Number(input.noticePeriodDays)
+          : undefined
 
       if (staffProfile) {
         staffProfile = await tx.staffProfile.update({
           where: { id: staffProfile.id },
           data: {
             employeeCode: empCode,
-            designation: input.designation?.trim() || staffProfile.designation,
-            department: input.department?.trim() || staffProfile.department,
-            qualification: input.qualification?.trim() || staffProfile.qualification,
+            designation: input.designation !== undefined ? (input.designation?.trim() || null) : staffProfile.designation,
+            department: input.department !== undefined ? (input.department?.trim() || null) : staffProfile.department,
+            qualification: input.qualification !== undefined ? (input.qualification?.trim() || null) : staffProfile.qualification,
             employmentType: input.employmentType || staffProfile.employmentType || 'FULL_TIME',
             branchId: input.branchId !== undefined ? input.branchId : staffProfile.branchId,
             ...(parsedDob ? { dateOfBirth: parsedDob } : {}),
             ...(input.gender !== undefined ? { gender: input.gender } : {}),
             ...(parsedJoining ? { joiningDate: parsedJoining } : {}),
+            ...(input.emergencyContactName !== undefined ? { emergencyContactName: input.emergencyContactName?.trim() || null } : {}),
+            ...(input.emergencyContactPhone !== undefined ? { emergencyContactPhone: input.emergencyContactPhone?.trim() || null } : {}),
+            ...(input.maritalStatus !== undefined ? { maritalStatus: input.maritalStatus?.trim() || null } : {}),
+            ...(input.bloodGroup !== undefined ? { bloodGroup: normalizeBloodGroup(input.bloodGroup) } : {}),
+            ...(input.currentAddress !== undefined ? { currentAddress: input.currentAddress?.trim() || null } : {}),
+            ...(input.permanentAddress !== undefined ? { permanentAddress: input.permanentAddress?.trim() || null } : {}),
+            ...(input.panNumber !== undefined ? { panNumber: input.panNumber?.trim() || null } : {}),
+            ...(input.aadhaarNumber !== undefined ? { aadhaarNumber: input.aadhaarNumber?.trim() || null } : {}),
+            ...(input.uanNumber !== undefined ? { uanNumber: input.uanNumber?.trim() || null } : {}),
+            ...(input.esiNumber !== undefined ? { esiNumber: input.esiNumber?.trim() || null } : {}),
+            ...(parsedProbation ? { probationEndDate: parsedProbation } : {}),
+            ...(parsedConfirmation ? { confirmationDate: parsedConfirmation } : {}),
+            ...(noticePeriod !== undefined ? { noticePeriodDays: noticePeriod } : {}),
           },
         })
       } else {
@@ -170,6 +201,19 @@ export class StaffUserService {
             dateOfBirth: parsedDob || null,
             gender: input.gender || null,
             joiningDate: parsedJoining || null,
+            emergencyContactName: input.emergencyContactName?.trim() || null,
+            emergencyContactPhone: input.emergencyContactPhone?.trim() || null,
+            maritalStatus: input.maritalStatus?.trim() || null,
+            bloodGroup: normalizeBloodGroup(input.bloodGroup),
+            currentAddress: input.currentAddress?.trim() || null,
+            permanentAddress: input.permanentAddress?.trim() || null,
+            panNumber: input.panNumber?.trim() || null,
+            aadhaarNumber: input.aadhaarNumber?.trim() || null,
+            uanNumber: input.uanNumber?.trim() || null,
+            esiNumber: input.esiNumber?.trim() || null,
+            probationEndDate: parsedProbation || null,
+            confirmationDate: parsedConfirmation || null,
+            noticePeriodDays: noticePeriod !== undefined ? noticePeriod : 60,
           },
         })
       }
@@ -194,7 +238,9 @@ export class StaffUserService {
         staffProfile,
         classroom: assignedClassroom,
       }
-    })
+    }
+
+    const result = externalTx ? await executeLogic(externalTx) : await db.$transaction(executeLogic)
 
     // 5. Emit audit log
     await recordAudit({

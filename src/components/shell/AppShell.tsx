@@ -17,6 +17,9 @@ import { BottomNav } from '@/components/shell/BottomNav'
 import { RouteProgress } from '@/components/preone/RouteProgress'
 import { WorkspaceBackground } from '@/components/shell/WorkspaceBackground'
 import { GlobalWorkspaceHeader } from '@/components/shell/GlobalWorkspaceHeader'
+import { StaffProfileModal } from '@/components/profile/StaffProfileModal'
+import { getStoredShellGlowConfig, applyShellGlowToDom } from '@/lib/theme/shell-glow'
+import type { BrandingConfig } from '@/lib/branding-types'
 
 export interface ShellUser {
   name: string
@@ -24,14 +27,31 @@ export interface ShellUser {
   role: Role
   tenantName: string
   branchName: string | null
+  avatarUrl?: string | null
 }
 
-export function AppShell({ user, children }: { user: ShellUser; children: React.ReactNode }) {
+export function AppShell({
+  user,
+  branding,
+  children,
+}: {
+  user: ShellUser
+  branding?: BrandingConfig
+  children: React.ReactNode
+}) {
   const router = useRouter()
   const pathname = usePathname()
 
   const [menuOpen, setMenuOpen] = useState(false)
+  const [profileModalOpen, setProfileModalOpen] = useState(false)
   const [searchModalOpen, setSearchModalOpen] = useState(false)
+  const [nameOverride, setNameOverride] = useState<string | null>(null)
+  const [avatarOverride, setAvatarOverride] = useState<string | null>(null)
+  const shellUser: ShellUser = {
+    ...user,
+    ...(nameOverride ? { name: nameOverride } : {}),
+    ...(avatarOverride !== null ? { avatarUrl: avatarOverride } : {}),
+  }
   const [query, setQuery] = useState('')
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const searchRef = useRef<HTMLInputElement>(null)
@@ -39,6 +59,16 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
   const startBtnRef = useRef<HTMLButtonElement>(null)
   const headerSearchRef = useRef<HTMLInputElement>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
+
+  const handleProfileUpdated = (updated?: { name?: string; avatarUrl?: string | null }) => {
+    if (updated?.name) {
+      setNameOverride(updated.name)
+    }
+    if (updated?.avatarUrl !== undefined) {
+      setAvatarOverride(updated.avatarUrl)
+    }
+    router.refresh()
+  }
 
   // Notification center state
   const [notifications, setNotifications] = useState<any[]>([])
@@ -101,8 +131,10 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
     return () => clearInterval(timer)
   }, [])
 
-  // Poll users KPIs for the "needs attention" panel (quiet fail for non-privileged roles)
+  // Poll users KPIs for the "needs attention" panel (privileged roles only)
   useEffect(() => {
+    if (!['OWNER', 'PRINCIPAL', 'PLATFORM_ADMIN'].includes(user.role)) return
+
     const loadAttention = async () => {
       try {
         const res = await fetch('/api/v1/users?pageSize=1').then((r) => r.json())
@@ -119,23 +151,44 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
     loadAttention()
     const timer = setInterval(loadAttention, 60000)
     return () => clearInterval(timer)
-  }, [])
+  }, [user.role])
 
   const nav = useMemo(() => navForRole(user.role), [user.role])
 
 
   // theme boot + persistence (reads localStorage once on mount)
   useEffect(() => {
-    const t = (localStorage.getItem('preone-theme') as 'light' | 'dark') || 'light'
+    const stored = localStorage.getItem('preone_theme') || localStorage.getItem('preone-theme')
+    let isDark = false
+    if (stored === 'dark') {
+      isDark = true
+    } else if (stored === 'light') {
+      isDark = false
+    } else {
+      isDark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+    }
+    const t = isDark ? 'dark' : 'light'
     document.documentElement.setAttribute('data-theme', t)
+    document.documentElement.classList.toggle('dark', isDark)
     queueMicrotask(() => setTheme(t))
+    applyShellGlowToDom(getStoredShellGlowConfig())
   }, [])
 
   const toggleTheme = useCallback(() => {
+    // Enable smooth cross-fade transition only during deliberate user toggle
+    document.documentElement.classList.add('theme-transition-active')
+    setTimeout(() => {
+      document.documentElement.classList.remove('theme-transition-active')
+    }, 250)
+
     setTheme((prev) => {
       const next = prev === 'light' ? 'dark' : 'light'
-      localStorage.setItem('preone-theme', next)
+      try {
+        localStorage.setItem('preone_theme', next)
+        localStorage.setItem('preone-theme', next)
+      } catch {}
       document.documentElement.setAttribute('data-theme', next)
+      document.documentElement.classList.toggle('dark', next === 'dark')
       return next
     })
   }, [])
@@ -222,7 +275,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
   const filteredTiles = q ? nav.filter((n) => n.label.toLowerCase().includes(q)) : nav
 
   const roleLabel = enumLabel(user.role)
-  const initials = user.name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('')
+  const initials = (user.name || user.email || 'User').split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('')
   const attentionTotal = attention.invited + attention.suspended
 
   return (
@@ -231,7 +284,8 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
       <RouteProgress />
       {/* ── Global Workspace Top Bar (Reference Match) ── */}
       <GlobalWorkspaceHeader
-        user={user}
+        user={shellUser}
+        branding={branding}
         theme={theme}
         onToggleTheme={toggleTheme}
         onOpenSearch={() => setSearchModalOpen(true)}
@@ -256,6 +310,8 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
         onOpenHelp={() => setShortcutOpen(true)}
         avatarRef={avatarRef}
         onOpenProfile={() => setMenuOpen(true)}
+        onOpenMyProfile={() => setProfileModalOpen(true)}
+        onLogout={logout}
         pathname={pathname}
       />
 
@@ -269,10 +325,18 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
       <StartMenu
         isOpen={menuOpen}
         onClose={() => setMenuOpen(false)}
-        user={user}
+        user={shellUser}
         onLogout={logout}
+        onOpenMyProfile={() => setProfileModalOpen(true)}
         triggerRef={startBtnRef}
         menuRef={menuRef}
+      />
+
+      {/* ── Staff Self-Service Profile Modal ── */}
+      <StaffProfileModal
+        open={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        onProfileUpdated={handleProfileUpdated}
       />
       {/* E2E verification reference contracts */}
       {false && filteredTiles.map((n) => n.key)}
@@ -292,6 +356,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
       <GlobalSearchModal
         isOpen={searchModalOpen}
         onClose={() => setSearchModalOpen(false)}
+        user={user}
       />
 
       {/* ── Keyboard shortcut cheat sheet (? key) ── */}

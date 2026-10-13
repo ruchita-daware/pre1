@@ -68,8 +68,9 @@ export class SessionService {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
 
     try {
-      return await db.userSession.create({
-        data: {
+      return await db.userSession.upsert({
+        where: { tokenHash },
+        create: {
           userId: params.userId,
           tenantId: params.tenantId ?? undefined,
           tokenHash,
@@ -79,6 +80,12 @@ export class SessionService {
           userAgent: meta.userAgent,
           expiresAt,
           status: 'ACTIVE',
+        },
+        update: {
+          status: 'ACTIVE',
+          expiresAt,
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
         },
       })
     } catch (err: any) {
@@ -156,7 +163,7 @@ export class SessionService {
   }
 
   /**
-   * Revokes a specific session.
+   * Revokes a specific session by ID.
    */
   static async revokeSession(sessionId: string, userId?: string): Promise<boolean> {
     const where: any = { id: sessionId }
@@ -173,15 +180,35 @@ export class SessionService {
   }
 
   /**
-   * Revokes all active sessions for a user (e.g., password change, suspension, logout-all).
+   * Revokes a session identified by its raw JWT token.
    */
-  static async revokeAllUserSessions(userId: string, exceptTokenHash?: string): Promise<number> {
+  static async revokeSessionByToken(token: string): Promise<boolean> {
+    if (!token) return false
+    const tokenHash = this.hashToken(token)
+    const res = await db.userSession.updateMany({
+      where: { tokenHash },
+      data: {
+        status: 'REVOKED',
+        updatedAt: new Date(),
+      },
+    })
+    return res.count > 0
+  }
+
+  /**
+   * Revokes all active sessions for a user (e.g., password change, suspension, logout-all).
+   * If tenantId is provided, revokes active sessions specifically for that tenant.
+   */
+  static async revokeAllUserSessions(userId: string, exceptTokenHash?: string, tenantId?: string | null): Promise<number> {
     const where: any = {
       userId,
       status: 'ACTIVE',
     }
     if (exceptTokenHash) {
       where.tokenHash = { not: exceptTokenHash }
+    }
+    if (tenantId) {
+      where.tenantId = tenantId
     }
 
     const res = await db.userSession.updateMany({

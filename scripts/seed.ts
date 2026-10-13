@@ -62,10 +62,67 @@ async function main() {
   }
 
   const hash = await bcrypt.hash(PASSWORD, 10)
+  const preoneAdminPassword = process.env.PREONE_ADMIN_PASSWORD || 'Preone@2311'
+  const hashPreoneAdmin = await bcrypt.hash(preoneAdminPassword, 10)
 
   // ── Platform admin (no tenant) ──
   await db.user.create({
     data: { email: 'platform@preone.in', username: 'platform.admin', fullName: 'PreOne Platform Admin', passwordHash: hash, status: 'ACTIVE' },
+  })
+
+  // ── PREONE School Tenant ──
+  const tenantPreone = await db.tenant.create({
+    data: {
+      name: 'PreOne Preschool Academy',
+      code: 'PREONE',
+      type: 'SCHOOL',
+      status: 'ACTIVE',
+      subscriptionPlan: 'PRO',
+      maxBranches: 5,
+      maxStudents: 500,
+      onboardingStep: 5,
+      onboardedAt: new Date(),
+    },
+  })
+
+  const branchPreone = await db.branch.create({
+    data: {
+      tenantId: tenantPreone.id,
+      name: 'PreOne Main Campus',
+      code: 'MAIN',
+      isMain: true,
+    },
+  })
+
+  const userPreone = await db.user.create({
+    data: {
+      email: 'admin@preone.com',
+      username: 'admin',
+      fullName: 'PreOne Administrator',
+      passwordHash: hashPreoneAdmin,
+      status: 'ACTIVE',
+    },
+  })
+
+  await db.tenantUser.create({
+    data: {
+      tenantId: tenantPreone.id,
+      userId: userPreone.id,
+      role: 'OWNER',
+      roles: ['OWNER', 'PRINCIPAL'],
+      branchId: branchPreone.id,
+      status: 'ACTIVE',
+    },
+  })
+
+  await db.staffProfile.create({
+    data: {
+      tenantId: tenantPreone.id,
+      userId: userPreone.id,
+      employeeCode: 'EMP-001',
+      designation: 'School Director',
+      branchId: branchPreone.id,
+    },
   })
 
   // ── Tenant ──
