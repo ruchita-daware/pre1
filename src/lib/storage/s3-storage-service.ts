@@ -248,7 +248,7 @@ export class S3StorageService {
       params.originalName,
       params.mimeType
     )
-    const url = this.resolvePublicUrl(key)
+    let url = this.resolvePublicUrl(key)
 
     if (this.isS3Configured()) {
       const s3 = this.getS3Client()
@@ -278,6 +278,7 @@ export class S3StorageService {
         await fs.promises.writeFile(path.join(dirPath, filename), params.buffer)
         url = `/uploads/${params.category}/${filename}`
       } catch (fsErr) {
+        console.error('[S3StorageService] Local upload write failed:', fsErr)
         url = `data:${params.mimeType};base64,${params.buffer.toString('base64')}`
       }
       mockS3Store.set(key, {

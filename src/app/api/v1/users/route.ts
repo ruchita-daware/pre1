@@ -616,6 +616,8 @@ export const POST = withApi(async (req: NextRequest) => {
       ? 'INVITE'
       : password && password.trim().length >= 6
       ? 'MANUAL'
+      : assignedRoles.every((r) => ['PARENT', 'GUARDIAN'].includes(r))
+      ? 'GENERATE'
       : 'MANUAL' // Default for staff account creation is manual credential setup
 
   const isStaffFlow = assignedRoles.some((r) =>
