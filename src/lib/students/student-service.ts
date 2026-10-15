@@ -999,6 +999,8 @@ export class StudentService {
       guardianPhone: string
       guardianEmail?: string
       guardianRelationship?: string
+      guardianId?: string
+      guardianUserId?: string
       canPickup?: boolean
       isFeePayer?: boolean
       confirmDuplicate?: boolean
@@ -1007,10 +1009,30 @@ export class StudentService {
   ) {
     const scope = await this.verifyScope(ctx.tenantId, input.branchId || ctx.branchId, input.academicSessionId || ctx.academicSessionId)
 
-    if (!input.firstName || !input.firstName.trim()) throw new Error('First name is required')
-    if (!input.dob) throw new Error('Date of birth is required')
-    if (!input.gender) throw new Error('Gender is required')
-    if (!input.guardianName || !input.guardianPhone) throw new Error('Guardian name and phone are required')
+    if (!input.firstName || !input.firstName.trim()) {
+      const err: any = new Error('First name is required')
+      err.code = 'VALIDATION_ERROR'
+      err.status = 400
+      throw err
+    }
+    if (!input.dob) {
+      const err: any = new Error('Date of birth is required')
+      err.code = 'VALIDATION_ERROR'
+      err.status = 400
+      throw err
+    }
+    if (!input.gender) {
+      const err: any = new Error('Gender is required')
+      err.code = 'VALIDATION_ERROR'
+      err.status = 400
+      throw err
+    }
+    if (!input.guardianName || !input.guardianPhone) {
+      const err: any = new Error('Guardian name and phone are required')
+      err.code = 'VALIDATION_ERROR'
+      err.status = 400
+      throw err
+    }
 
     // Duplicate Check
     if (!input.confirmDuplicate) {
@@ -1039,7 +1061,12 @@ export class StudentService {
       const anyBranch = await db.branch.findFirst({ where: { tenantId: scope.tenantId } })
       branchId = anyBranch?.id || null
     }
-    if (!branchId) throw new Error('Branch context is required')
+    if (!branchId) {
+      const err: any = new Error('Branch context is required')
+      err.code = 'BRANCH_REQUIRED'
+      err.status = 400
+      throw err
+    }
 
     // Classroom & Capacity Guard
     let classroom: any = null
@@ -1047,18 +1074,29 @@ export class StudentService {
       classroom = await db.classroom.findFirst({
         where: { id: input.classroomId, tenantId: scope.tenantId, isActive: true },
       })
-      if (!classroom) throw new Error('Selected classroom not found or inactive')
+      if (!classroom) {
+        const err: any = new Error('Selected classroom not found or inactive')
+        err.code = 'CLASSROOM_NOT_FOUND'
+        err.status = 404
+        throw err
+      }
 
       const seats = await classroomSeats(classroom.id)
       if (seats.available <= 0) {
-        throw new Error(`Classroom ${classroom.name} is at full capacity (${seats.current}/${seats.capacity}). Please choose another section.`)
+        const err: any = new Error(`Classroom ${classroom.name} is at full capacity (${seats.current}/${seats.capacity}). Please choose another section.`)
+        err.code = 'CLASSROOM_FULL'
+        err.status = 422
+        throw err
       }
 
       // Age eligibility check
       if (classroom.programType) {
         const ageCheck = await ConfigurationService.validateProgramAge(scope.tenantId, classroom.programType, input.dob)
         if (!ageCheck.eligible) {
-          throw new Error(`Age requirement not met for ${classroom.programType}: ${ageCheck.reason}`)
+          const err: any = new Error(`Age requirement not met for ${classroom.programType}: ${ageCheck.reason}`)
+          err.code = 'AGE_INELIGIBLE'
+          err.status = 422
+          throw err
         }
       }
     }
@@ -1089,20 +1127,66 @@ export class StudentService {
       })
 
       // 2. Resolve or Create Guardian
-      let guardian = await tx.guardian.findFirst({
-        where: { tenantId: scope.tenantId, phone: input.guardianPhone.trim() },
-      })
+      let guardian: any = null
+      if (input.guardianId) {
+        guardian = await tx.guardian.findFirst({
+          where: { id: input.guardianId, tenantId: scope.tenantId },
+        })
+      }
+      if (!guardian && input.guardianUserId) {
+        guardian = await tx.guardian.findFirst({
+          where: { userId: input.guardianUserId, tenantId: scope.tenantId },
+        })
+      }
       if (!guardian) {
-        guardian = await tx.guardian.create({
-          data: {
+        const cleanPhone = input.guardianPhone ? input.guardianPhone.trim().replace(/[^\d+]/g, '') : null
+        guardian = await tx.guardian.findFirst({
+          where: {
             tenantId: scope.tenantId,
-            fullName: input.guardianName.trim(),
-            phone: input.guardianPhone.trim(),
-            email: input.guardianEmail?.trim() || null,
-            relationship: (input.guardianRelationship as any) || 'FATHER',
-            isPrimaryContact: true,
+            OR: [
+              { phone: input.guardianPhone.trim() },
+              ...(cleanPhone ? [{ phone: cleanPhone }] : []),
+              ...(input.guardianEmail ? [{ email: input.guardianEmail.trim().toLowerCase() }] : []),
+            ],
           },
         })
+      }
+
+      if (guardian) {
+        // If guardian exists and userId is not yet set, set it if guardianUserId is provided
+        if (!guardian.userId && input.guardianUserId) {
+          const userAlreadyHasGuardian = await tx.guardian.findFirst({
+            where: { userId: input.guardianUserId, tenantId: scope.tenantId, id: { not: guardian.id } },
+          })
+          if (!userAlreadyHasGuardian) {
+            guardian = await tx.guardian.update({
+              where: { id: guardian.id },
+              data: { userId: input.guardianUserId },
+            })
+          }
+        }
+      } else {
+        if (input.guardianUserId) {
+          const existingGuardianByUser = await tx.guardian.findFirst({
+            where: { userId: input.guardianUserId },
+          })
+          if (existingGuardianByUser) {
+            guardian = existingGuardianByUser
+          }
+        }
+        if (!guardian) {
+          guardian = await tx.guardian.create({
+            data: {
+              tenantId: scope.tenantId,
+              userId: input.guardianUserId || null,
+              fullName: input.guardianName.trim(),
+              phone: input.guardianPhone.trim(),
+              email: input.guardianEmail?.trim() || null,
+              relationship: (input.guardianRelationship as any) || 'FATHER',
+              isPrimaryContact: true,
+            },
+          })
+        }
       }
 
       // 3. Link Student ↔ Guardian

@@ -350,6 +350,7 @@ export function EditUserModal({
         email: email.trim().toLowerCase() || null,
         phone: phone.trim() || null,
         username: username.trim() || null,
+        avatarUrl: avatarUrl || null,
         locale: locale ? normalizeLocale(locale) : DEFAULT_LOCALE,
         role,
         primaryRole: role,
@@ -1496,7 +1497,7 @@ export function EditUserModal({
                     <span>No Password Set</span>
                   </span>
                 )}
-              </div>
+
 
               {/* Masked Password View State (when password is configured and not currently in edit mode) */}
               {!isChangingPassword && user.hasPassword !== false && user.passwordStatus !== 'NOT_SET' ? (

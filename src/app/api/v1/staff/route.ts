@@ -23,7 +23,7 @@ async function _GET(req: NextRequest) {
     const profiles = await db.staffProfile.findMany({
       where: { tenantId: session.tenantId, deletedAt: null },
       include: {
-        user: { select: { id: true, fullName: true, email: true, status: true } },
+        user: { select: { id: true, fullName: true, email: true, status: true, passwordHash: true, mustChangePassword: true } },
         branch: { select: { name: true } },
       },
       orderBy: { createdAt: 'asc' },
@@ -49,6 +49,8 @@ async function _GET(req: NextRequest) {
         membershipStatus: m?.status ?? 'NO_MEMBERSHIP',
         branchAssigned: p.branchId != null && m?.branchId != null,
         classesAssigned: taught.get(p.userId) ?? 0,
+        hasPassword: Boolean(p.user.passwordHash && p.user.passwordHash.trim().length > 0),
+        mustChangePassword: Boolean(p.user.mustChangePassword),
       }
     }))
   } catch (e) {

@@ -1102,6 +1102,47 @@ export function User360Drawer({ open, onClose, user, onEdit, onStatusChange }: U
                     Sessions are tracked automatically upon user sign-in.
                   </p>
                 </div>
+=======
+          <div className="space-y-3 text-xs">
+            {/* Password & Credential Status */}
+            <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-gray-400 block text-[11px]">Login Password Status</span>
+                <div className="flex items-center gap-2">
+                  {user.hasPassword ? (
+                    <>
+                      <span className="badge b-success text-xs font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        Password set
+                      </span>
+                      <span className="text-muted-foreground font-mono tracking-widest text-xs">••••••••</span>
+                    </>
+                  ) : (
+                    <span className="badge b-warning text-xs font-semibold flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-amber-600" />
+                      Password not set
+                    </span>
+                  )}
+                </div>
+                <p className="text-gray-500 text-[11px] mt-0.5">
+                  {user.hasPassword
+                    ? 'Account credentials configured. Passwords are encrypted with one-way salted hashes and never displayed.'
+                    : 'No portal password has been configured for this account. Set a password to enable user login.'}
+                </p>
+              </div>
+              {onEdit && (
+                <button
+                  type="button"
+                  className="btn btn-secondary text-xs flex items-center gap-1 shrink-0 ml-3"
+                  onClick={() => {
+                    onClose()
+                    onEdit(user)
+                  }}
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  {user.hasPassword ? 'Reset Password' : 'Set Password'}
+                </button>
+>>>>>>> Stashed changes
               )}
             </div>
 
@@ -1684,6 +1725,23 @@ export function User360Drawer({ open, onClose, user, onEdit, onStatusChange }: U
               </div>
             )}
           </div>
+=======
+        {photoModalOpen && (
+          <PhotoUploadModal
+            open={photoModalOpen}
+            onClose={() => setPhotoModalOpen(false)}
+            userId={user.userId || user.id}
+            userName={user.name}
+            currentPhotoUrl={userAvatarUrl}
+            onSuccess={(newPhotoUrl) => {
+              setUserAvatarUrl(newPhotoUrl)
+              if (user) {
+                user.avatarUrl = newPhotoUrl
+              }
+              onStatusChange?.(user)
+            }}
+          />
+>>>>>>> Stashed changes
         )}
 
         {/* Actions Bar */}

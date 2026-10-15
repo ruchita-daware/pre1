@@ -7,6 +7,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import crypto from 'crypto'
 import path from 'path'
+import fs from 'fs'
 
 export interface PresignedUploadRequest {
   tenantId: string
@@ -190,11 +191,14 @@ export class S3StorageService {
     const expiresIn = 300 // 5 minutes TTL
 
     if (!this.isS3Configured()) {
-      // In development/test without S3 credentials, simulate signed endpoint URL
+      // In development/test without S3 credentials, simulate durable local storage
+      const ext = EXTENSION_MAP[params.mimeType] || 'png'
+      const filename = `${params.category === 'avatars' ? 'avatar' : params.category}-${params.tenantId}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`
+      const localUrl = `/uploads/${params.category}/${filename}`
       return {
-        uploadUrl: `/api/v1/uploads/mock-s3?key=${encodeURIComponent(key)}`,
+        uploadUrl: `/api/v1/uploads/mock-s3?key=${encodeURIComponent(key)}&filename=${encodeURIComponent(filename)}&category=${encodeURIComponent(params.category)}&tenantId=${encodeURIComponent(params.tenantId)}`,
         key,
-        fileUrl,
+        fileUrl: localUrl,
         expiresIn,
         isS3: false,
       }
@@ -265,6 +269,17 @@ export class S3StorageService {
         })
       )
     } else {
+      // In local dev/environments without S3 credentials, save locally to public/uploads
+      const ext = EXTENSION_MAP[params.mimeType] || 'png'
+      const filename = `${params.category === 'avatars' ? 'avatar' : params.category}-${params.tenantId}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`
+      const dirPath = path.join(process.cwd(), 'public', 'uploads', params.category)
+      try {
+        await fs.promises.mkdir(dirPath, { recursive: true })
+        await fs.promises.writeFile(path.join(dirPath, filename), params.buffer)
+        url = `/uploads/${params.category}/${filename}`
+      } catch (fsErr) {
+        url = `data:${params.mimeType};base64,${params.buffer.toString('base64')}`
+      }
       mockS3Store.set(key, {
         buffer: params.buffer,
         mimeType: params.mimeType,
@@ -318,6 +333,16 @@ export class S3StorageService {
   static async deleteObject(keyOrUrl: string | null | undefined): Promise<boolean> {
     if (!keyOrUrl || typeof keyOrUrl !== 'string') return false
     if (keyOrUrl.startsWith('data:')) return true
+
+    if (keyOrUrl.startsWith('/uploads/')) {
+      try {
+        const localPath = path.join(process.cwd(), 'public', keyOrUrl.replace(/^\//, ''))
+        await fs.promises.unlink(localPath).catch(() => {})
+        return true
+      } catch {
+        return false
+      }
+    }
 
     const key = this.extractKeyFromUrl(keyOrUrl)
     if (!key) return false

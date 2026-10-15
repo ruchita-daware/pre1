@@ -43,15 +43,19 @@ export class UserPhotoService {
   }): Promise<{ success: boolean; avatarUrl: string }> {
     // 1. Fetch user to verify tenant membership and clean up old avatar file
     const member = await db.tenantUser.findFirst({
-      where: { tenantId: params.tenantId, userId: params.userId, deletedAt: null },
-      include: { user: { select: { avatarUrl: true, fullName: true } } },
+      where: {
+        tenantId: params.tenantId,
+        deletedAt: null,
+        OR: [{ userId: params.userId }, { id: params.userId }],
+      },
+      include: { user: { select: { id: true, avatarUrl: true, fullName: true } } },
     })
 
     if (!member) {
       throw new Error('User not found in this school context')
     }
 
-    // 2. Remove old photo if exists in S3 or legacy path
+    // 2. Remove old photo if exists in S3 or local path
     if (member.user.avatarUrl) {
       try {
         await S3StorageService.deleteObject(member.user.avatarUrl)
@@ -60,7 +64,7 @@ export class UserPhotoService {
       }
     }
 
-    // 3. Upload binary to S3 with serverless resilient fallback
+    // 3. Upload binary to S3 or durable local storage
     let avatarUrl: string
     try {
       const uploadResult = await S3StorageService.uploadBufferToS3({
@@ -69,7 +73,7 @@ export class UserPhotoService {
         buffer: params.fileBuffer,
         mimeType: params.mimeType,
         originalName: params.originalFilename,
-        userId: params.userId,
+        userId: member.user.id,
       })
       avatarUrl = uploadResult.url
     } catch (storageErr: any) {
@@ -79,7 +83,7 @@ export class UserPhotoService {
 
     // 4. Update database
     await db.user.update({
-      where: { id: params.userId },
+      where: { id: member.user.id },
       data: { avatarUrl, updatedAt: new Date() },
     })
 
@@ -91,7 +95,7 @@ export class UserPhotoService {
       actorRole: params.actor.role,
       action: 'USER_PHOTO_UPLOADED',
       entity: 'User',
-      entityId: params.userId,
+      entityId: member.user.id,
       module: 'USERS',
       summary: `Uploaded profile photo for user ${member.user.fullName}`,
       ipAddress: params.actor.ipAddress,
@@ -111,8 +115,12 @@ export class UserPhotoService {
     actor: { id: string; name: string; role: string; ipAddress?: string; userAgent?: string }
   }): Promise<{ success: boolean }> {
     const member = await db.tenantUser.findFirst({
-      where: { tenantId: params.tenantId, userId: params.userId, deletedAt: null },
-      include: { user: { select: { avatarUrl: true, fullName: true } } },
+      where: {
+        tenantId: params.tenantId,
+        deletedAt: null,
+        OR: [{ userId: params.userId }, { id: params.userId }],
+      },
+      include: { user: { select: { id: true, avatarUrl: true, fullName: true } } },
     })
 
     if (!member) {
@@ -128,7 +136,7 @@ export class UserPhotoService {
     }
 
     await db.user.update({
-      where: { id: params.userId },
+      where: { id: member.user.id },
       data: { avatarUrl: null, updatedAt: new Date() },
     })
 
@@ -139,7 +147,7 @@ export class UserPhotoService {
       actorRole: params.actor.role,
       action: 'USER_PHOTO_REMOVED',
       entity: 'User',
-      entityId: params.userId,
+      entityId: member.user.id,
       module: 'USERS',
       summary: `Removed profile photo for user ${member.user.fullName}`,
       ipAddress: params.actor.ipAddress,

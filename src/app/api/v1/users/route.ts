@@ -307,13 +307,14 @@ export const GET = withApi(async (req: NextRequest) => {
         hasPassword,
         passwordStatus,
         maskedPassword,
+        mustChangePassword: Boolean(m.user.mustChangePassword),
         branchId: m.branchId,
         assignedBranches,
         assignedBranchIds,
         lastLoginAt: m.user.lastLoginAt,
         createdAt: m.createdAt,
         locale: m.user.locale,
-        staffProfile: m.staffProfile
+        staffProfile: (m.staffProfile || (m.user as any).staffProfile)
           ? {
               employeeCode: m.staffProfile.employeeCode,
               designation: m.staffProfile.designation,

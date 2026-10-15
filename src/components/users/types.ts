@@ -159,6 +159,7 @@ export interface UserRecord {
   hasPassword?: boolean
   passwordStatus?: PasswordStatus
   maskedPassword?: string | null
+  mustChangePassword?: boolean
   reportingManagerId?: string | null
   reportingManager?: {
     id: string

@@ -68,8 +68,7 @@ export class UserIdentityService {
       user = await tx.user.findUnique({
         where: { email: emailNorm },
       })
-    }
-    if (!user && opts.username?.trim()) {
+    } else if (opts.username?.trim()) {
       user = await tx.user.findUnique({
         where: { username: opts.username.trim().toLowerCase() },
       })
@@ -86,12 +85,11 @@ export class UserIdentityService {
       })
     } else {
       // Validate provided username
-      const available = await UsernameService.isUsernameAvailable(username, opts.usernameType)
+      const available = await UsernameService.isUsernameAvailable(username, opts.usernameType, user?.id)
       if (!available) {
         username = await UsernameService.generateUniqueUsername({
           name: opts.fullName,
           type: opts.usernameType,
-          preferred: username,
         })
       }
     }

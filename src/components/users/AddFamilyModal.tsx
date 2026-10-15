@@ -71,7 +71,7 @@ export function AddFamilyModal({
   const [childDOB, setChildDOB] = useState('')
   const [childGender, setChildGender] = useState('MALE')
   const [childBranchId, setChildBranchId] = useState(branches[0]?.id || '')
-  const [childClassroomId, setChildClassroomId] = useState(classrooms[0]?.id || '')
+  const [childClassroomId, setChildClassroomId] = useState('')
   const [childAdmissionNo, setChildAdmissionNo] = useState('')
   const [childPhotoUrl, setChildPhotoUrl] = useState('')
 
@@ -134,9 +134,8 @@ export function AddFamilyModal({
       }
       if (!password) generateRandomPassword()
       if (branches.length > 0 && !childBranchId) setChildBranchId(branches[0].id)
-      if (classrooms.length > 0 && !childClassroomId) setChildClassroomId(classrooms[0].id)
     }
-  }, [open, defaultRole, branches, classrooms])
+  }, [open, defaultRole, branches])
 
   // Auto-generate username from fullName
   const handleFullNameChange = (val: string) => {
@@ -232,6 +231,9 @@ export function AddFamilyModal({
     setChildFirstName('')
     setChildLastName('')
     setChildDOB('')
+    setChildGender('MALE')
+    setChildBranchId(branches[0]?.id || '')
+    setChildClassroomId('')
     setChildAdmissionNo('')
     setChildPhotoUrl('')
     setCanPickup(true)
@@ -281,6 +283,41 @@ export function AddFamilyModal({
       if (!childDOB) {
         toast.error('Validation Error', 'Child Date of Birth is required')
         return false
+      }
+
+      const dobDate = new Date(childDOB)
+      if (isNaN(dobDate.getTime())) {
+        toast.error('Validation Error', 'Child Date of Birth is invalid')
+        return false
+      }
+
+      const now = new Date()
+      if (dobDate > now) {
+        toast.error('Validation Error', 'Child Date of Birth cannot be in the future')
+        return false
+      }
+
+      // Check age compatibility if classroom is chosen
+      if (childClassroomId) {
+        const selectedClassroom = classrooms.find((c) => c.id === childClassroomId)
+        if (selectedClassroom?.programType) {
+          const months =
+            (now.getFullYear() - dobDate.getFullYear()) * 12 + (now.getMonth() - dobDate.getMonth())
+          const minMonthsByProgram: Record<string, number> = {
+            PLAYGROUP: 18,
+            NURSERY: 36,
+            LKG: 48,
+            UKG: 60,
+          }
+          const min = minMonthsByProgram[selectedClassroom.programType.toUpperCase()]
+          if (min && months < min) {
+            toast.error(
+              'Age Requirement Not Met',
+              `Child is ${months} months old. ${selectedClassroom.name} (${selectedClassroom.programType}) requires at least ${min} months. You may choose an age-appropriate classroom or leave it unassigned.`
+            )
+            return false
+          }
+        }
       }
     }
     return true
@@ -988,17 +1025,38 @@ export function AddFamilyModal({
                         <DoorOpen className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <select
                           value={childClassroomId}
-                          onChange={(e) => setChildClassroomId(e.target.value)}
+                          onChange={(e) => {
+                            const selectedId = e.target.value
+                            setChildClassroomId(selectedId)
+                            const cls = classrooms.find((c) => c.id === selectedId)
+                            if (cls && cls.branchId) {
+                              setChildBranchId(cls.branchId)
+                            }
+                          }}
                           className="select w-full text-xs pl-9"
                         >
-                          <option value="">Select Classroom</option>
-                          {classrooms.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name} {c.code ? `(${c.code})` : ''}
-                            </option>
-                          ))}
+                          <option value="">Select Classroom (Optional)</option>
+                          {classrooms.map((c) => {
+                            const b = branches.find((br) => br.id === c.branchId)
+                            return (
+                              <option key={c.id} value={c.id}>
+                                {c.name} {c.code ? `(${c.code})` : ''} {c.programType ? `• ${c.programType}` : ''} {b ? `• [${b.name.trim()}]` : ''}
+                              </option>
+                            )
+                          })}
                         </select>
                       </div>
+                      {childClassroomId && (() => {
+                        const c = classrooms.find((cls) => cls.id === childClassroomId)
+                        if (!c) return null
+                        const b = branches.find((br) => br.id === c.branchId)
+                        return (
+                          <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 pl-1 font-medium flex items-center gap-2">
+                            <span>Assigned Program: <strong>{c.programType || 'Standard'}</strong></span>
+                            {b && <span>• Campus: <strong>{b.name.trim()}</strong></span>}
+                          </p>
+                        )
+                      })()}
                     </div>
 
                     {/* Admission Number */}
@@ -1165,7 +1223,7 @@ export function AddFamilyModal({
                 <div className="text-xs font-bold text-gray-900 dark:text-white">
                   Review &amp; Confirm
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-1">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs pt-1">
                   <div>
                     <span className="text-[11px] text-gray-400 block">Caregiver</span>
                     <span className="font-semibold text-gray-800 dark:text-gray-200">{fullName}</span>
@@ -1182,6 +1240,14 @@ export function AddFamilyModal({
                       {childMode === 'EXISTING'
                         ? selectedStudent ? `${selectedStudent.firstName} (${selectedStudent.admissionNo})` : '—'
                         : `${childFirstName} ${childLastName}`.trim()}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-gray-400 block">Classroom</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">
+                      {childMode === 'EXISTING'
+                        ? selectedStudent?.currentClassroom?.name || '—'
+                        : (classrooms.find((c) => c.id === childClassroomId)?.name || 'Unassigned')}
                     </span>
                   </div>
                   <div>

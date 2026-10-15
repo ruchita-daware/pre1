@@ -185,6 +185,20 @@ export class FamilyUserService {
         // Step 3: Create student using existing StudentService
         // StudentService handles admission number, seat number, allocations, and guardian creation
         const mappedRel = normalizeRelationship(input.relationship)
+        const normPhone = UserIdentityService.normalizePhone(input.phone)
+
+        // Find existing guardian for this user or phone/email in this tenant if any
+        const existingGuardian = await tx.guardian.findFirst({
+          where: {
+            tenantId: ctx.tenantId,
+            OR: [
+              { userId: user.id },
+              ...(normPhone ? [{ phone: normPhone }] : []),
+              { phone: input.phone.trim() },
+              ...(input.email ? [{ email: input.email.trim().toLowerCase() }] : []),
+            ],
+          },
+        })
 
         const studentResult = await StudentService.createStudent(
           {
@@ -206,6 +220,8 @@ export class FamilyUserService {
             seatNumber: childData.seatNumber,
             photoUrl: childData.photoUrl,
             username: childUsername,
+            guardianId: existingGuardian?.id,
+            guardianUserId: user.id,
             guardianName: input.fullName.trim(),
             guardianPhone: input.phone.trim(),
             guardianEmail: input.email.trim(),
@@ -241,8 +257,9 @@ export class FamilyUserService {
 
         let createdGuardian =
           studentLink?.guardian ||
+          existingGuardian ||
           (await tx.guardian.findFirst({
-            where: { tenantId: ctx.tenantId, phone: input.phone.trim() },
+            where: { tenantId: ctx.tenantId, OR: [{ userId: user.id }, { phone: input.phone.trim() }] },
           }))
 
         const existingUserGuardian = await tx.guardian.findUnique({
@@ -260,11 +277,23 @@ export class FamilyUserService {
           createdGuardian = existingUserGuardian
         } else if (existingUserGuardian) {
           createdGuardian = existingUserGuardian
-        } else if (createdGuardian) {
+        }
+
+        if (createdGuardian) {
+          // Only update userId if unassigned or already set to this user
+          let shouldSetUserId = false
+          if (!createdGuardian.userId) {
+            const userAlreadyHasOtherGuardian = await tx.guardian.findFirst({
+              where: { tenantId: ctx.tenantId, userId: user.id, id: { not: createdGuardian.id } },
+            })
+            shouldSetUserId = !userAlreadyHasOtherGuardian
+          } else if (createdGuardian.userId === user.id) {
+            shouldSetUserId = true
+          }
           createdGuardian = await tx.guardian.update({
             where: { id: createdGuardian.id },
             data: {
-              userId: user.id,
+              ...(shouldSetUserId ? { userId: user.id } : {}),
               relationship: mappedRel,
               pickupPin: perms.pickupPin || createdGuardian.pickupPin || null,
               isPrimaryContact: Boolean(input.isPrimaryContact),

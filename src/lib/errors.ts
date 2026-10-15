@@ -291,13 +291,82 @@ export function toPreOneError(err: unknown, defaultModule = 'system'): PreOneErr
 
   // 3. Standard JS Error
   if (err instanceof Error) {
+    const errCode = (err as any).code
+    const httpStatus = (err as any).httpStatus || (err as any).status
+
+    // Check if it's a known JS runtime crash error (syntax, type, reference, memory)
+    const isRuntimeSystemCrash =
+      err instanceof TypeError ||
+      err instanceof ReferenceError ||
+      err instanceof SyntaxError ||
+      err instanceof RangeError ||
+      (err as any).isDeveloper === true
+
+    if (isRuntimeSystemCrash) {
+      return new PreOneError({
+        class: 'DEVELOPER',
+        code: ErrorCodes.SYSTEM_INTERNAL_ERROR,
+        httpStatus: 500,
+        userMessage: 'Something went wrong on our side. Please try again or contact support.',
+        cause: err,
+        details: { originalMessage: err.message },
+        module: defaultModule,
+      })
+    }
+
+    if (errCode && typeof errCode === 'string') {
+      const statusNum =
+        typeof httpStatus === 'number'
+          ? httpStatus
+          : errCode === 'VALIDATION_ERROR' || errCode === 'INVALID_INPUT' || errCode === 'AGE_INELIGIBLE' || errCode === 'CLASSROOM_FULL'
+          ? 422
+          : errCode === 'DUPLICATE_POSSIBLE' || errCode === 'PARENT_LIMIT_REACHED' || errCode === 'CONFLICT'
+          ? 409
+          : errCode === 'STUDENT_NOT_FOUND' || errCode === 'NOT_FOUND' || errCode === 'NOT_FOUND_CLASSROOM'
+          ? 404
+          : 400
+
+      return new PreOneError({
+        class: 'OPERATIONAL',
+        code: errCode,
+        httpStatus: statusNum,
+        userMessage: err.message,
+        cause: err,
+        details: (err as any).details || (err as any).matches,
+        module: defaultModule,
+      })
+    }
+
+    // For standard Error instances thrown without an explicit code (e.g. business/validation rules)
+    const isNotFound = /not found/i.test(err.message)
+    const isConflict = /duplicate|already (exists|linked|taken)|limit reached/i.test(err.message)
+    const isAgeOrCapacity = /age requirement|capacity|ineligible|minimum required|maximum permitted/i.test(err.message)
+    const code = isNotFound
+      ? ErrorCodes.NOT_FOUND_RESOURCE
+      : isConflict
+      ? ErrorCodes.CONFLICT_DUPLICATE_RECORD
+      : isAgeOrCapacity
+      ? 'AGE_INELIGIBLE'
+      : ErrorCodes.VALIDATION_GENERAL
+
+    const statusNum =
+      typeof httpStatus === 'number'
+        ? httpStatus
+        : isNotFound
+        ? 404
+        : isConflict
+        ? 409
+        : isAgeOrCapacity
+        ? 422
+        : 400
+
     return new PreOneError({
-      class: 'DEVELOPER',
-      code: ErrorCodes.SYSTEM_INTERNAL_ERROR,
-      httpStatus: 500,
-      userMessage: 'Something went wrong on our side. Please try again or contact support.',
+      class: 'OPERATIONAL',
+      code,
+      httpStatus: statusNum,
+      userMessage: err.message,
       cause: err,
-      details: { originalMessage: err.message },
+      details: (err as any).details || (err as any).matches,
       module: defaultModule,
     })
   }

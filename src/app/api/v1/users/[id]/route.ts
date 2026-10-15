@@ -253,7 +253,8 @@ async function _GET(req: NextRequest, { params }: { params: Promise<{ id: string
       assignedBranchIds: assignedBranches.map((b) => b.id),
       lastLoginAt: member.user.lastLoginAt,
       createdAt: member.createdAt,
-      staffProfile: member.staffProfile
+      mustChangePassword: Boolean(member.user.mustChangePassword),
+      staffProfile: (member.staffProfile || (member.user as any).staffProfile)
         ? {
             ...member.staffProfile,
             bloodGroup: formatBloodGroup(member.staffProfile.bloodGroup),
@@ -1209,7 +1210,8 @@ async function _PATCH(req: NextRequest, { params }: { params: Promise<{ id: stri
       assignedBranchIds,
       lastLoginAt: refreshed.user.lastLoginAt,
       createdAt: refreshed.createdAt,
-      staffProfile: refreshed.staffProfile
+      mustChangePassword: Boolean(refreshed.user.mustChangePassword),
+      staffProfile: (refreshed.staffProfile || (refreshed.user as any).staffProfile)
         ? {
             ...refreshed.staffProfile,
             bloodGroup: formatBloodGroup(refreshed.staffProfile.bloodGroup),
