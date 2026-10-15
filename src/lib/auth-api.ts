@@ -26,18 +26,8 @@ export async function requireApi(
     }
   }
 
-  // Enforce mandatory password change (Phase 2)
-  if (session.mustChangePassword) {
-    const path = req.nextUrl?.pathname || ''
-    const allowedPaths = ['/api/v1/auth/password', '/api/v1/auth/logout', '/api/v1/auth/me']
-    if (!allowedPaths.some((p) => path.startsWith(p))) {
-      return Errors.business(
-        'PASSWORD_CHANGE_REQUIRED',
-        'Mandatory password change required before accessing other features.',
-        403
-      )
-    }
-  }
+  // Mandatory password change check disabled - passwords are set during profile creation and should not be mandatory
+
 
   const effectiveRoles = session.roles && session.roles.length > 0 ? session.roles : [session.role]
   let hasPermission = !permission || can(effectiveRoles, permission)

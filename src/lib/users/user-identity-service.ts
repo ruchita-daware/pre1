@@ -116,7 +116,7 @@ export class UserIdentityService {
           fullName: opts.fullName.trim(),
           avatarUrl: opts.avatarUrl?.trim() || null,
           passwordHash,
-          mustChangePassword: isGeneratedPassword,
+          mustChangePassword: false,
           status: initialStatus,
           ...(opts.locale ? { locale: opts.locale } : {}),
         },

@@ -128,8 +128,6 @@ async function _GET(req: NextRequest, { params }: { params: Promise<{ id: string
     const passwordStatus: 'CONFIGURED' | 'PENDING_SETUP' | 'NOT_SET' =
       !hasPassword
         ? 'NOT_SET'
-        : member.status === 'PENDING' || member.user.mustChangePassword
-        ? 'PENDING_SETUP'
         : 'CONFIGURED'
     const maskedPassword = hasPassword ? '••••••••' : null
 
@@ -1127,8 +1125,6 @@ async function _PATCH(req: NextRequest, { params }: { params: Promise<{ id: stri
     const passwordStatus: 'CONFIGURED' | 'PENDING_SETUP' | 'NOT_SET' =
       !hasPassword
         ? 'NOT_SET'
-        : refreshed.status === 'PENDING' || refreshed.user.mustChangePassword
-        ? 'PENDING_SETUP'
         : 'CONFIGURED'
     const maskedPassword = hasPassword ? '••••••••' : null
 

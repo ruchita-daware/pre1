@@ -96,14 +96,8 @@ export async function middleware(req: NextRequest) {
     return applySecurityHeaders(redirectRes, traceId)
   }
 
-  // If user must change password, restrict browser page access to /app/change-password
-  if (session.mustChangePassword && isProtectedPage && !pathname.startsWith('/app/change-password')) {
-    const url = req.nextUrl.clone()
-    url.pathname = '/app/change-password'
-    url.search = ''
-    const redirectRes = NextResponse.redirect(url)
-    return applySecurityHeaders(redirectRes, traceId)
-  }
+  // Mandatory password change check disabled - passwords are set during profile creation and should not be mandatory on login
+
 
   const res = NextResponse.next({ request: { headers: requestHeaders } })
   return applySecurityHeaders(res, traceId)

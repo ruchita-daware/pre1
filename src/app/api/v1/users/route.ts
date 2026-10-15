@@ -289,8 +289,6 @@ export const GET = withApi(async (req: NextRequest) => {
       const passwordStatus: 'CONFIGURED' | 'PENDING_SETUP' | 'NOT_SET' =
         !hasPassword
           ? 'NOT_SET'
-          : m.status === 'PENDING' || m.user.mustChangePassword
-          ? 'PENDING_SETUP'
           : 'CONFIGURED'
       const maskedPassword = hasPassword ? '••••••••' : null
 
@@ -670,7 +668,7 @@ export const POST = withApi(async (req: NextRequest) => {
     }
     effectivePassword = generateSecureInitialPassword()
     isGeneratedPassword = true
-    mustChangePassword = true
+    mustChangePassword = false
   } else {
     // INVITE flow: Account is created in PENDING state. Password cannot be used for immediate login.
     if (rawUsername) {
@@ -683,7 +681,7 @@ export const POST = withApi(async (req: NextRequest) => {
     // High-entropy random initial placeholder for password hash so the DB column is satisfied, but login is blocked by PENDING status
     effectivePassword = generateSecureInitialPassword()
     isGeneratedPassword = true
-    mustChangePassword = true
+    mustChangePassword = false
   }
 
   // Account status enforcement: INVITE mode MUST be PENDING so it cannot be used for immediate login
@@ -760,8 +758,6 @@ export const POST = withApi(async (req: NextRequest) => {
     const passwordStatus: 'CONFIGURED' | 'PENDING_SETUP' | 'NOT_SET' =
       !hasPassword
         ? 'NOT_SET'
-        : familyResult.user.status === 'PENDING' || familyResult.user.mustChangePassword
-        ? 'PENDING_SETUP'
         : 'CONFIGURED'
     const maskedPassword = hasPassword ? '••••••••' : null
 
@@ -1370,8 +1366,6 @@ export const POST = withApi(async (req: NextRequest) => {
   const passwordStatus: 'CONFIGURED' | 'PENDING_SETUP' | 'NOT_SET' =
     !hasPassword
       ? 'NOT_SET'
-      : result.membership.status === 'PENDING' || result.user.mustChangePassword
-      ? 'PENDING_SETUP'
       : 'CONFIGURED'
   const maskedPassword = hasPassword ? '••••••••' : null
 
