@@ -6,23 +6,42 @@ import {
   Baby, Search, UserPlus, FileSpreadsheet, Download, RefreshCw,
   Phone, Mail, Edit3, Shield, Eye, Lock,
   ChevronLeft, CheckCircle2, User, Users,
-  KeyRound, Clock, X
+  KeyRound, Clock, X, Camera
 } from 'lucide-react'
 import { Avatar, StatusBadge, EmptyState, KpiTile, PageHead, IconButton } from '@/components/preone/ui'
 import { EmptyUsersIllustration } from '@/components/preone'
 import { DataTable, Column } from '@/components/preone/DataTable'
 import { Breadcrumbs } from '@/components/preone/Breadcrumbs'
+import { SearchFilterBar } from '@/components/preone'
 import { useToast } from '@/components/preone/Toast'
 import { AddFamilyModal } from '@/components/users/AddFamilyModal'
 import { CsvImportModal } from '@/components/users/CsvImportModal'
+import { BulkPhotoUploadModal } from '@/components/users/BulkPhotoUploadModal'
+import { BulkUpdateFieldModal } from '@/components/users/BulkUpdateFieldModal'
 import { User360Drawer } from '@/components/users/User360Drawer'
 import { EditUserModal } from '@/components/users/EditUserModal'
 import { RolesDirectoryModal } from '@/components/users/RolesDirectoryModal'
+import { BulkActionModal } from '@/components/users/BulkActionModal'
+import { ZipPhotoUploadModal } from '@/components/users/ZipPhotoUploadModal'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu'
+import {
+  GlobalActionMenu,
+  type ActionItem,
+  type ActionGroup,
+} from '@/components/ui/action-menu'
 import { UserRecord, BranchOption, ClassroomOption } from '@/components/users/types'
 import { timeAgo } from '@/lib/format'
+import { useI18n } from '@/lib/i18n'
+import { Image, Layers, MoreHorizontal } from 'lucide-react'
 
 export default function FamilyUsersPage() {
   const toast = useToast()
+  const { t } = useI18n()
 
   // Tab: PARENTS vs GUARDIANS
   const [activeTab, setActiveTab] = useState<'PARENTS' | 'GUARDIANS'>('PARENTS')
@@ -48,11 +67,16 @@ export default function FamilyUsersPage() {
 
   // Selection
   const [selectedKeys, setSelectedKeys] = useState<(string | number)[]>([])
+  const [selectAllMatching, setSelectAllMatching] = useState(false)
+  const [bulkFieldUpdateOpen, setBulkFieldUpdateOpen] = useState(false)
 
   // Modals
   const [addFamilyOpen, setAddFamilyOpen] = useState(false)
   const [addFamilyRole, setAddFamilyRole] = useState<'PARENT' | 'GUARDIAN'>('PARENT')
   const [csvModalOpen, setCsvModalOpen] = useState(false)
+  const [zipPhotoModalOpen, setZipPhotoModalOpen] = useState(false)
+  const [bulkActionModalOpen, setBulkActionModalOpen] = useState(false)
+  const [bulkPhotosOpen, setBulkPhotosOpen] = useState(false)
   const [rolesModalOpen, setRolesModalOpen] = useState(false)
   const [viewingUser, setViewingUser] = useState<UserRecord | null>(null)
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null)
@@ -146,7 +170,7 @@ export default function FamilyUsersPage() {
   const parentColumns: Column<UserRecord>[] = [
     {
       key: 'name',
-      header: 'Parent Identity',
+      header: t('users.parentIdentity'),
       sortable: true,
       render: (u) => (
         <div className="flex items-center gap-3">
@@ -155,7 +179,7 @@ export default function FamilyUsersPage() {
             <div
               className="font-semibold text-gray-900 dark:text-white hover:text-purple-600 dark:hover:text-purple-400 transition-colors cursor-pointer text-sm truncate"
               onClick={() => setViewingUser(u)}
-              title="View 360 profile"
+              title={t('users.view360Profile')}
             >
               {u.name}
             </div>
@@ -168,11 +192,11 @@ export default function FamilyUsersPage() {
     },
     {
       key: 'children',
-      header: 'Linked Students',
+      header: t('users.linkedStudents'),
       render: (u) => {
         const children = u.guardianProfile?.students || []
         if (children.length === 0) {
-          return <span className="text-xs text-gray-400 italic">No linked students</span>
+          return <span className="text-xs text-gray-400 italic">{t('users.noLinkedStudents')}</span>
         }
         return (
           <div className="space-y-1">
@@ -189,7 +213,7 @@ export default function FamilyUsersPage() {
     },
     {
       key: 'email',
-      header: 'Contact Details',
+      header: t('users.contactDetails'),
       render: (u) => (
         <div className="text-xs space-y-1">
           {u.email ? (
@@ -200,7 +224,7 @@ export default function FamilyUsersPage() {
           ) : (
             <div className="text-gray-400 italic text-[11px] flex items-center gap-1.5">
               <Mail className="w-3.5 h-3.5 text-gray-300 shrink-0" />
-              <span>No email address</span>
+              <span>{t('users.noEmailAddress')}</span>
             </div>
           )}
           {u.phone && (
@@ -214,45 +238,83 @@ export default function FamilyUsersPage() {
     },
     {
       key: 'financials',
-      header: 'Fee Visibility',
+      header: t('users.feeVisibility'),
       render: () => (
         <span className="badge b-success text-xs font-medium">
-          Fee Payer
+          {t('users.feePayer')}
         </span>
       ),
     },
     {
       key: 'status',
-      header: 'Status',
+      header: t('common.status'),
       sortable: true,
       render: (u) => <StatusBadge status={u.status} />,
     },
     {
       key: 'lastLoginAt',
-      header: 'Last Portal Login',
+      header: t('users.lastPortalLogin'),
       render: (u) => (
         <span className="text-xs text-gray-500 flex items-center gap-1">
           <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-          <span>{u.lastLoginAt ? timeAgo(u.lastLoginAt) : 'Never'}</span>
+          <span>{u.lastLoginAt ? timeAgo(u.lastLoginAt) : t('users.never')}</span>
         </span>
       ),
     },
     {
       key: 'actions',
-      header: 'Actions',
+      header: t('common.actions'),
       align: 'right',
       render: (u) => (
-        <div className="dt-actions-row">
+        <div className="dt-actions-row flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
           <IconButton
             icon={<Eye size={15} />}
-            label="View 360 Profile"
+            label={t('users.view360Profile')}
             onClick={() => setViewingUser(u)}
           />
           <IconButton
             icon={<Edit3 size={15} />}
-            label="Edit Parent"
+            label={t('users.editParent')}
             onClick={() => setEditingUser(u)}
           />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="dt-icon-btn p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-800 transition-colors"
+                title={t('common.moreActions')}
+                aria-label={t('common.moreActions')}
+              >
+                <MoreHorizontal size={15} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 p-1.5 rounded-xl shadow-lg border border-border/80 bg-popover z-50">
+              <DropdownMenuItem
+                className="flex items-center gap-2 px-2.5 py-2 text-xs rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 font-medium"
+                onClick={() => setEditingUser(u)}
+              >
+                <Edit3 size={14} className="text-amber-600" />
+                <span>{t('users.individualEdit')}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="flex items-center gap-2 px-2.5 py-2 text-xs rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 font-medium"
+                onClick={() => {
+                  setSelectedKeys([u.userId || u.id])
+                  setBulkFieldUpdateOpen(true)
+                }}
+              >
+                <Layers size={14} className="text-purple-600" />
+                <span>{t('users.bulkFieldUpdate')}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="flex items-center gap-2 px-2.5 py-2 text-xs rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 font-medium"
+                onClick={() => setViewingUser(u)}
+              >
+                <Eye size={14} className="text-slate-500" />
+                <span>{t('users.view360Profile')}</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       ),
     },
@@ -262,7 +324,7 @@ export default function FamilyUsersPage() {
   const guardianColumns: Column<UserRecord>[] = [
     {
       key: 'name',
-      header: 'Authorized Guardian',
+      header: t('users.authorizedGuardian'),
       sortable: true,
       render: (u) => (
         <div className="flex items-center gap-3">
@@ -271,7 +333,7 @@ export default function FamilyUsersPage() {
             <div
               className="font-semibold text-gray-900 dark:text-white hover:text-amber-600 dark:hover:text-amber-400 transition-colors cursor-pointer text-sm truncate"
               onClick={() => setViewingUser(u)}
-              title="View 360 profile"
+              title={t('users.view360Profile')}
             >
               {u.name}
             </div>
@@ -284,11 +346,11 @@ export default function FamilyUsersPage() {
     },
     {
       key: 'children',
-      header: 'Authorized Linked Child',
+      header: t('users.authorizedLinkedChild'),
       render: (u) => {
         const children = u.guardianProfile?.students || []
         if (children.length === 0) {
-          return <span className="text-xs text-gray-400 italic">No linked children</span>
+          return <span className="text-xs text-gray-400 italic">{t('users.noLinkedChildren')}</span>
         }
         return (
           <div className="space-y-1">
@@ -305,7 +367,7 @@ export default function FamilyUsersPage() {
     },
     {
       key: 'pickup',
-      header: 'Pickup Security',
+      header: t('users.pickupSecurity'),
       render: (u) => {
         const children = u.guardianProfile?.students || []
         const canPickup = children.some((c) => c.canPickup)
@@ -313,11 +375,11 @@ export default function FamilyUsersPage() {
         return (
           <div className="flex items-center gap-1.5">
             <span className={`badge text-xs ${canPickup ? 'b-success' : 'b-neutral'}`}>
-              {canPickup ? 'Authorized' : 'Restricted'}
+              {canPickup ? t('users.authorized') : t('users.restricted')}
             </span>
             {hasPin && (
               <span className="badge b-purple font-mono text-[10px]">
-                PIN Set
+                {t('users.pinSet')}
               </span>
             )}
           </div>
@@ -326,7 +388,7 @@ export default function FamilyUsersPage() {
     },
     {
       key: 'email',
-      header: 'Contact Details',
+      header: t('users.contactDetails'),
       render: (u) => (
         <div className="text-xs space-y-1">
           {u.email ? (
@@ -337,7 +399,7 @@ export default function FamilyUsersPage() {
           ) : (
             <div className="text-gray-400 italic text-[11px] flex items-center gap-1.5">
               <Mail className="w-3.5 h-3.5 text-gray-300 shrink-0" />
-              <span>No email address</span>
+              <span>{t('users.noEmailAddress')}</span>
             </div>
           )}
           {u.phone && (
@@ -351,36 +413,74 @@ export default function FamilyUsersPage() {
     },
     {
       key: 'status',
-      header: 'Status',
+      header: t('common.status'),
       sortable: true,
       render: (u) => <StatusBadge status={u.status} />,
     },
     {
       key: 'lastLoginAt',
-      header: 'Last Active',
+      header: t('users.lastActive'),
       render: (u) => (
         <span className="text-xs text-gray-500 flex items-center gap-1">
           <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-          <span>{u.lastLoginAt ? timeAgo(u.lastLoginAt) : 'Never'}</span>
+          <span>{u.lastLoginAt ? timeAgo(u.lastLoginAt) : t('users.never')}</span>
         </span>
       ),
     },
     {
       key: 'actions',
-      header: 'Actions',
+      header: t('common.actions'),
       align: 'right',
       render: (u) => (
-        <div className="dt-actions-row">
+        <div className="dt-actions-row flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
           <IconButton
             icon={<Eye size={15} />}
-            label="View 360 Profile"
+            label={t('users.view360Profile')}
             onClick={() => setViewingUser(u)}
           />
           <IconButton
             icon={<Edit3 size={15} />}
-            label="Edit Guardian"
+            label={t('users.editGuardian')}
             onClick={() => setEditingUser(u)}
           />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="dt-icon-btn p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-800 transition-colors"
+                title={t('common.moreActions')}
+                aria-label={t('common.moreActions')}
+              >
+                <MoreHorizontal size={15} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 p-1.5 rounded-xl shadow-lg border border-border/80 bg-popover z-50">
+              <DropdownMenuItem
+                className="flex items-center gap-2 px-2.5 py-2 text-xs rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 font-medium"
+                onClick={() => setEditingUser(u)}
+              >
+                <Edit3 size={14} className="text-amber-600" />
+                <span>{t('users.individualEdit')}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="flex items-center gap-2 px-2.5 py-2 text-xs rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 font-medium"
+                onClick={() => {
+                  setSelectedKeys([u.userId || u.id])
+                  setBulkFieldUpdateOpen(true)
+                }}
+              >
+                <Layers size={14} className="text-purple-600" />
+                <span>{t('users.bulkFieldUpdate')}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="flex items-center gap-2 px-2.5 py-2 text-xs rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 font-medium"
+                onClick={() => setViewingUser(u)}
+              >
+                <Eye size={14} className="text-slate-500" />
+                <span>{t('users.view360Profile')}</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       ),
     },
@@ -391,64 +491,118 @@ export default function FamilyUsersPage() {
       {/* Breadcrumbs */}
       <Breadcrumbs
         items={[
-          { label: 'Home', href: '/app' },
-          { label: 'Users & Access', href: '/app/users' },
-          { label: 'Family Users' },
+          { label: t('nav.home'), href: '/app' },
+          { label: t('users.title'), href: '/app/users' },
+          { label: t('users.familyUsers') },
         ]}
       />
 
       {/* Page Header */}
       <PageHead
-        title="Family Users"
+        title={t('users.familyUsers')}
         backHref="/app/users"
         actions={
-          <div className="users-actions-bar">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={fetchFamilyUsers}
-              className="p-2 rounded-lg border border-gray-200 dark:border-gray-800 bg-card hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-purple-500 users-act-refresh"
-              title="Refresh list"
-              aria-label="Refresh list"
+              className="p-2 rounded-lg border border-gray-200 dark:border-gray-800 bg-card hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+              title={t('common.refresh')}
+              aria-label={t('common.refresh')}
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-purple-600' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-amber-600' : ''}`} />
             </button>
-            <button
-              type="button"
-              onClick={() => setRolesModalOpen(true)}
-              className="btn btn-secondary text-xs flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3 users-act-roles"
-            >
-              <Shield className="w-3.5 h-3.5 text-purple-600" />
-              <span>Roles Directory</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setCsvModalOpen(true)}
-              className="btn btn-secondary text-xs flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3 users-act-import"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Import Family CSV</span>
-            </button>
+
+            <GlobalActionMenu
+              label={t('common.actions') || 'Actions'}
+              groups={[
+                { id: 'data', label: t('users.dataOperations') || 'Data Operations' },
+                { id: 'management', label: t('users.management') || 'Management' },
+              ]}
+              actions={[
+                {
+                  id: 'roles',
+                  label: t('users.rolesDirectory'),
+                  icon: <Shield />,
+                  category: 'settings',
+                  groupId: 'management',
+                  onClick: () => setRolesModalOpen(true),
+                },
+                {
+                  id: 'import-csv',
+                  label: t('users.importFamilyCsv'),
+                  icon: <FileSpreadsheet />,
+                  category: 'import',
+                  groupId: 'data',
+                  onClick: () => setCsvModalOpen(true),
+                },
+                {
+                  id: 'export-csv',
+                  label: t('users.exportFamilyCsv') || `${t('common.export')} CSV`,
+                  icon: <Download />,
+                  category: 'export',
+                  groupId: 'data',
+                  href: `/api/v1/users/export?userType=${activeTab === 'PARENTS' ? 'PARENT' : 'GUARDIAN'}${selectedBranch !== 'ALL' ? `&branchId=${selectedBranch}` : ''}${selectedStatus !== 'ALL' ? `&status=${selectedStatus}` : ''}${search.trim() ? `&q=${encodeURIComponent(search.trim())}` : ''}`,
+                  download: `${activeTab.toLowerCase()}-directory.csv`,
+                },
+                {
+                  id: 'individual-edit',
+                  label: t('users.individualEdit') || 'Individual Edit',
+                  icon: <Edit3 />,
+                  category: 'edit',
+                  groupId: 'management',
+                  onClick: () => {
+                    if (selectedKeys.length === 1) {
+                      const u = users.find((x) => String(x.userId || x.id) === String(selectedKeys[0]))
+                      if (u) {
+                        setEditingUser(u)
+                        return
+                      }
+                    }
+                    if (users.length > 0) {
+                      setEditingUser(users[0])
+                    } else {
+                      toast.info('Selection Needed', 'No family user available to edit')
+                    }
+                  },
+                },
+                {
+                  id: 'bulk-update',
+                  label: t('users.bulkFieldUpdate') || 'Bulk Field Update',
+                  icon: <Layers />,
+                  category: 'edit',
+                  groupId: 'management',
+                  onClick: () => setBulkFieldUpdateOpen(true),
+                },
+                {
+                  id: 'upload-photos',
+                  label: t('users.uploadPhotos') || 'Upload Photos',
+                  icon: <Camera />,
+                  category: 'import',
+                  groupId: 'management',
+                  onClick: () => setBulkPhotosOpen(true),
+                },
+                {
+                  id: 'zip-photos',
+                  label: t('users.bulkPhotoUpload') || 'Bulk Profile Photo Upload',
+                  icon: <Image />,
+                  category: 'import',
+                  groupId: 'management',
+                  onClick: () => setZipPhotoModalOpen(true),
+                },
+              ]}
+            />
+
             <button
               type="button"
               onClick={() => {
-                setAddFamilyRole('PARENT')
+                setAddFamilyRole(activeTab === 'PARENTS' ? 'PARENT' : 'GUARDIAN')
                 setAddFamilyOpen(true)
               }}
               className="btn btn-primary text-xs flex items-center justify-center gap-1.5 py-2 px-3.5 shadow-sm font-semibold users-act-add"
             >
               <UserPlus className="w-3.5 h-3.5" />
-              <span>+ Add Parent</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setAddFamilyRole('GUARDIAN')
-                setAddFamilyOpen(true)
-              }}
-              className="btn bg-amber-600 hover:bg-amber-700 text-white text-xs flex items-center justify-center gap-1.5 py-2 px-3.5 shadow-sm font-semibold users-act-add"
-            >
-              <Shield className="w-3.5 h-3.5" />
-              <span>+ Add Guardian</span>
+              <span>+ {t('users.addFamily')}</span>
             </button>
           </div>
         }
@@ -468,7 +622,7 @@ export default function FamilyUsersPage() {
           >
             <span className="flex items-center justify-center gap-1.5">
               <User className="w-3.5 h-3.5" />
-              <span>Parents ({parentCount})</span>
+              <span>{t('users.parentsTab', { count: parentCount })}</span>
             </span>
           </button>
 
@@ -483,7 +637,7 @@ export default function FamilyUsersPage() {
           >
             <span className="flex items-center justify-center gap-1.5">
               <Shield className="w-3.5 h-3.5" />
-              <span>Guardians ({guardianCount})</span>
+              <span>{t('users.guardiansTab', { count: guardianCount })}</span>
             </span>
           </button>
         </div>
@@ -494,35 +648,35 @@ export default function FamilyUsersPage() {
         {activeTab === 'PARENTS' ? (
           <>
             <KpiTile
-              label="Security Policy"
-              value="Max 2 Parents"
+              label={t('users.securityPolicy')}
+              value={t('users.max2Parents')}
               icon={<Lock />}
               iconClass="ic-purple"
               variant="compact"
             />
             <KpiTile
-              label="Total Parents"
+              label={t('users.totalParents')}
               value={parentCount}
               icon={<User />}
               iconClass="ic-blue"
               variant="compact"
             />
             <KpiTile
-              label="Linked Students"
+              label={t('users.linkedStudents')}
               value={kpis.linkedChildrenTotal}
               icon={<Baby />}
               iconClass="ic-green"
               variant="compact"
             />
             <KpiTile
-              label="Fee Visibility"
-              value="Fee Payers"
+              label={t('users.feeVisibility')}
+              value={t('users.feePayers')}
               icon={<CheckCircle2 />}
               iconClass="ic-orange"
               variant="compact"
             />
             <KpiTile
-              label="Multi-Child Parents"
+              label={t('users.multiChildParents')}
               value={kpis.multiChildCount}
               icon={<Users />}
               iconClass="ic-teal"
@@ -532,41 +686,41 @@ export default function FamilyUsersPage() {
         ) : (
           <>
             <KpiTile
-              label="Security Policy"
-              value="Gate Escort"
-              meta="Zero financial access"
+              label={t('users.securityPolicy')}
+              value={t('users.gateEscort')}
+              meta={t('users.zeroFinancialAccess')}
               icon={<Shield />}
               iconClass="ic-amber"
               variant="compact"
             />
             <KpiTile
-              label="Total Guardians"
+              label={t('users.totalGuardians')}
               value={guardianCount}
-              meta="Authorized pickup escorts"
+              meta={t('users.authorizedPickupEscorts')}
               icon={<Shield />}
               iconClass="ic-orange"
               variant="compact"
             />
             <KpiTile
-              label="Gate Clearance"
+              label={t('users.gateClearance')}
               value={kpis.authorizedPickupTotal}
-              meta="Authorized for pickup"
+              meta={t('users.authorizedForPickup')}
               icon={<CheckCircle2 />}
               iconClass="ic-green"
               variant="compact"
             />
             <KpiTile
-              label="Gate PIN Set"
+              label={t('users.gatePinSet')}
               value={kpis.pinSetTotal}
-              meta="Cryptographic PIN set"
+              meta={t('users.cryptographicPinSet')}
               icon={<KeyRound />}
               iconClass="ic-purple"
               variant="compact"
             />
             <KpiTile
-              label="Privacy Shield"
-              value="Strict"
-              meta="Zero billing/grade access"
+              label={t('users.privacyShield')}
+              value={t('users.privacyStrict')}
+              meta={t('users.zeroBillingAccess')}
               icon={<Lock />}
               iconClass="ic-blue"
               variant="compact"
@@ -575,118 +729,161 @@ export default function FamilyUsersPage() {
         )}
       </div>
 
-      {/* Filter / Search Area */}
-      <div className="card card-compact p-3 sm:p-4 rounded-xl sm:rounded-2xl">
-        <div className="users-filter-row">
-          {/* Search */}
-          <div className="relative users-filter-search">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            <input
-              type="text"
-              placeholder={`Search ${activeTab === 'PARENTS' ? 'parent' : 'guardian'} name, child, admission no...`}
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value)
-                setPage(1)
-              }}
-              style={{ paddingLeft: '36px', paddingRight: search ? '32px' : '14px' }}
-              className="input w-full text-xs"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearch('')
-                  setPage(1)
-                }}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                title="Clear search"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* Branch Filter */}
-          <div className="users-filter-select">
-            <select
-              value={selectedBranch}
-              onChange={(e) => {
-                setSelectedBranch(e.target.value)
-                setPage(1)
-              }}
-              className="select w-full text-xs"
-            >
-              <option value="ALL">All Branches</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name} ({b.code})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Status Filter */}
-          <div className="users-filter-select">
-            <select
-              value={selectedStatus}
-              onChange={(e) => {
-                setSelectedStatus(e.target.value)
-                setPage(1)
-              }}
-              className="select w-full text-xs"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="ACTIVE">ACTIVE</option>
-              <option value="SUSPENDED">SUSPENDED</option>
-              <option value="LOCKED">LOCKED</option>
-              <option value="DEACTIVATED">DEACTIVATED</option>
-              <option value="ARCHIVED">ARCHIVED</option>
-            </select>
-          </div>
-
-          {/* Export CSV */}
-          <a
-            href={`/api/v1/users/export?role=${activeTab === 'PARENTS' ? 'PARENT' : 'GUARDIAN'}`}
-            className="btn btn-outline text-xs flex items-center justify-center gap-1.5 py-2 px-3 users-filter-export shrink-0"
-            download
-            title="Export CSV"
-          >
-            <Download className="w-3.5 h-3.5 text-gray-500" />
-            <span>Export</span>
-          </a>
-
-          {/* Clear Filters Button if filters dirty */}
-          {(search || selectedBranch !== 'ALL' || selectedStatus !== 'ALL') && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearch('')
-                setSelectedBranch('ALL')
-                setSelectedStatus('ALL')
-                setPage(1)
-              }}
-              className="btn btn-ghost text-xs py-2 px-2.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 w-full sm:w-auto shrink-0"
-            >
-              Reset
-            </button>
-          )}
-        </div>
-      </div>
+      <SearchFilterBar
+        search={{
+          value: search,
+          onChange: (val) => {
+            setSearch(val)
+            setPage(1)
+          },
+          placeholder: activeTab === 'PARENTS' ? t('users.searchParentPlaceholder') : t('users.searchGuardianPlaceholder'),
+          shortcut: '⌘K',
+        }}
+        filters={[
+          {
+            id: 'branch',
+            label: t('users.filterByBranch') || 'Campus',
+            type: 'branch',
+            value: selectedBranch,
+            defaultValue: 'ALL',
+            placeholder: t('users.allBranches'),
+            options: [
+              { value: 'ALL', label: t('users.allBranches') },
+              ...branches.map((b) => ({
+                value: b.id,
+                label: `${b.name} (${b.code})`,
+                isMain: b.code === 'MAIN' || (b as any).isMain,
+              })),
+            ],
+            onChange: (val) => {
+              setSelectedBranch(val)
+              setPage(1)
+            },
+          },
+          {
+            id: 'status',
+            label: t('users.filterByStatus') || 'Status',
+            type: 'status',
+            value: selectedStatus,
+            defaultValue: 'ALL',
+            placeholder: t('users.allStatuses'),
+            options: [
+              { value: 'ALL', label: t('users.allStatuses') },
+              { value: 'ACTIVE', label: t('users.statusActive'), colorDot: 'green' },
+              { value: 'SUSPENDED', label: t('users.statusSuspended'), colorDot: 'red' },
+              { value: 'LOCKED', label: t('users.statusLocked'), colorDot: 'red' },
+              { value: 'DEACTIVATED', label: t('users.statusDeactivated'), colorDot: 'red' },
+              { value: 'ARCHIVED', label: t('users.statusArchived'), colorDot: 'slate' },
+            ],
+            onChange: (val) => {
+              setSelectedStatus(val)
+              setPage(1)
+            },
+          },
+        ]}
+        onReset={() => {
+          setSearch('')
+          setSelectedBranch('ALL')
+          setSelectedStatus('ALL')
+          setPage(1)
+        }}
+      />
 
       {/* Family DataTable Workspace */}
       <div className="table-workspace">
+        {/* Smart Selection Banner */}
+        {selectedKeys.length > 0 && (
+          <div className="px-4 py-2.5 bg-purple-50 dark:bg-purple-950/30 border-b border-purple-100 dark:border-purple-900/50 flex items-center justify-between text-xs">
+            <span className="text-purple-900 dark:text-purple-200 font-medium">
+              {selectAllMatching ? (
+                <>All <strong>{total}</strong> {activeTab.toLowerCase()} matching filters are selected.</>
+              ) : (
+                <>
+                  <strong>{selectedKeys.length}</strong> {activeTab.toLowerCase()} on this page selected.
+                  {total > users.length && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectAllMatching(true)}
+                      className="ml-2 underline text-purple-700 dark:text-purple-300 font-semibold hover:text-purple-900"
+                    >
+                      Select all {total} matching {activeTab.toLowerCase()}
+                    </button>
+                  )}
+                </>
+              )}
+            </span>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setBulkActionModalOpen(true)}
+                className="btn btn-primary text-xs py-1 px-3 flex items-center gap-1.5 shadow-sm"
+              >
+                <Layers size={13} />
+                <span>Bulk Actions ({selectAllMatching ? total : selectedKeys.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedKeys([])
+                  setSelectAllMatching(false)
+                }}
+                className="btn btn-ghost text-xs py-1 px-2 text-gray-500 hover:text-gray-700"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
+
         <DataTable
           columns={activeTab === 'PARENTS' ? parentColumns : guardianColumns}
           data={users}
           loading={loading}
-          showToolbar={false}
+          showToolbar={selectedKeys.length > 0}
           rowSelection={true}
           selectedKeys={selectedKeys}
-          onSelectionChange={setSelectedKeys}
+          onSelectionChange={(keys) => {
+            setSelectedKeys(keys)
+            if (keys.length === 0) setSelectAllMatching(false)
+          }}
+          bulkActions={
+            selectedKeys.length > 0 ? (
+              <div className="flex items-center gap-2">
+                {selectedKeys.length === 1 && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm flex items-center gap-1.5 text-xs font-semibold shadow-xs"
+                    onClick={() => {
+                      const u = users.find((x) => String(x.userId || x.id) === String(selectedKeys[0]))
+                      if (u) setEditingUser(u)
+                    }}
+                  >
+                    <Edit3 size={14} className="text-amber-600" />
+                    <span>Individual Edit</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm flex items-center gap-1.5 text-xs font-semibold shadow-xs"
+                  onClick={() => setBulkFieldUpdateOpen(true)}
+                >
+                  <Layers size={14} />
+                  <span>{t('users.bulkFieldUpdate')} ({selectedKeys.length})</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm flex items-center gap-1.5 text-xs font-semibold"
+                  onClick={() => setBulkActionModalOpen(true)}
+                >
+                  <span>{t('common.moreActions')}</span>
+                </button>
+              </div>
+            ) : null
+          }
           emptyIcon={<EmptyUsersIllustration size={120} />}
-          emptyTitle={`No ${activeTab === 'PARENTS' ? 'parents' : 'guardians'} found`}
-          emptyMessage={`No ${activeTab === 'PARENTS' ? 'parent' : 'guardian'} accounts match your selected campus branch, status, or search query.`}
+          emptyTitle={activeTab === 'PARENTS' ? t('users.noParentsFound') : t('users.noGuardiansFound')}
+          emptyMessage={activeTab === 'PARENTS' ? t('users.noParentsMessage') : t('users.noGuardiansMessage')}
         />
 
         {/* Pagination Strip */}
@@ -695,8 +892,8 @@ export default function FamilyUsersPage() {
           style={{ background: 'var(--bg-subtle)' }}
         >
           <span className="text-center sm:text-left">
-            Showing {users.length > 0 ? (page - 1) * pageSize + 1 : 0} to{' '}
-            {Math.min(page * pageSize, total)} of {total} {activeTab.toLowerCase()}
+            {t('table.showing')} {users.length > 0 ? (page - 1) * pageSize + 1 : 0} {t('table.of')}{' '}
+            {Math.min(page * pageSize, total)} {t('table.of')} {total} {activeTab === 'PARENTS' ? t('users.parentsTab', { count: total }) : t('users.guardiansTab', { count: total })}
           </span>
           <div className="flex items-center gap-1.5">
             <button
@@ -705,7 +902,7 @@ export default function FamilyUsersPage() {
               onClick={() => setPage((p) => p - 1)}
               className="btn btn-secondary text-xs px-2.5 py-1"
             >
-              Previous
+              {t('common.prev')}
             </button>
             <span className="w-7 h-7 rounded-md font-semibold text-xs flex items-center justify-center bg-purple-600 text-white">
               {page}
@@ -716,7 +913,7 @@ export default function FamilyUsersPage() {
               onClick={() => setPage((p) => p + 1)}
               className="btn btn-secondary text-xs px-2.5 py-1"
             >
-              Next
+              {t('common.next')}
             </button>
           </div>
         </div>
@@ -739,6 +936,12 @@ export default function FamilyUsersPage() {
         onSuccess={fetchFamilyUsers}
       />
 
+      <BulkPhotoUploadModal
+        open={bulkPhotosOpen}
+        onClose={() => setBulkPhotosOpen(false)}
+        onSuccess={fetchFamilyUsers}
+      />
+
       <User360Drawer
         open={Boolean(viewingUser)}
         onClose={() => setViewingUser(null)}
@@ -751,12 +954,53 @@ export default function FamilyUsersPage() {
         onClose={() => setEditingUser(null)}
         user={editingUser}
         branches={branches}
+        classrooms={classrooms}
         onSuccess={fetchFamilyUsers}
       />
 
       <RolesDirectoryModal
         open={rolesModalOpen}
         onClose={() => setRolesModalOpen(false)}
+      />
+
+      <BulkPhotoUploadModal
+        open={bulkPhotosOpen}
+        onClose={() => setBulkPhotosOpen(false)}
+        onSuccess={fetchFamilyUsers}
+      />
+
+      <ZipPhotoUploadModal
+        open={zipPhotoModalOpen}
+        onClose={() => setZipPhotoModalOpen(false)}
+        onSuccess={fetchFamilyUsers}
+      />
+
+      <BulkActionModal
+        open={bulkActionModalOpen}
+        onClose={() => setBulkActionModalOpen(false)}
+        selectedUserIds={
+          selectAllMatching
+            ? users.map((u) => u.userId || u.id)
+            : (selectedKeys.map(String))
+        }
+        branches={branches}
+        onSuccess={() => {
+          setSelectedKeys([])
+          setSelectAllMatching(false)
+          fetchFamilyUsers()
+        }}
+      />
+
+      <BulkUpdateFieldModal
+        open={bulkFieldUpdateOpen}
+        onClose={() => setBulkFieldUpdateOpen(false)}
+        selectedUserIds={selectedKeys.map((k) => String(k))}
+        branches={branches}
+        userType="FAMILY"
+        onSuccess={() => {
+          setSelectedKeys([])
+          fetchFamilyUsers()
+        }}
       />
     </div>
   )

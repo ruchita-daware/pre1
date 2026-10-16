@@ -32,6 +32,11 @@ export function BottomSheet({
   const [translateY, setTranslateY] = useState<number>(0)
   const [isDragging, setIsDragging] = useState<boolean>(false)
 
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  })
+
   // Focus trap and ESC key dismissal
   useEffect(() => {
     if (!open) {
@@ -42,7 +47,7 @@ export function BottomSheet({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation()
-        onClose()
+        onCloseRef.current()
       }
     }
 
@@ -50,7 +55,9 @@ export function BottomSheet({
     document.body.style.overflow = 'hidden'
 
     const focusTimer = setTimeout(() => {
-      panelRef.current?.focus()
+      if (panelRef.current && !panelRef.current.contains(document.activeElement)) {
+        panelRef.current.focus()
+      }
     }, 40)
 
     return () => {
@@ -58,7 +65,7 @@ export function BottomSheet({
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = ''
     }
-  }, [open, onClose])
+  }, [open])
 
   // Touch handlers for swipe-down dismissal
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -128,7 +135,7 @@ export function BottomSheet({
           maxWidth: '640px',
           margin: '0 auto',
           maxHeight,
-          background: 'var(--surface-elevated, #FFFFFF)',
+          background: 'var(--surface-elevated)',
           borderRadius: 'var(--radius-2xl, 24px) var(--radius-2xl, 24px) 0 0',
           boxShadow: 'var(--shadow-modal)',
           display: 'flex',
@@ -157,7 +164,7 @@ export function BottomSheet({
               width: '44px',
               height: '5px',
               borderRadius: '999px',
-              background: 'var(--border-strong, #CBD5E1)',
+              background: 'var(--border-strong)',
               opacity: 0.8,
             }}
           />
@@ -172,7 +179,7 @@ export function BottomSheet({
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '10px 20px 14px',
-              borderBottom: '1px solid var(--border-subtle, #EEF2F8)',
+              borderBottom: '1px solid var(--border-subtle)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -182,8 +189,8 @@ export function BottomSheet({
                     width: 36,
                     height: 36,
                     borderRadius: 'var(--radius-md, 12px)',
-                    background: 'var(--primary-light, #F3EEFF)',
-                    color: 'var(--primary, #7C3AED)',
+                    background: 'var(--primary-light)',
+                    color: 'var(--primary)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -193,11 +200,11 @@ export function BottomSheet({
                 </div>
               )}
               <div>
-                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                <h3 className="section-title font-heading text-base sm:text-lg font-semibold" style={{ margin: 0, color: 'var(--text-primary)' }}>
                   {title}
                 </h3>
                 {subtitle && (
-                  <div style={{ fontSize: '12.5px', color: 'var(--text-muted)', marginTop: 2 }}>
+                  <div className="body-copy-sm" style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: 2 }}>
                     {subtitle}
                   </div>
                 )}
@@ -244,8 +251,8 @@ export function BottomSheet({
             className="sheet-foot"
             style={{
               padding: '12px 20px',
-              borderTop: '1px solid var(--border-subtle, #EEF2F8)',
-              background: 'var(--surface, #FFFFFF)',
+              borderTop: '1px solid var(--border-subtle)',
+              background: 'var(--surface)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',

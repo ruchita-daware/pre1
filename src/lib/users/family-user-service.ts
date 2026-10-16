@@ -121,7 +121,13 @@ export class FamilyUserService {
       }
 
       // Branch check if actor is branch scoped
-      if (ctx.actorBranchId && targetStudent.branchId !== ctx.actorBranchId && ctx.actorRole !== 'OWNER' && ctx.actorRole !== 'PLATFORM_ADMIN') {
+      if (
+        ctx.actorBranchId &&
+        targetStudent.branchId !== ctx.actorBranchId &&
+        ctx.actorRole !== 'OWNER' &&
+        ctx.actorRole !== 'PLATFORM_ADMIN' &&
+        ctx.actorRole !== 'PRINCIPAL'
+      ) {
         throw new Error('Unauthorized: Selected student belongs to another campus branch')
       }
 
@@ -163,6 +169,7 @@ export class FamilyUserService {
           password: input.password,
           status: initialStatus,
           usernameType: assignedRole,
+          locale: input.locale,
         })
 
         // Step 2: Create TenantUser membership
@@ -196,13 +203,16 @@ export class FamilyUserService {
             programType: childData.programType,
             classroomId: childData.classroomId,
             branchId: childData.branchId,
+            seatNumber: childData.seatNumber,
+            photoUrl: childData.photoUrl,
+            username: childUsername,
             guardianName: input.fullName.trim(),
             guardianPhone: input.phone.trim(),
             guardianEmail: input.email.trim(),
             guardianRelationship: mappedRel,
             canPickup: perms.canPickup,
             isFeePayer: perms.isFeePayer,
-            confirmDuplicate: true,
+            confirmDuplicate: input.confirmDuplicate ?? false,
           },
           tx
         )
@@ -229,20 +239,21 @@ export class FamilyUserService {
           })
         }
 
-        const createdGuardian =
+        let createdGuardian =
           studentLink?.guardian ||
           (await tx.guardian.findFirst({
             where: { tenantId: ctx.tenantId, phone: input.phone.trim() },
           }))
 
         if (createdGuardian) {
-          await tx.guardian.update({
+          createdGuardian = await tx.guardian.update({
             where: { id: createdGuardian.id },
             data: {
               userId: user.id,
               relationship: mappedRel,
               pickupPin: perms.pickupPin || createdGuardian.pickupPin || null,
               isPrimaryContact: Boolean(input.isPrimaryContact),
+              ...(input.occupation !== undefined ? { occupation: input.occupation?.trim() || null } : {}),
             },
           })
         }
@@ -317,6 +328,7 @@ export class FamilyUserService {
           password: input.password,
           status: initialStatus,
           usernameType: assignedRole,
+          locale: input.locale,
         })
 
         // Step 2: Create or update TenantUser membership
@@ -363,6 +375,7 @@ export class FamilyUserService {
               relationship: mappedRel,
               pickupPin: perms.pickupPin,
               isPrimaryContact: Boolean(input.isPrimaryContact),
+              occupation: input.occupation?.trim() || null,
             },
           })
         } else {
@@ -373,6 +386,7 @@ export class FamilyUserService {
               relationship: mappedRel,
               pickupPin: perms.pickupPin || guardian.pickupPin,
               isPrimaryContact: input.isPrimaryContact !== undefined ? Boolean(input.isPrimaryContact) : guardian.isPrimaryContact,
+              ...(input.occupation !== undefined ? { occupation: input.occupation?.trim() || null } : {}),
             },
           })
         }

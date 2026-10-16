@@ -9,12 +9,14 @@ import {
   GraduationCap,
   Sparkles,
   Briefcase,
+  CalendarCheck,
 } from 'lucide-react'
 import { PLogoMark } from '@/components/preone/PLogo'
 import { DockStarsAccent } from '@/components/preone/illustrations'
 import { DockDateTime } from './DockDateTime'
 import type { NavItem } from '@/lib/nav'
 import type { Role } from '@/lib/auth'
+import { useI18n } from '@/lib/i18n/context'
 
 export interface BottomNavProps {
   user: { role: Role; name?: string }
@@ -31,6 +33,7 @@ interface ResolvedDockItem {
   label: string
   href: string
   icon: React.ComponentType<{ size?: number | string; className?: string }>
+  image?: string
 }
 
 /**
@@ -49,6 +52,8 @@ export function BottomNav({
   triggerRef,
   className = '',
 }: BottomNavProps) {
+  const { t } = useI18n()
+
   // Resolve canonical dock navigation items based on user role and permissions
   const { leftItems, rightItems } = useMemo(() => {
     // Canonical preferred items across roles
@@ -73,54 +78,68 @@ export function BottomNav({
     const studentsItem =
       nav.find((n) => n.key === 'students') ||
       nav.find((n) => n.key === 'admissions')
+    const learningItem =
+      nav.find((n) => n.key === 'learning' || n.key === 'preo-learning' || n.key === 'preo_learning')
     const staffItem =
       nav.find((n) => n.key === 'users') ||
       nav.find((n) => n.key === 'hr')
     const growthItem =
-      nav.find((n) => n.key === 'academics') ||
-      nav.find((n) => n.key === 'reports') ||
-      nav.find((n) => n.key === 'attendance')
+      nav.find((n) => n.key === 'daily-diary') ||
+      nav.find((n) => n.key === 'reports')
 
     // Prepare left cluster (Home, Apps)
     const left: ResolvedDockItem[] = [
       {
         key: homeItem.key,
-        label: 'Home',
+        label: t('nav.home'),
         href: homeItem.href,
         icon: homeItem.icon || Home,
       },
       {
         key: appsItem.key,
-        label: 'Apps',
+        label: t('nav.dashboard'),
         href: appsItem.href,
         icon: appsItem.icon || LayoutGrid,
+        image: '/animations/home/dashboard.webp',
       },
     ]
 
-    // Prepare right cluster (Students, Staff, Growth)
+    // Prepare right cluster (Students, Learning, Staff, Growth)
     const right: ResolvedDockItem[] = []
     if (studentsItem) {
       right.push({
         key: studentsItem.key,
-        label: 'Students',
+        label: t('nav.students'),
         href: studentsItem.href,
         icon: studentsItem.icon || GraduationCap,
+        image: '/animations/home/students.webp',
+      })
+    }
+    if (learningItem) {
+      right.push({
+        key: learningItem.key,
+        label: t('nav.learning'),
+        href: learningItem.href,
+        icon: learningItem.icon || GraduationCap,
+        image: '/animations/home/preo_learning_mascot.webp',
       })
     }
     if (staffItem) {
       right.push({
         key: staffItem.key,
-        label: 'Staff',
+        label: t('nav.users'),
         href: staffItem.href,
         icon: staffItem.icon || Briefcase,
+        image: '/animations/home/users.webp',
       })
     }
     if (growthItem) {
       right.push({
         key: growthItem.key,
-        label: 'Growth',
+        label: growthItem.key === 'daily-diary' ? t('nav.dailyDiary') : t('nav.reports'),
         href: growthItem.href,
-        icon: growthItem.icon || Sparkles,
+        icon: growthItem.key === 'daily-diary' ? CalendarCheck : (growthItem.icon || Sparkles),
+        image: '/animations/home/daily_diary.webp',
       })
     }
 
@@ -130,9 +149,12 @@ export function BottomNav({
         (n) => n.key !== homeItem.key && n.key !== appsItem.key
       ).slice(0, 3)
       for (const item of remaining) {
+        const localizedLabel = (item.key && t(`nav.${item.key}` as any) !== `nav.${item.key}`)
+          ? t(`nav.${item.key}` as any)
+          : item.label
         right.push({
           key: item.key,
-          label: item.label,
+          label: localizedLabel,
           href: item.href,
           icon: item.icon,
         })
@@ -140,7 +162,7 @@ export function BottomNav({
     }
 
     return { leftItems: left, rightItems: right }
-  }, [nav])
+  }, [nav, t])
 
   const isItemActive = (href: string) => {
     if (href === '/app/home') return pathname === '/app/home' || pathname === '/app'
@@ -166,13 +188,22 @@ export function BottomNav({
                 <Link
                   key={item.key}
                   href={item.href}
+                  prefetch={true}
                   className={`dock-item${active ? ' active' : ''}`}
                   title={item.label}
                   aria-label={item.label}
                   aria-current={active ? 'page' : undefined}
                 >
                   <span className="dock-item-icon">
-                    <Icon size={18} />
+                    {item.image ? (
+                      <img
+                        src={item.image}
+                        alt={item.label}
+                        className="w-5 h-5 object-contain scale-110 drop-shadow-sm pointer-events-none"
+                      />
+                    ) : (
+                      <Icon size={18} />
+                    )}
                   </span>
                   <span className="dock-item-label">{item.label}</span>
                 </Link>
@@ -195,7 +226,7 @@ export function BottomNav({
               aria-haspopup="menu"
               type="button"
             >
-              <PLogoMark size={34} />
+              <PLogoMark size={34} variant={isOpen ? 'white' : 'color'} />
               <span className="dock-orb-halo" aria-hidden="true" />
             </button>
           </div>
@@ -212,13 +243,22 @@ export function BottomNav({
                 <Link
                   key={item.key}
                   href={item.href}
+                  prefetch={true}
                   className={`dock-item${active ? ' active' : ''}`}
                   title={item.label}
                   aria-label={item.label}
                   aria-current={active ? 'page' : undefined}
                 >
                   <span className="dock-item-icon">
-                    <Icon size={18} />
+                    {item.image ? (
+                      <img
+                        src={item.image}
+                        alt={item.label}
+                        className="w-5 h-5 object-contain scale-110 drop-shadow-sm pointer-events-none"
+                      />
+                    ) : (
+                      <Icon size={18} />
+                    )}
                   </span>
                   <span className="dock-item-label">{item.label}</span>
                 </Link>

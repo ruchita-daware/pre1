@@ -45,12 +45,12 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           "w-full transition-all font-sans outline-none appearance-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
           // Sizing & Radius
           isAuthOrXl
-            ? "h-12 text-sm rounded-xl"
+            ? "h-12 text-[15px] rounded-xl"
             : inputSize === "sm"
-            ? "h-8 text-xs rounded-md px-2.5 py-1"
+            ? "h-8 text-sm rounded-md px-2.5 py-1"
             : inputSize === "lg"
-            ? "h-10 text-sm rounded-lg px-3.5 py-1.5"
-            : "h-9 text-sm rounded-md px-3 py-1",
+            ? "h-10 text-[15px] rounded-lg px-3.5 py-1.5"
+            : "h-9 text-[15px] rounded-md px-3 py-1",
           // Paddings for Icons
           isAuthOrXl
             ? cn(leadingIcon ? "pl-11" : "pl-4", trailingAction ? "pr-11" : "pr-4")
@@ -60,15 +60,15 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             ? cn(
                 "auth-input bg-slate-50/80 dark:bg-slate-950/60 border text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 font-medium shadow-2xs",
                 hasError
-                  ? "border-rose-300 dark:border-rose-800 focus:ring-2 focus:ring-rose-500/20"
-                  : "border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 dark:focus:border-purple-500"
+                  ? "border-destructive focus-visible:border-destructive [box-shadow:0_0_0_var(--focus-ring-inner-width,1px)_var(--danger),0_0_0_var(--focus-ring-outer-width,4px)_color-mix(in_srgb,var(--danger)_20%,transparent)]"
+                  : "border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 focus-visible:border-primary [box-shadow:none] focus-visible:[box-shadow:var(--focus-ring)]"
               )
             : cn(
-                "border border-input bg-transparent dark:bg-input/30 placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground shadow-2xs",
-                "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+                "border border-border/60 dark:border-border/40 bg-transparent dark:bg-input/30 placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground shadow-2xs hover:border-border/80 dark:hover:border-border/60",
+                "focus-visible:border-[var(--focus-ring-color)] focus-visible:[box-shadow:var(--focus-ring)]",
                 hasError
-                  ? "border-destructive ring-destructive/20"
-                  : "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"
+                  ? "!border-destructive focus-visible:!border-destructive focus-visible:![box-shadow:0_0_0_var(--focus-ring-inner-width,1px)_var(--danger),0_0_0_var(--focus-ring-outer-width,4px)_color-mix(in_srgb,var(--danger)_20%,transparent)]"
+                  : "aria-invalid:!border-destructive aria-invalid:focus-visible:!border-destructive aria-invalid:focus-visible:![box-shadow:0_0_0_var(--focus-ring-inner-width,1px)_var(--danger),0_0_0_var(--focus-ring-outer-width,4px)_color-mix(in_srgb,var(--danger)_20%,transparent)]"
               ),
           className
         )}

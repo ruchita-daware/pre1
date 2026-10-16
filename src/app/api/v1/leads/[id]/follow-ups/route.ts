@@ -3,6 +3,36 @@ import { NextRequest } from 'next/server'
 import { ok, Errors } from '@/lib/api'
 import { requireApi, isResponse } from '@/lib/auth-api'
 import { AdmissionService } from '@/lib/admissions/admission-service'
+import { db } from '@/lib/db'
+
+/**
+ * GET /api/v1/leads/[id]/follow-ups — List all follow-up actions on an enquiry
+ */
+async function _GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await requireApi(req, 'admissions:read')
+  if (isResponse(session)) return session
+  if (!session.tenantId) return Errors.forbidden('No tenant context')
+
+  const { id } = await params
+
+  try {
+    const followUps = await db.followUp.findMany({
+      where: {
+        tenantId: session.tenantId,
+        sourceId: id,
+        sourceType: 'EnquiryFollowUp',
+      },
+      orderBy: { dueAt: 'desc' },
+    })
+
+    return ok(followUps)
+  } catch (e: any) {
+    return Errors.internal(e.message || 'Failed to list follow-ups')
+  }
+}
 
 /**
  * POST /api/v1/leads/[id]/follow-ups — Log a follow-up action on an enquiry
@@ -19,7 +49,7 @@ async function _POST(
 
   try {
     const body = await req.json()
-    const { type, note, dueAt, outcome, branchId, academicYearId } = body
+    const { type, note, dueAt, outcome, branchId, academicYearId, followUpId, lostReason } = body
 
     if (!note?.trim()) {
       return Errors.validation('Note is required')
@@ -40,7 +70,9 @@ async function _POST(
         note: note.trim(),
         dueAt,
         outcome,
-      }
+        followUpId,
+        lostReason,
+      } as any
     )
 
     return ok(fu, undefined, 201)
@@ -49,4 +81,5 @@ async function _POST(
   }
 }
 
+export const GET = withApi(_GET)
 export const POST = withApi(_POST)
