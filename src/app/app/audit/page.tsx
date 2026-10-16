@@ -21,6 +21,7 @@ import {
   FileCode2,
 } from 'lucide-react'
 import { PageHead, EmptyState, Skeleton, KpiTile } from '@/components/preone/ui'
+import { SearchFilterBar } from '@/components/preone'
 import { Modal } from '@/components/preone/Modal'
 import { useToast } from '@/components/preone/Toast'
 import { fmtDate, timeAgo } from '@/lib/format'
@@ -196,8 +197,12 @@ export default function AuditPage() {
   }
 
   return (
-    <>
+    <div className="w-full min-w-0 max-w-[1460px] mx-auto space-y-4 pb-20">
       <PageHead
+        breadcrumbs={[
+          { label: 'Home', href: '/app' },
+          { label: 'Audit Logs' },
+        ]}
         title="Audit Logs & Governance"
         sub="Authoritative, tamper-evident forensic history and security event tracking across PreOne"
         actions={
@@ -272,6 +277,7 @@ export default function AuditPage() {
 
       {/* ── Category Views / Views Bar ── */}
       <div
+        className="w-full min-w-0 max-w-full overflow-x-auto touch-pan-x scrollbar-none"
         style={{
           display: 'flex',
           gap: 4,
@@ -279,18 +285,18 @@ export default function AuditPage() {
           padding: 4,
           borderRadius: 'var(--radius-12)',
           marginBottom: 14,
-          overflowX: 'auto',
         }}
       >
         {CATEGORY_TABS.map((tab) => (
           <button
             key={tab.key}
-            className={`btn btn-sm ${category === tab.key ? 'btn-primary' : 'btn-ghost'}`}
+            className={`btn btn-sm ${category === tab.key ? 'btn-primary' : 'btn-ghost'} shrink-0`}
             style={{
               padding: '6px 14px',
               fontSize: 12.5,
               fontWeight: 600,
               borderRadius: 'var(--radius-8)',
+              whiteSpace: 'nowrap',
             }}
             onClick={() => {
               setCategory(tab.key)
@@ -303,150 +309,81 @@ export default function AuditPage() {
       </div>
 
       {/* ── Main Activity Table & Advanced Filters ── */}
-      <div className="card" style={{ padding: 0 }}>
+      <div className="card w-full min-w-0 max-w-full overflow-hidden" style={{ padding: 0 }}>
         {/* Filter Bar */}
-        <div
-          style={{
-            padding: '12px 16px',
-            borderBottom: '1px solid var(--border-subtle)',
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 10,
-          }}
-        >
-          {/* Search box */}
-          <div style={{ position: 'relative', flex: '1 1 240px', maxWidth: 360 }}>
-            <Search
-              size={15}
-              style={{
-                position: 'absolute',
-                left: 10,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: 'var(--muted)',
-              }}
-            />
-            <input
-              type="text"
-              placeholder="Search action, record, summary, actor..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value)
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <SearchFilterBar
+            variant="embedded"
+            search={{
+              value: searchQuery,
+              onChange: (val) => {
+                setSearchQuery(val)
                 setPage(1)
-              }}
-              style={{
-                width: '100%',
-                height: 34,
-                paddingLeft: 32,
-                paddingRight: 10,
-                fontSize: 13,
-                borderRadius: 'var(--radius-8)',
-                border: '1px solid var(--border)',
-                background: 'var(--surface)',
-                color: 'var(--foreground)',
-              }}
-            />
-          </div>
-
-          {/* Dropdown Filters */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span className="t-caption" style={{ fontWeight: 600 }}>Module:</span>
-              <select
-                className="select"
-                value={moduleFilter}
-                onChange={(e) => {
-                  setModuleFilter(e.target.value)
+              },
+              placeholder: 'Search action, record, summary, actor...',
+              shortcut: '⌘K',
+            }}
+            filters={[
+              {
+                id: 'module',
+                label: 'Module',
+                type: 'select',
+                value: moduleFilter,
+                defaultValue: 'ALL',
+                placeholder: 'All Modules',
+                options: MODULES.map((m) => ({
+                  value: m,
+                  label: m === 'ALL' ? 'All Modules' : m,
+                })),
+                onChange: (val) => {
+                  setModuleFilter(val)
                   setPage(1)
-                }}
-                style={{ height: 32, fontSize: 12.5, padding: '0 8px' }}
+                },
+              },
+              {
+                id: 'severity',
+                label: 'Severity',
+                type: 'status',
+                value: severityFilter,
+                defaultValue: 'ALL',
+                placeholder: 'All Severities',
+                options: SEVERITIES.map((s) => ({
+                  value: s,
+                  label: s === 'ALL' ? 'All Severities' : s,
+                  colorDot:
+                    s === 'CRITICAL' ? 'red' : s === 'WARN' ? 'amber' : s === 'INFO' ? 'blue' : undefined,
+                })),
+                onChange: (val) => {
+                  setSeverityFilter(val)
+                  setPage(1)
+                },
+              },
+            ]}
+            extraActions={
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => load()}
+                disabled={busy}
+                title="Refresh logs"
               >
-                {MODULES.map((m) => (
-                  <option key={m} value={m}>
-                    {m === 'ALL' ? 'All Modules' : m}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span className="t-caption" style={{ fontWeight: 600 }}>Severity:</span>
-              <select
-                className="select"
-                value={severityFilter}
-                onChange={(e) => {
-                  setSeverityFilter(e.target.value)
-                  setPage(1)
-                }}
-                style={{ height: 32, fontSize: 12.5, padding: '0 8px' }}
-              >
-                {SEVERITIES.map((s) => (
-                  <option key={s} value={s}>
-                    {s === 'ALL' ? 'All Severities' : s}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span className="t-caption" style={{ fontWeight: 600 }}>From:</span>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => {
-                  setDateFrom(e.target.value)
-                  setPage(1)
-                }}
-                style={{
-                  height: 32,
-                  fontSize: 12,
-                  padding: '0 6px',
-                  borderRadius: 6,
-                  border: '1px solid var(--border)',
-                  background: 'var(--surface)',
-                  color: 'var(--foreground)',
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span className="t-caption" style={{ fontWeight: 600 }}>To:</span>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => {
-                  setDateTo(e.target.value)
-                  setPage(1)
-                }}
-                style={{
-                  height: 32,
-                  fontSize: 12,
-                  padding: '0 6px',
-                  borderRadius: 6,
-                  border: '1px solid var(--border)',
-                  background: 'var(--surface)',
-                  color: 'var(--foreground)',
-                }}
-              />
-            </div>
-
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => load()}
-              disabled={busy}
-              title="Refresh logs"
-              style={{ padding: '4px 8px' }}
-            >
-              <RefreshCw size={14} className={busy ? 'animate-spin' : ''} />
-            </button>
-          </div>
+                <RefreshCw size={14} className={busy ? 'animate-spin' : ''} />
+                <span>Refresh</span>
+              </button>
+            }
+            onReset={() => {
+              setSearchQuery('')
+              setModuleFilter('ALL')
+              setSeverityFilter('ALL')
+              setDateFrom('')
+              setDateTo('')
+              setPage(1)
+            }}
+          />
         </div>
 
         {/* Audit Data Table */}
-        <div className="dtable-scroll">
-          <table className="dtable">
+        <div className="dtable-scroll overflow-x-auto w-full min-w-0">
+          <table className="dtable w-full min-w-[880px]">
             <thead>
               <tr>
                 <th>When</th>
@@ -549,12 +486,29 @@ export default function AuditPage() {
 
           {logs?.length === 0 && (
             <EmptyState
-              icon={<ScrollText size={42} />}
+              illustration="documents"
+              eyebrow="Audit Trail"
               title="No audit events matched"
-              message={
+              description={
                 searchQuery || moduleFilter !== 'ALL' || severityFilter !== 'ALL'
-                  ? 'No records match the selected filter criteria. Try adjusting your query.'
-                  : 'As staff interact with PreOne, all authoritative mutations and security events land here.'
+                  ? 'No audit log records match the selected filter criteria. Try clearing or widening your query.'
+                  : 'As staff interact with PreOne OS, all authoritative mutations and security events land here.'
+              }
+              action={
+                searchQuery || moduleFilter !== 'ALL' || severityFilter !== 'ALL'
+                  ? {
+                      label: 'Clear Filters',
+                      onClick: () => {
+                        setSearchQuery('')
+                        setModuleFilter('ALL')
+                        setSeverityFilter('ALL')
+                        setDateFrom('')
+                        setDateTo('')
+                        setPage(1)
+                      },
+                      variant: 'secondary',
+                    }
+                  : undefined
               }
             />
           )}
@@ -817,6 +771,6 @@ export default function AuditPage() {
           </div>
         )}
       </Modal>
-    </>
+    </div>
   )
 }

@@ -5,6 +5,13 @@ const SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'preone-dev-jwt-secret-2f8b7c9d4e6a1f3b5c8d0e'
 )
 
+// ── Standardized Password Policy Floor (N-2 Audit Fix) ──
+export const MIN_PASSWORD_LENGTH = 8
+export const PASSWORD_POLICY = {
+  minLength: MIN_PASSWORD_LENGTH,
+  errorMessage: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long`,
+} as const
+
 import { CANONICAL_ROLES, CanonicalRole, normalizeRole, LEGACY_ROLE_MAP } from './roles'
 
 export const SCHOOL_ROLES = CANONICAL_ROLES.filter((r) => r !== 'PLATFORM_ADMIN')
@@ -21,6 +28,13 @@ export interface SessionPayload {
   branchId?: string | null
   role: Role // Canonical primary role
   roles?: Role[] // All assigned roles
+  mustChangePassword?: boolean
+  mfaVerified?: boolean
+  tokenVersion?: number
+  passwordChangedAt?: number
+  iat?: number
+  exp?: number
+  jti?: string
 }
 
 // ── RBAC — permission bundles per role (PRD §7 + API Catalog §5.3) ──
@@ -194,6 +208,7 @@ export function can(roleOrRoles: Role | Role[] | undefined | null, permission: s
 export async function signSession(payload: SessionPayload): Promise<string> {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
+    .setJti(crypto.randomUUID())
     .setIssuedAt()
     .setIssuer('preone')
     .setExpirationTime('7d')

@@ -27,6 +27,46 @@ export interface GuardianChild {
   pickupPin?: string | null
   relationship?: string
   classroom?: string
+  branchId?: string | null
+  branchName?: string | null
+  branchCode?: string | null
+  dob?: string | null
+  gender?: string | null
+  status?: string | null
+  photoUrl?: string | null
+  seatNumber?: string | null
+}
+
+export interface HouseholdGuardian {
+  id: string
+  userId?: string | null
+  fullName: string
+  relationship: string
+  phone?: string | null
+  email?: string | null
+  isPrimaryContact?: boolean
+  canPickup?: boolean
+  pickupPin?: string | null
+  avatarUrl?: string | null
+  role?: string | null
+  status?: string | null
+}
+
+export interface HouseholdCampus {
+  id: string
+  name: string
+  code: string
+  studentCount: number
+}
+
+export interface FamilyHousehold {
+  id: string
+  familyName: string
+  isCrossCampus: boolean
+  campuses: HouseholdCampus[]
+  guardians: HouseholdGuardian[]
+  students: GuardianChild[]
+  primaryGuardian?: HouseholdGuardian | null
 }
 
 export type UserLifecycleStatus =
@@ -38,38 +78,107 @@ export type UserLifecycleStatus =
   | 'INACTIVE'
   | 'PENDING'
 
+export interface StaffProfileData {
+  employeeCode: string
+  designation: string | null
+  department: string | null
+  qualification: string | null
+  employmentType: string
+  joiningDate?: string | null
+  dateOfBirth?: string | null
+  gender?: string | null
+  maritalStatus?: string | null
+  bloodGroup?: string | null
+  emergencyContactName?: string | null
+  emergencyContactPhone?: string | null
+  currentAddress?: string | null
+  permanentAddress?: string | null
+  panNumber?: string | null
+  aadhaarNumber?: string | null
+  uanNumber?: string | null
+  esiNumber?: string | null
+  probationEndDate?: string | null
+  confirmationDate?: string | null
+  noticePeriodDays?: number | null
+  reportingManagerId?: string | null
+  reportingManager?: {
+    id: string
+    userId: string
+    name: string
+    fullName?: string
+    designation?: string | null
+    avatarUrl?: string | null
+  } | null
+  directReportsCount?: number
+  directReports?: Array<{
+    id: string
+    userId: string
+    name: string
+    designation?: string | null
+    avatarUrl?: string | null
+  }>
+}
+
+export interface GuardianProfileData {
+  id: string
+  relationship: string
+  occupation?: string | null
+  isPrimaryContact?: boolean
+  pickupPin?: string | null
+  isCrossCampus?: boolean
+  campusesCount?: number
+  campuses?: HouseholdCampus[]
+  coGuardians?: HouseholdGuardian[]
+  students: GuardianChild[]
+}
+
+export type PasswordStatus = 'CONFIGURED' | 'PENDING_SETUP' | 'NOT_SET'
+
 export interface UserRecord {
   id: string
   userId: string
   username?: string | null
   avatarUrl?: string | null
   name: string
+  fullName?: string | null
   email: string | null
   phone: string | null
+  locale?: string | null
   role: Role
   roles?: Role[]
   status: UserLifecycleStatus
   branchId: string | null
+  branchName?: string | null
+  assignedBranches?: Array<{ id: string; name: string; code: string; isMain?: boolean; isPrimary?: boolean }>
+  assignedBranchIds?: string[]
   lastLoginAt: string | null
   createdAt: string
-  staffProfile?: {
-    employeeCode: string
-    designation: string | null
-    department: string | null
-    qualification: string | null
-    employmentType: string
-    joiningDate?: string | null
-    dateOfBirth?: string | null
-    gender?: string | null
-    currentAddress?: string | null
-  } | null
+  staffProfile?: StaffProfileData | null
   taughtClasses?: Array<{ id: string; name: string; programType: string; capacity?: number }>
-  guardianProfile?: {
+  guardianProfile?: GuardianProfileData | null
+  hasPassword?: boolean
+  passwordStatus?: PasswordStatus
+  maskedPassword?: string | null
+  mustChangePassword?: boolean
+  reportingManagerId?: string | null
+  reportingManager?: {
     id: string
-    relationship: string
-    students: GuardianChild[]
+    userId: string
+    name: string
+    designation?: string | null
+    avatarUrl?: string | null
   } | null
 }
+
+export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const
+export const GENDERS = ['MALE', 'FEMALE', 'OTHER'] as const
+export const MARITAL_STATUSES = ['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED'] as const
+export const EMPLOYMENT_TYPES = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN', 'PROBATION', 'TEMPORARY'] as const
+export const LOCALES = [
+  { value: 'en-IN', label: 'English' },
+  { value: 'hi-IN', label: 'Hindi (हिंदी)' },
+  { value: 'mr-IN', label: 'Marathi (मराठी)' },
+] as const
 
 export const CANONICAL_STAFF_ROLES: Role[] = [
   'OWNER',

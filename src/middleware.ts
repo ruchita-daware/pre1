@@ -1,7 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySession, SESSION_COOKIE } from '@/lib/auth'
 
-const PUBLIC_PATHS = ['/api/v1/auth/login']
+const PUBLIC_PATHS = [
+  '/api/v1/auth/login',
+  '/api/v1/auth/logout',
+  '/api/v1/auth/branding',
+  '/api/v1/auth/reset-password',
+  '/api/v1/auth/otp',
+  '/api/v1/auth/otp/send',
+  '/api/v1/auth/otp/verify',
+  '/api/v1/auth/otp/resend',
+  '/api/v1/auth/mfa',
+  '/api/v1/auth/invitation',
+  '/api/v1/health',
+  '/api/health',
+  '/api/v1/version',
+  '/api/version',
+  '/api/v1/operations/health',
+  '/api/v1/public',
+  '/api/v1/webhooks',
+]
 
 function resolveTraceId(req: NextRequest): string {
   const incoming = req.headers.get('x-trace-id') || req.headers.get('traceparent')
@@ -9,6 +27,20 @@ function resolveTraceId(req: NextRequest): string {
     return incoming
   }
   return 'PRE-' + Math.random().toString(16).substring(2, 10).toUpperCase().padEnd(8, '0')
+}
+
+function applySecurityHeaders<T extends NextResponse>(res: T, traceId: string): T {
+  res.headers.set('X-Trace-Id', traceId)
+  res.headers.set('X-Content-Type-Options', 'nosniff')
+  res.headers.set('X-Frame-Options', 'DENY')
+  res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  res.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
+  res.headers.set(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https:; frame-ancestors 'none';"
+  )
+  return res
 }
 
 export async function middleware(req: NextRequest) {
@@ -21,18 +53,16 @@ export async function middleware(req: NextRequest) {
 
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
     const res = NextResponse.next({ request: { headers: requestHeaders } })
-    res.headers.set('X-Trace-Id', traceId)
-    return res
+    return applySecurityHeaders(res, traceId)
   }
 
   const isProtectedPage = pathname.startsWith('/app') || pathname.startsWith('/onboard')
   const isProtectedApi =
-    pathname.startsWith('/api/v1/') && !pathname.startsWith('/api/v1/auth/login')
+    pathname.startsWith('/api/v1/') && !PUBLIC_PATHS.some((p) => pathname.startsWith(p))
 
   if (!isProtectedPage && !isProtectedApi) {
     const res = NextResponse.next({ request: { headers: requestHeaders } })
-    res.headers.set('X-Trace-Id', traceId)
-    return res
+    return applySecurityHeaders(res, traceId)
   }
 
   const token = req.cookies.get(SESSION_COOKIE)?.value
@@ -40,7 +70,7 @@ export async function middleware(req: NextRequest) {
 
   if (!session) {
     if (isProtectedApi) {
-      return NextResponse.json(
+      const res = NextResponse.json(
         {
           success: false,
           error: {
@@ -57,18 +87,20 @@ export async function middleware(req: NextRequest) {
           },
         }
       )
+      return applySecurityHeaders(res, traceId)
     }
     const url = req.nextUrl.clone()
     url.pathname = '/'
     url.searchParams.set('next', pathname)
     const redirectRes = NextResponse.redirect(url)
-    redirectRes.headers.set('X-Trace-Id', traceId)
-    return redirectRes
+    return applySecurityHeaders(redirectRes, traceId)
   }
 
+  // Mandatory password change check disabled - passwords are set during profile creation and should not be mandatory on login
+
+
   const res = NextResponse.next({ request: { headers: requestHeaders } })
-  res.headers.set('X-Trace-Id', traceId)
-  return res
+  return applySecurityHeaders(res, traceId)
 }
 
 export const config = {

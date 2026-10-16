@@ -17,7 +17,9 @@ import { db } from '@/lib/db'
 import { ConfigurationService } from '@/lib/setup/config-service'
 import { classroomSeats } from '@/lib/capacity'
 import { audit } from '@/lib/audit'
+import { assertResourceScope } from '@/lib/security/resource-scope'
 import type { Gender, BloodGroup, StudentStatus, ProgramType, UserRole, Prisma } from '@prisma/client'
+import { PrimaryContactGuard } from '@/lib/users/primary-contact-guard'
 
 export interface ScopeContext {
   tenantId: string
@@ -27,6 +29,7 @@ export interface ScopeContext {
   actorId?: string | null
   actorName?: string | null
   actorRole?: string | null
+  actorRoles?: string[] | null
 }
 
 export interface StudentFilterOptions {
@@ -40,6 +43,22 @@ export interface StudentFilterOptions {
   pageSize?: number
 }
 
+function ctxToSession(ctx: ScopeContext) {
+  const roles = (ctx.actorRoles && ctx.actorRoles.length > 0
+    ? ctx.actorRoles
+    : (ctx.actorRole ? [ctx.actorRole] : ['OWNER'])) as any[]
+
+  return {
+    uid: ctx.actorId || '',
+    email: '',
+    name: ctx.actorName || '',
+    tenantId: ctx.tenantId,
+    branchId: ctx.branchId,
+    role: (roles[0] || ctx.actorRole || 'OWNER') as any,
+    roles: roles as any,
+  }
+}
+
 export class StudentService {
   /**
    * Authoritative multi-tenant & session scope resolver
@@ -47,7 +66,8 @@ export class StudentService {
   static async verifyScope(
     tenantId: string,
     branchId?: string | null,
-    academicSessionId?: string | null
+    academicSessionId?: string | null,
+    options: { requireSession?: boolean } = {}
   ) {
     if (!tenantId) throw new Error('Tenant context is required')
 
@@ -75,14 +95,14 @@ export class StudentService {
       })
     }
 
-    if (!session) {
+    if (!session && options.requireSession) {
       throw new Error('Active academic session is required. Configure an academic year in Setup first.')
     }
 
     return {
       tenantId,
       branchId: branchId || null,
-      academicSessionId: session.id as string,
+      academicSessionId: session ? (session.id as string) : null,
       session,
     }
   }
@@ -124,7 +144,7 @@ export class StudentService {
    * List students with multi-dimensional filtering, search and server-side pagination
    */
   static async listStudents(ctx: ScopeContext, filters: StudentFilterOptions = {}) {
-    const scope = await this.verifyScope(ctx.tenantId, filters.branchId || ctx.branchId, filters.academicSessionId || ctx.academicSessionId)
+    const scope = await this.verifyScope(ctx.tenantId, filters.branchId || ctx.branchId, filters.academicSessionId || ctx.academicSessionId, { requireSession: false })
     const page = Math.max(1, filters.page || 1)
     const pageSize = Math.min(100, Math.max(1, filters.pageSize || 20))
     const search = filters.search?.trim()
@@ -139,6 +159,13 @@ export class StudentService {
 
     if (filters.programType) {
       where.currentClassroom = { programType: filters.programType }
+    }
+
+    if (filters.academicSessionId) {
+      where.currentClassroom = {
+        ...(where.currentClassroom || {}),
+        academicSessionId: filters.academicSessionId,
+      }
     }
 
     if (search) {
@@ -163,13 +190,26 @@ export class StudentService {
     }
 
     // If teacher role, scope strictly to their assigned classrooms
-    if (ctx.actorRole === 'TEACHER' && ctx.actorId) {
+    const effectiveRoles = (ctx.actorRoles && ctx.actorRoles.length > 0 ? ctx.actorRoles : [ctx.actorRole]).filter(Boolean) as string[]
+    const isTeacher = effectiveRoles.includes('TEACHER') && !effectiveRoles.some((r) => ['OWNER', 'PRINCIPAL', 'PLATFORM_ADMIN'].includes(r))
+    if (isTeacher && ctx.actorId) {
       const assignedRooms = await db.classroom.findMany({
-        where: { tenantId: scope.tenantId, primaryTeacherId: ctx.actorId, isActive: true },
+        where: {
+          tenantId: scope.tenantId,
+          isActive: true,
+          OR: [
+            { primaryTeacherId: ctx.actorId },
+            { subjectMappings: { some: { specialistTeacherId: ctx.actorId } } },
+          ],
+        },
         select: { id: true },
       })
       const roomIds = assignedRooms.map((r) => r.id)
-      where.currentClassroomId = { in: roomIds }
+      if (filters.classroomId) {
+        where.currentClassroomId = roomIds.includes(filters.classroomId) ? filters.classroomId : { in: [] }
+      } else {
+        where.currentClassroomId = { in: roomIds }
+      }
     }
 
     const [total, students] = await Promise.all([
@@ -193,7 +233,7 @@ export class StudentService {
                 select: { id: true, fullName: true, phone: true, email: true, relationship: true, userId: true },
               },
             },
-            where: { isPrimary: true },
+            orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
             take: 1,
           },
           attendances: {
@@ -219,9 +259,9 @@ export class StudentService {
       const presentDays = s.attendances.filter((a) => ['PRESENT', 'LATE', 'HALF_DAY'].includes(a.status)).length
       const attendancePct = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 100
 
-      const totalBilledCents = s.invoices.reduce((acc, i) => acc + i.totalCents, 0)
-      const totalPaidCents = s.invoices.reduce((acc, i) => acc + i.paidCents, 0)
-      const balanceCents = s.invoices.reduce((acc, i) => acc + i.balanceCents, 0)
+      const totalBilledCents = s.invoices.reduce((acc, i) => acc + (i.totalCents || 0), 0)
+      const totalPaidCents = s.invoices.reduce((acc, i) => acc + (i.paidCents || 0), 0)
+      const balanceCents = s.invoices.reduce((acc, i) => acc + (i.balanceCents || 0), 0)
 
       return {
         id: s.id,
@@ -304,6 +344,7 @@ export class StudentService {
                 fullName: true,
                 phone: true,
                 email: true,
+                occupation: true,
                 relationship: true,
                 userId: true,
                 user: { select: { id: true, email: true, status: true, lastLoginAt: true } },
@@ -349,6 +390,12 @@ export class StudentService {
 
     if (!student) throw new Error('Student not found')
 
+    // Centralized tenant + branch boundary before object-level checks.
+    assertResourceScope(ctxToSession(ctx), {
+      tenantId: student.tenantId,
+      branchId: student.branchId,
+    })
+
     // Parent permission check: Only allowed to view own ward
     if (ctx.actorRole === 'PARENT') {
       const isLinked = student.guardians.some((g) => g.guardian.userId === ctx.actorId)
@@ -368,15 +415,66 @@ export class StudentService {
       }
     }
 
+    // Guardian User & Session Account Health
+    const guardianUserIds = student.guardians
+      .map((g) => g.guardian.userId)
+      .filter(Boolean) as string[]
+
+    const [tenantUsers, userSessions] = await Promise.all([
+      guardianUserIds.length > 0
+        ? db.tenantUser.findMany({
+            where: { tenantId: scope.tenantId, userId: { in: guardianUserIds }, deletedAt: null },
+            select: { userId: true, status: true, role: true, createdAt: true },
+          })
+        : [],
+      guardianUserIds.length > 0
+        ? db.userSession.findMany({
+            where: { userId: { in: guardianUserIds }, status: 'ACTIVE' },
+            select: { id: true, userId: true, device: true, platform: true, lastActiveAt: true, createdAt: true, status: true },
+            orderBy: { lastActiveAt: 'desc' },
+            take: 20,
+          })
+        : [],
+    ])
+
+    const tenantUserMap = new Map(tenantUsers.map((tu) => [tu.userId, tu] as [string, typeof tu]))
+    const sessionMap = new Map<string, any[]>()
+    for (const s of userSessions) {
+      if (!sessionMap.has(s.userId)) sessionMap.set(s.userId, [])
+      sessionMap.get(s.userId)!.push(s)
+    }
+
     // 1. Originating Admission Application link
     const admissionApplication = await db.admissionApplication.findFirst({
       where: { tenantId: scope.tenantId, studentId: student.id },
       include: {
+        lead: {
+          select: { id: true, leadNumber: true, source: true, status: true },
+        },
         documents: {
-          select: { id: true, docType: true, fileName: true, status: true, verified: true, uploadedAt: true },
+          select: {
+            id: true,
+            docType: true,
+            fileName: true,
+            status: true,
+            verified: true,
+            uploadedAt: true,
+            verifiedAt: true,
+            remarks: true,
+            rejectionReason: true,
+          },
         },
         offers: {
-          select: { id: true, offerNumber: true, status: true, feeTotalCents: true, validUntil: true, acceptedAt: true },
+          select: {
+            id: true,
+            offerNumber: true,
+            status: true,
+            feeTotalCents: true,
+            terms: true,
+            validUntil: true,
+            acceptedAt: true,
+            issuedAt: true,
+          },
         },
       },
     })
@@ -405,13 +503,70 @@ export class StudentService {
       .filter((i) => i.status === 'OVERDUE' || (i.balanceCents > 0 && new Date(i.dueDate) < new Date()))
       .reduce((acc, i) => acc + i.balanceCents, 0)
 
-    const hasFinanceAccess = ctx.actorRole !== 'GUARDIAN'
+    const effectiveActorRoles = ctx.actorRoles && ctx.actorRoles.length > 0
+      ? ctx.actorRoles
+      : (ctx.actorRole ? [ctx.actorRole] : [])
+    const hasFinanceAccess = effectiveActorRoles.some((r) => ['OWNER', 'PRINCIPAL', 'ACCOUNTANT', 'PARENT'].includes(r))
+      || (effectiveActorRoles.length > 0 && !effectiveActorRoles.includes('GUARDIAN'))
+      || (effectiveActorRoles.length === 0 && ctx.actorRole !== 'GUARDIAN')
+
+    // Area E: Student Deposits & Refunds
+    let deposits: any[] = []
+    let refunds: any[] = []
+    let depositStats = {
+      totalDepositsCents: 0,
+      refundedAmountCents: 0,
+      remainingAmountCents: 0,
+    }
+
+    if (hasFinanceAccess) {
+      deposits = await db.studentDeposit.findMany({
+        where: { tenantId: scope.tenantId, studentId: student.id },
+        include: {
+          feeItem: { select: { id: true, name: true } },
+          refunds: { select: { id: true, amountCents: true, refundDate: true, refundMode: true, reference: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+
+      refunds = await db.refund.findMany({
+        where: { tenantId: scope.tenantId, studentId: student.id },
+        orderBy: { refundDate: 'desc' },
+      })
+
+      depositStats = {
+        totalDepositsCents: deposits.reduce((acc, d) => acc + d.totalAmountCents, 0),
+        refundedAmountCents: deposits.reduce((acc, d) => acc + d.refundedAmountCents, 0),
+        remainingAmountCents: deposits.reduce((acc, d) => acc + d.remainingAmountCents, 0),
+      }
+    }
+
+    // Area E: Reconcile agreed admission terms with actual fee ledger
+    const acceptedOffer = admissionApplication?.offers?.find((o) => o.status === 'ACCEPTED') || admissionApplication?.offers?.[0]
+    const offerAgreedCents = acceptedOffer ? acceptedOffer.feeTotalCents : null
+    const feeReconciliation = {
+      hasOffer: !!acceptedOffer,
+      offerNumber: acceptedOffer?.offerNumber || null,
+      offerAgreedCents,
+      totalBilledCents,
+      totalPaidCents,
+      balanceCents,
+      discrepancyCents: offerAgreedCents !== null ? totalBilledCents - offerAgreedCents : 0,
+      hasDiscrepancy: offerAgreedCents !== null && totalBilledCents !== offerAgreedCents,
+      terms: acceptedOffer?.terms || null,
+      offerStatus: acceptedOffer?.status || null,
+    }
+
     const financeSummary = hasFinanceAccess
       ? {
           totalBilledCents,
           totalPaidCents,
           balanceCents,
           overdueCents,
+          deposits,
+          refunds,
+          depositStats,
+          reconciliation: feeReconciliation,
           invoices: student.invoices.map((inv) => ({
             id: inv.id,
             invoiceNumber: inv.invoiceNumber,
@@ -435,9 +590,12 @@ export class StudentService {
           totalPaidCents: 0,
           balanceCents: 0,
           overdueCents: 0,
+          deposits: [],
+          refunds: [],
+          depositStats: { totalDepositsCents: 0, refundedAmountCents: 0, remainingAmountCents: 0 },
+          reconciliation: null,
           invoices: [],
         }
-
 
     // 4. Learning & Progress aggregation
     const progressRecords = await db.studentProgress.findMany({
@@ -479,7 +637,28 @@ export class StudentService {
       take: 20,
     })
 
-    // 6. Transport data for student
+    // Area C: Inventory Stock Issues for student
+    const stockIssues = await db.stockIssue.findMany({
+      where: { tenantId: scope.tenantId, studentId: student.id },
+      include: {
+        location: { select: { id: true, name: true, code: true } },
+        items: {
+          include: {
+            item: {
+              select: { id: true, name: true, sku: true, unitId: true, category: { select: { name: true } } },
+            },
+          },
+        },
+        returns: {
+          include: {
+            items: true,
+          },
+        },
+      },
+      orderBy: { issueDate: 'desc' },
+    })
+
+    // Area D: Transport data & Pickup Authorizations
     const transportAssignments = await db.studentTransportAssignment.findMany({
       where: { tenantId: scope.tenantId, studentId: student.id, deletedAt: null },
       include: {
@@ -506,6 +685,29 @@ export class StudentService {
       take: 10,
     })
 
+    const pickupAuthorizations = await db.transportPickupAuthorization.findMany({
+      where: { tenantId: scope.tenantId, studentId: student.id },
+      include: {
+        guardian: { select: { fullName: true, phone: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    const reportCards = await db.studentReportCard.findMany({
+      where: {
+        tenantId: scope.tenantId,
+        studentId: student.id,
+        ...(ctx.actorRole === 'PARENT' || ctx.actorRole === 'GUARDIAN' ? { status: 'PUBLISHED' } : {}),
+      },
+      include: {
+        documentTemplate: { select: { id: true, name: true, type: true } },
+        academicSession: { select: { id: true, name: true } },
+        classroom: { select: { id: true, name: true } },
+        document: { select: { id: true, title: true, fileName: true, fileUrl: true, fileSizeBytes: true } },
+      },
+      orderBy: [{ academicSession: { startDate: 'desc' } }, { term: 'asc' }],
+    })
+
     return {
       student: {
         id: student.id,
@@ -518,17 +720,66 @@ export class StudentService {
         dob: student.dob,
         gender: student.gender,
         bloodGroup: student.bloodGroup,
+        allergies: student.allergies || null,
+        medicalAlerts: student.medicalAlerts || null,
+        dietaryRestrictions: student.dietaryRestrictions || null,
+        emergencyMedicalInstructions: student.emergencyMedicalInstructions || null,
         address: student.address,
         photoUrl: student.photoUrl,
         status: student.status,
         admissionDate: student.admissionDate,
         createdAt: student.createdAt,
       },
+      health: {
+        bloodGroup: student.bloodGroup,
+        allergies: student.allergies || null,
+        medicalAlerts: student.medicalAlerts || null,
+        dietaryRestrictions: student.dietaryRestrictions || null,
+        emergencyMedicalInstructions: student.emergencyMedicalInstructions || null,
+      },
+      reportCards: reportCards.map((rc) => ({
+        id: rc.id,
+        term: rc.term,
+        academicSessionName: rc.academicSession.name,
+        classroomName: rc.classroom?.name,
+        templateName: rc.documentTemplate.name,
+        templateId: rc.templateId,
+        status: rc.status,
+        overallGrade: rc.overallGrade,
+        remarks: rc.remarks,
+        attendancePct: rc.attendancePct,
+        fieldValues: rc.fieldValues,
+        documentId: rc.documentId,
+        document: rc.document,
+        evaluatorName: rc.evaluatorName,
+        publishedAt: rc.publishedAt,
+        updatedAt: rc.updatedAt,
+      })),
       admission: admissionApplication
         ? {
             id: admissionApplication.id,
             applicationNumber: admissionApplication.applicationNumber,
             status: admissionApplication.status,
+            previousSchool: admissionApplication.previousSchool,
+            notes:
+              ctx.actorRole !== 'PARENT' && ctx.actorRole !== 'GUARDIAN'
+                ? admissionApplication.notes
+                : null,
+            lead: admissionApplication.lead
+              ? {
+                  id: admissionApplication.lead.id,
+                  leadNumber: admissionApplication.lead.leadNumber,
+                  source: admissionApplication.lead.source,
+                  status: admissionApplication.lead.status,
+                }
+              : null,
+            lifecycle: {
+              submittedAt: admissionApplication.submittedAt,
+              verifiedAt: admissionApplication.verifiedAt,
+              approvedAt: admissionApplication.approvedAt,
+              rejectedAt: admissionApplication.rejectedAt,
+              rejectionReason: admissionApplication.rejectionReason,
+            },
             submittedAt: admissionApplication.submittedAt,
             documents: admissionApplication.documents,
             offers: admissionApplication.offers,
@@ -550,34 +801,103 @@ export class StudentService {
           id: a.id,
           sessionName: a.academicSession.name,
           classroomName: a.classroom.name,
+          classroomCode: a.classroom.code,
           programType: a.programType,
           status: a.status,
           startedAt: a.startedAt,
           endedAt: a.endedAt,
           reason: a.reason,
+          createdByName: (a as any).createdByName || null,
         })),
       },
-      guardians: student.guardians.map((g) => ({
-        id: g.guardian.id,
-        name: g.guardian.fullName,
-        relationship: g.guardian.relationship,
-        phone: g.guardian.phone,
-        email: g.guardian.email,
-        isPrimary: g.isPrimary,
-        canPickup: g.canPickup,
-        isFeePayer: g.isFeePayer,
-        receivesComm: g.receivesComm,
-        portalAccount: g.guardian.user
-          ? {
-              id: g.guardian.user.id,
-              email: g.guardian.user.email,
-              status: g.guardian.user.status,
-              lastLoginAt: g.guardian.user.lastLoginAt,
-            }
-          : null,
-      })),
+      guardians: student.guardians.map((g) => {
+        const tu = g.guardian.userId ? tenantUserMap.get(g.guardian.userId) : null
+        const sessions = g.guardian.userId ? sessionMap.get(g.guardian.userId) || [] : []
+        const isStaff = ctx.actorRole !== 'PARENT' && ctx.actorRole !== 'GUARDIAN'
+        return {
+          id: g.guardian.id,
+          name: g.guardian.fullName,
+          relationship: g.guardian.relationship,
+          phone: g.guardian.phone,
+          email: g.guardian.email,
+          occupation: g.guardian.occupation || null,
+          isPrimary: g.isPrimary,
+          canPickup: g.canPickup,
+          isFeePayer: g.isFeePayer,
+          receivesComm: g.receivesComm,
+          portalAccount: g.guardian.user
+            ? {
+                id: g.guardian.user.id,
+                email: g.guardian.user.email,
+                accountStatus: g.guardian.user.status,
+                membershipStatus: (tu as any)?.status || g.guardian.user.status,
+                lastLoginAt: g.guardian.user.lastLoginAt,
+                sessions: isStaff
+                  ? sessions.map((s: any) => ({
+                      id: s.id,
+                      device: s.device || 'Web Browser',
+                      platform: s.platform || 'Desktop/Mobile',
+                      lastActiveAt: s.lastActiveAt,
+                      createdAt: s.createdAt,
+                      status: s.status,
+                    }))
+                  : [],
+              }
+            : null,
+        }
+      }),
       attendance: attendanceStats,
       finance: financeSummary,
+      inventory: {
+        stockIssues: stockIssues.map((si) => ({
+          id: si.id,
+          issueNumber: si.issueNumber,
+          issueDate: si.issueDate,
+          status: si.status,
+          locationName: si.location?.name || 'Main Store',
+          issuedByName: si.issuedByName,
+          notes: si.notes,
+          items: si.items.map((it) => ({
+            id: it.id,
+            itemName: it.item?.name || 'General Item',
+            itemSku: it.item?.sku || '—',
+            category: it.item?.category?.name || 'Supplies',
+            quantity: Number(it.quantity),
+            returnedQuantity: Number(it.returnedQuantity),
+            unitCost: it.unitCost ? Number(it.unitCost) : null,
+            batchNumber: it.batchNumber,
+          })),
+          returns: si.returns.map((ret) => ({
+            id: ret.id,
+            returnNumber: ret.returnNumber,
+            returnDate: ret.returnDate,
+            returnedByName: ret.returnedByName,
+            notes: ret.notes,
+          })),
+        })),
+      },
+      transport: {
+        activeAssignment: transportAssignments.find((a) => a.status === 'ACTIVE') || null,
+        assignments: transportAssignments,
+        recentTrips: recentTripManifests,
+        pickupAuthorizations: pickupAuthorizations.map((pa) => ({
+          id: pa.id,
+          personName: pa.personName,
+          phone: pa.phone,
+          relationship: pa.relationship,
+          actionType: pa.actionType,
+          reason: pa.reason,
+          validFrom: pa.validFrom,
+          validUntil: pa.validUntil,
+          isOneTime: pa.isOneTime,
+          status: pa.status,
+          approvedByName: pa.approvedByName,
+          approvedAt: pa.approvedAt,
+          rejectionReason: pa.rejectionReason,
+          remarks: pa.remarks,
+          createdAt: pa.createdAt,
+        })),
+      },
       academics: {
         activities,
         observations: student.observations,
@@ -585,11 +905,6 @@ export class StudentService {
       },
       timeline: student.timelineEntries,
       audit: auditLogs,
-      transport: {
-        activeAssignment: transportAssignments.find((a) => a.status === 'ACTIVE') || null,
-        assignments: transportAssignments,
-        recentTrips: recentTripManifests,
-      },
     }
   }
 
@@ -677,11 +992,15 @@ export class StudentService {
       programType?: ProgramType
       classroomId?: string
       branchId?: string
+      seatNumber?: string
+      username?: string
       academicSessionId?: string
       guardianName: string
       guardianPhone: string
       guardianEmail?: string
       guardianRelationship?: string
+      guardianId?: string
+      guardianUserId?: string
       canPickup?: boolean
       isFeePayer?: boolean
       confirmDuplicate?: boolean
@@ -690,10 +1009,30 @@ export class StudentService {
   ) {
     const scope = await this.verifyScope(ctx.tenantId, input.branchId || ctx.branchId, input.academicSessionId || ctx.academicSessionId)
 
-    if (!input.firstName || !input.firstName.trim()) throw new Error('First name is required')
-    if (!input.dob) throw new Error('Date of birth is required')
-    if (!input.gender) throw new Error('Gender is required')
-    if (!input.guardianName || !input.guardianPhone) throw new Error('Guardian name and phone are required')
+    if (!input.firstName || !input.firstName.trim()) {
+      const err: any = new Error('First name is required')
+      err.code = 'VALIDATION_ERROR'
+      err.status = 400
+      throw err
+    }
+    if (!input.dob) {
+      const err: any = new Error('Date of birth is required')
+      err.code = 'VALIDATION_ERROR'
+      err.status = 400
+      throw err
+    }
+    if (!input.gender) {
+      const err: any = new Error('Gender is required')
+      err.code = 'VALIDATION_ERROR'
+      err.status = 400
+      throw err
+    }
+    if (!input.guardianName || !input.guardianPhone) {
+      const err: any = new Error('Guardian name and phone are required')
+      err.code = 'VALIDATION_ERROR'
+      err.status = 400
+      throw err
+    }
 
     // Duplicate Check
     if (!input.confirmDuplicate) {
@@ -713,16 +1052,21 @@ export class StudentService {
 
 
     // Branch Resolution
-    let branchId = input.branchId || scope.branchId
+    let branchId: string | null | undefined = input.branchId || scope.branchId
     if (!branchId) {
       const defaultBranch = await db.branch.findFirst({ where: { tenantId: scope.tenantId, isMain: true } })
-      branchId = defaultBranch?.id
+      branchId = defaultBranch?.id || null
     }
     if (!branchId) {
       const anyBranch = await db.branch.findFirst({ where: { tenantId: scope.tenantId } })
-      branchId = anyBranch?.id
+      branchId = anyBranch?.id || null
     }
-    if (!branchId) throw new Error('Branch context is required')
+    if (!branchId) {
+      const err: any = new Error('Branch context is required')
+      err.code = 'BRANCH_REQUIRED'
+      err.status = 400
+      throw err
+    }
 
     // Classroom & Capacity Guard
     let classroom: any = null
@@ -730,24 +1074,35 @@ export class StudentService {
       classroom = await db.classroom.findFirst({
         where: { id: input.classroomId, tenantId: scope.tenantId, isActive: true },
       })
-      if (!classroom) throw new Error('Selected classroom not found or inactive')
+      if (!classroom) {
+        const err: any = new Error('Selected classroom not found or inactive')
+        err.code = 'CLASSROOM_NOT_FOUND'
+        err.status = 404
+        throw err
+      }
 
       const seats = await classroomSeats(classroom.id)
       if (seats.available <= 0) {
-        throw new Error(`Classroom ${classroom.name} is at full capacity (${seats.current}/${seats.capacity}). Please choose another section.`)
+        const err: any = new Error(`Classroom ${classroom.name} is at full capacity (${seats.current}/${seats.capacity}). Please choose another section.`)
+        err.code = 'CLASSROOM_FULL'
+        err.status = 422
+        throw err
       }
 
       // Age eligibility check
       if (classroom.programType) {
         const ageCheck = await ConfigurationService.validateProgramAge(scope.tenantId, classroom.programType, input.dob)
         if (!ageCheck.eligible) {
-          throw new Error(`Age requirement not met for ${classroom.programType}: ${ageCheck.reason}`)
+          const err: any = new Error(`Age requirement not met for ${classroom.programType}: ${ageCheck.reason}`)
+          err.code = 'AGE_INELIGIBLE'
+          err.status = 422
+          throw err
         }
       }
     }
 
     const admissionNo = await this.generateAdmissionNumber(scope.tenantId)
-    const seatNumber = classroom ? await this.generateSeatNumber(scope.tenantId, classroom.id) : null
+    const seatNumber = input.seatNumber || (classroom ? await this.generateSeatNumber(scope.tenantId, classroom.id) : null)
 
     const runInTx = async (tx: Prisma.TransactionClient) => {
       // 1. Create Student
@@ -757,6 +1112,7 @@ export class StudentService {
           branchId,
           admissionNo,
           seatNumber,
+          username: input.username || null,
           firstName: input.firstName.trim(),
           lastName: input.lastName?.trim() || null,
           dob: new Date(input.dob),
@@ -771,20 +1127,66 @@ export class StudentService {
       })
 
       // 2. Resolve or Create Guardian
-      let guardian = await tx.guardian.findFirst({
-        where: { tenantId: scope.tenantId, phone: input.guardianPhone.trim() },
-      })
+      let guardian: any = null
+      if (input.guardianId) {
+        guardian = await tx.guardian.findFirst({
+          where: { id: input.guardianId, tenantId: scope.tenantId },
+        })
+      }
+      if (!guardian && input.guardianUserId) {
+        guardian = await tx.guardian.findFirst({
+          where: { userId: input.guardianUserId, tenantId: scope.tenantId },
+        })
+      }
       if (!guardian) {
-        guardian = await tx.guardian.create({
-          data: {
+        const cleanPhone = input.guardianPhone ? input.guardianPhone.trim().replace(/[^\d+]/g, '') : null
+        guardian = await tx.guardian.findFirst({
+          where: {
             tenantId: scope.tenantId,
-            fullName: input.guardianName.trim(),
-            phone: input.guardianPhone.trim(),
-            email: input.guardianEmail?.trim() || null,
-            relationship: (input.guardianRelationship as any) || 'FATHER',
-            isPrimaryContact: true,
+            OR: [
+              { phone: input.guardianPhone.trim() },
+              ...(cleanPhone ? [{ phone: cleanPhone }] : []),
+              ...(input.guardianEmail ? [{ email: input.guardianEmail.trim().toLowerCase() }] : []),
+            ],
           },
         })
+      }
+
+      if (guardian) {
+        // If guardian exists and userId is not yet set, set it if guardianUserId is provided
+        if (!guardian.userId && input.guardianUserId) {
+          const userAlreadyHasGuardian = await tx.guardian.findFirst({
+            where: { userId: input.guardianUserId, tenantId: scope.tenantId, id: { not: guardian.id } },
+          })
+          if (!userAlreadyHasGuardian) {
+            guardian = await tx.guardian.update({
+              where: { id: guardian.id },
+              data: { userId: input.guardianUserId },
+            })
+          }
+        }
+      } else {
+        if (input.guardianUserId) {
+          const existingGuardianByUser = await tx.guardian.findFirst({
+            where: { userId: input.guardianUserId },
+          })
+          if (existingGuardianByUser) {
+            guardian = existingGuardianByUser
+          }
+        }
+        if (!guardian) {
+          guardian = await tx.guardian.create({
+            data: {
+              tenantId: scope.tenantId,
+              userId: input.guardianUserId || null,
+              fullName: input.guardianName.trim(),
+              phone: input.guardianPhone.trim(),
+              email: input.guardianEmail?.trim() || null,
+              relationship: (input.guardianRelationship as any) || 'FATHER',
+              isPrimaryContact: true,
+            },
+          })
+        }
       }
 
       // 3. Link Student ↔ Guardian
@@ -848,6 +1250,16 @@ export class StudentService {
       summary: `Student ${result.student.firstName} ${result.student.lastName || ''} (${admissionNo}) created`,
     })
 
+    // Auto-generate canonical fee schedules if classroom is assigned
+    if (result.classroom) {
+      try {
+        const { FeeService } = await import('@/lib/fees/fee-service')
+        await FeeService.applyActiveFeeStructuresToStudent(scope, result.student.id)
+      } catch (feeErr) {
+        console.warn('[StudentService.createStudent] Fee schedule auto-generation warning:', feeErr)
+      }
+    }
+
     return result.student
   }
 
@@ -867,6 +1279,10 @@ export class StudentService {
       dob?: Date | string
       gender?: Gender
       bloodGroup?: BloodGroup
+      allergies?: string | null
+      medicalAlerts?: string | null
+      dietaryRestrictions?: string | null
+      emergencyMedicalInstructions?: string | null
       address?: string
       photoUrl?: string
       seatNumber?: string
@@ -886,6 +1302,12 @@ export class StudentService {
       newSeatNumber = await this.generateSeatNumber(scope.tenantId, student.currentClassroomId)
     }
 
+    const sanitizeText = (val?: string | null, maxLen: number = 500): string | null => {
+      if (val === undefined || val === null) return null
+      const cleaned = val.replace(/<[^>]*>?/gm, '').trim()
+      return cleaned.slice(0, maxLen) || null
+    }
+
     const updated = await db.student.update({
       where: { id: student.id },
       data: {
@@ -894,7 +1316,11 @@ export class StudentService {
         ...(input.dob ? { dob: new Date(input.dob) } : {}),
         ...(input.gender ? { gender: input.gender } : {}),
         ...(input.bloodGroup !== undefined ? { bloodGroup: input.bloodGroup } : {}),
-        ...(input.address !== undefined ? { address: input.address?.trim() || null } : {}),
+        ...(input.allergies !== undefined ? { allergies: sanitizeText(input.allergies, 500) } : {}),
+        ...(input.medicalAlerts !== undefined ? { medicalAlerts: sanitizeText(input.medicalAlerts, 500) } : {}),
+        ...(input.dietaryRestrictions !== undefined ? { dietaryRestrictions: sanitizeText(input.dietaryRestrictions, 500) } : {}),
+        ...(input.emergencyMedicalInstructions !== undefined ? { emergencyMedicalInstructions: sanitizeText(input.emergencyMedicalInstructions, 1000) } : {}),
+        ...(input.address !== undefined ? { address: sanitizeText(input.address, 500) } : {}),
         ...(input.photoUrl !== undefined ? { photoUrl: input.photoUrl } : {}),
         ...(newSeatNumber !== undefined ? { seatNumber: newSeatNumber } : {}),
       },
@@ -1241,6 +1667,19 @@ export class StudentService {
     })
     if (!targetClass) throw new Error('Target classroom section not found')
 
+    // Idempotency guard: If student is already active in target session and classroom, avoid duplicates
+    const existingActiveInTarget = await db.studentAllocation.findFirst({
+      where: {
+        studentId: student.id,
+        academicSessionId: targetSession.id,
+        classroomId: targetClass.id,
+        status: 'ACTIVE',
+      },
+    })
+    if (existingActiveInTarget && student.currentClassroomId === targetClass.id) {
+      return student
+    }
+
     const seats = await classroomSeats(targetClass.id)
     if (seats.available <= 0) {
       throw new Error(`Target section ${targetClass.name} is full (${seats.current}/${seats.capacity})`)
@@ -1449,7 +1888,7 @@ export class StudentService {
     })
     if (!student) throw new Error('Student not found')
 
-    if (newStatus === 'WITHDRAWN') {
+    if ((newStatus as string) === 'WITHDRAWN') {
       return this.withdrawStudent(ctx, studentId, { reason: reason || 'Status changed to WITHDRAWN' })
     }
 
@@ -1487,13 +1926,15 @@ export class StudentService {
       fullName?: string
       phone?: string
       email?: string
+      occupation?: string
       relationship?: string
       isPrimary?: boolean
       canPickup?: boolean
       pickupPin?: string
       isFeePayer?: boolean
       receivesComm?: boolean
-      action: 'LINK' | 'UPDATE' | 'UNLINK'
+      alternateGuardianId?: string
+      action: 'LINK' | 'UPDATE' | 'UNLINK' | 'INVITE'
     }
   ) {
     const scope = await this.verifyScope(ctx.tenantId, ctx.branchId, ctx.academicSessionId)
@@ -1505,9 +1946,33 @@ export class StudentService {
 
     if (input.action === 'UNLINK') {
       if (!input.guardianId) throw new Error('Guardian ID is required to unlink')
-      await db.studentGuardian.deleteMany({
-        where: { studentId: student.id, guardianId: input.guardianId },
+
+      const unlinkCheck = await PrimaryContactGuard.checkStudentUnlinkSafety({
+        tenantId: scope.tenantId,
+        studentId: student.id,
+        guardianId: input.guardianId,
+        alternateGuardianId: input.alternateGuardianId,
       })
+
+      if (!unlinkCheck.safe) {
+        throw new Error(unlinkCheck.error || 'Cannot unlink primary contact without nominating an alternate contact')
+      }
+
+      await db.$transaction(async (tx) => {
+        if (unlinkCheck.transfers && unlinkCheck.transfers.length > 0) {
+          await PrimaryContactGuard.applyTransfersTx(tx, unlinkCheck.transfers, {
+            uid: ctx.actorId || 'system',
+            name: ctx.actorName || 'System',
+            role: ctx.actorRole || 'ADMIN',
+            tenantId: scope.tenantId,
+          })
+        }
+
+        await tx.studentGuardian.deleteMany({
+          where: { studentId: student.id, guardianId: input.guardianId },
+        })
+      })
+
       await audit({
         tenantId: scope.tenantId,
         actorId: ctx.actorId,
@@ -1521,6 +1986,70 @@ export class StudentService {
       return { success: true }
     }
 
+    if (input.action === 'INVITE') {
+      if (!input.guardianId) throw new Error('Guardian ID is required to invite')
+      const targetGuardian = await db.guardian.findFirst({
+        where: { id: input.guardianId, tenantId: scope.tenantId },
+        include: { user: true },
+      })
+      if (!targetGuardian) throw new Error('Guardian not found')
+      if (!targetGuardian.email) throw new Error('Guardian email is required to send portal invitation')
+
+      let user = targetGuardian.user
+      if (!user) {
+        user = await db.user.findFirst({
+          where: { email: targetGuardian.email.toLowerCase().trim() },
+        })
+      }
+
+      if (!user) {
+        user = await db.user.create({
+          data: {
+            fullName: targetGuardian.fullName,
+            email: targetGuardian.email.toLowerCase().trim(),
+            phone: targetGuardian.phone,
+            passwordHash: '',
+            status: 'PENDING',
+          },
+        })
+      }
+
+      if (targetGuardian.userId !== user.id) {
+        await db.guardian.update({
+          where: { id: targetGuardian.id },
+          data: { userId: user.id },
+        })
+      }
+
+      const existingTu = await db.tenantUser.findFirst({
+        where: { tenantId: scope.tenantId, userId: user.id },
+      })
+      if (!existingTu) {
+        await db.tenantUser.create({
+          data: {
+            tenantId: scope.tenantId,
+            userId: user.id,
+            role: 'PARENT',
+            roles: ['PARENT'],
+            status: 'PENDING',
+          },
+        })
+      }
+
+      await audit({
+        tenantId: scope.tenantId,
+        actorId: ctx.actorId,
+        actorName: ctx.actorName,
+        actorRole: ctx.actorRole,
+        action: 'INVITE_PARENT_PORTAL',
+        entity: 'Guardian',
+        entityId: targetGuardian.id,
+        summary: `Sent parent portal access invitation to ${targetGuardian.fullName} (${targetGuardian.email})`,
+      })
+
+      return { success: true, message: `Invitation dispatched to ${targetGuardian.email}`, userId: user.id }
+    }
+
     // Resolve or create guardian
     let guardian: any = null
     if (input.guardianId) {
@@ -1530,13 +2059,14 @@ export class StudentService {
       if (!guardian) throw new Error('Guardian not found')
 
       // Update canonical guardian details if provided
-      if (input.fullName || input.phone || input.email !== undefined) {
+      if (input.fullName || input.phone || input.email !== undefined || input.occupation !== undefined) {
         guardian = await db.guardian.update({
           where: { id: guardian.id },
           data: {
             ...(input.fullName ? { fullName: input.fullName.trim() } : {}),
             ...(input.phone ? { phone: input.phone.trim() } : {}),
             ...(input.email !== undefined ? { email: input.email?.trim() || null } : {}),
+            ...(input.occupation !== undefined ? { occupation: input.occupation?.trim() || null } : {}),
           },
         })
       }
@@ -1563,6 +2093,7 @@ export class StudentService {
             fullName: input.fullName.trim(),
             phone: phoneNorm,
             email: input.email?.trim() || null,
+            occupation: input.occupation?.trim() || null,
             relationship: (input.relationship as any) || 'MOTHER',
             pickupPin: input.pickupPin?.trim() || null,
           },
@@ -1633,12 +2164,35 @@ export class StudentService {
    * Real-time non-hardcoded operational dashboard metrics for Students module
    */
   static async getStudentDashboardStats(ctx: ScopeContext, filters?: { branchId?: string; academicSessionId?: string }) {
-    const scope = await this.verifyScope(ctx.tenantId, filters?.branchId || ctx.branchId, filters?.academicSessionId || ctx.academicSessionId)
+    const scope = await this.verifyScope(ctx.tenantId, filters?.branchId || ctx.branchId, filters?.academicSessionId || ctx.academicSessionId, { requireSession: false })
 
-    const baseWhere = {
+    const baseWhere: any = {
       tenantId: scope.tenantId,
       deletedAt: null,
       ...(filters?.branchId ? { branchId: filters.branchId } : {}),
+    }
+
+    if (filters?.academicSessionId) {
+      baseWhere.currentClassroom = {
+        academicSessionId: filters.academicSessionId,
+      }
+    }
+
+    const effectiveRoles = (ctx.actorRoles && ctx.actorRoles.length > 0 ? ctx.actorRoles : [ctx.actorRole]).filter(Boolean) as string[]
+    const isTeacher = effectiveRoles.includes('TEACHER') && !effectiveRoles.some((r) => ['OWNER', 'PRINCIPAL', 'PLATFORM_ADMIN'].includes(r))
+    if (isTeacher && ctx.actorId) {
+      const assignedRooms = await db.classroom.findMany({
+        where: {
+          tenantId: scope.tenantId,
+          isActive: true,
+          OR: [
+            { primaryTeacherId: ctx.actorId },
+            { subjectMappings: { some: { specialistTeacherId: ctx.actorId } } },
+          ],
+        },
+        select: { id: true },
+      })
+      baseWhere.currentClassroomId = { in: assignedRooms.map((r) => r.id) }
     }
 
     const [total, active, transferred, withdrawn, classrooms, programs, recentAdmissions] = await Promise.all([
@@ -1647,7 +2201,12 @@ export class StudentService {
       db.student.count({ where: { ...baseWhere, status: 'TRANSFERRED' } }),
       db.student.count({ where: { ...baseWhere, status: 'INACTIVE' } }),
       db.classroom.findMany({
-        where: { tenantId: scope.tenantId, isActive: true },
+        where: {
+          tenantId: scope.tenantId,
+          isActive: true,
+          ...(filters?.branchId ? { branchId: filters.branchId } : {}),
+          ...(filters?.academicSessionId ? { academicSessionId: filters.academicSessionId } : {}),
+        },
         select: {
           id: true,
           name: true,

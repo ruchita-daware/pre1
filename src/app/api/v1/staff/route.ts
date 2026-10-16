@@ -7,6 +7,7 @@ import { audit } from '@/lib/sequence'
 import bcrypt from 'bcryptjs'
 import type { UserRole } from '@prisma/client'
 import { CANONICAL_ROLES, type CanonicalRole, normalizeRole } from '@/lib/roles'
+import { MIN_PASSWORD_LENGTH, PASSWORD_POLICY } from '@/lib/auth'
 
 const ASSIGNABLE_ROLES: CanonicalRole[] = CANONICAL_ROLES.filter(
   (r) => r !== 'PLATFORM_ADMIN' && r !== 'OWNER' && r !== 'PARENT' && r !== 'GUARDIAN'
@@ -22,7 +23,7 @@ async function _GET(req: NextRequest) {
     const profiles = await db.staffProfile.findMany({
       where: { tenantId: session.tenantId, deletedAt: null },
       include: {
-        user: { select: { id: true, fullName: true, email: true, status: true } },
+        user: { select: { id: true, fullName: true, email: true, status: true, passwordHash: true, mustChangePassword: true } },
         branch: { select: { name: true } },
       },
       orderBy: { createdAt: 'asc' },
@@ -48,6 +49,8 @@ async function _GET(req: NextRequest) {
         membershipStatus: m?.status ?? 'NO_MEMBERSHIP',
         branchAssigned: p.branchId != null && m?.branchId != null,
         classesAssigned: taught.get(p.userId) ?? 0,
+        hasPassword: Boolean(p.user.passwordHash && p.user.passwordHash.trim().length > 0),
+        mustChangePassword: Boolean(p.user.mustChangePassword),
       }
     }))
   } catch (e) {
@@ -109,7 +112,7 @@ async function _POST(req: NextRequest) {
       if (!ASSIGNABLE_ROLES.includes(canonicalRole)) {
         return Errors.validation(`role must be one of: ${ASSIGNABLE_ROLES.join(', ')}`)
       }
-      if (password.length < 6) return Errors.validation('Password must be at least 6 characters', 'password')
+      if (password.length < MIN_PASSWORD_LENGTH) return Errors.validation(PASSWORD_POLICY.errorMessage, 'password')
       const existingUser = await db.user.findUnique({ where: { email: String(email).toLowerCase() } })
       if (existingUser) return Errors.conflict('A user with this email already exists')
 
