@@ -3,9 +3,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Search, Filter, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Download,
-  AlertCircle, MoreVertical, Columns3, Rows3, X, ArrowUpDown,
+  AlertCircle, MoreVertical, Columns3, Rows3, X, ArrowUpDown, Eye,
 } from 'lucide-react'
-import { Skeleton, EmptyState, IconButton } from './ui'
+import { Skeleton, EmptyState, IconButton, ZenTableSkeleton } from './ui'
+import { useI18n } from '@/lib/i18n/context'
 
 export interface ColumnFilterOption {
   value: string
@@ -89,6 +90,10 @@ export interface DataTableProps<T extends { id?: string | number }> {
   selectionSummary?: React.ReactNode
   /** Keep the selection checkbox column pinned while scrolling horizontally. */
   stickyCheckColumn?: boolean
+  /** Minimum table width in pixels or CSS value to enforce horizontal rail scrolling */
+  minWidth?: number | string
+  /** Additional CSS class names on the <table> element */
+  tableClassName?: string
 }
 
 type MenuState = { kind: 'cols' } | { kind: 'kebab'; rowId: string } | { kind: 'filter'; colKey: string } | null
@@ -146,7 +151,11 @@ export function DataTable<T extends { id?: string | number }>({
   tableKey,
   selectionSummary,
   stickyCheckColumn,
+  minWidth,
+  tableClassName,
 }: DataTableProps<T>) {
+  const { t } = useI18n()
+  const effectiveSearchPlaceholder = searchPlaceholder || t('table.searchPlaceholder')
   const [localSearch, setLocalSearch] = useState(searchValue || '')
   const [sortKey, setSortKey] = useState<string | undefined>(defaultSortKey)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultSortDir)
@@ -253,7 +262,7 @@ export function DataTable<T extends { id?: string | number }>({
   // column filters
   const toggleColFilter = useCallback((key: string, value: string) => {
     setColFilters((prev) => {
-      const next = new Map(Object.entries(prev))
+      const next = new Map(Object.entries(prev || {}))
       const set = new Set(next.get(key) || [])
       if (set.has(value)) set.delete(value)
       else set.add(value)
@@ -267,7 +276,7 @@ export function DataTable<T extends { id?: string | number }>({
   const filtered = useMemo(() => {
     let rows = allRows
     const filterDefs = new Map(columns.filter((c) => c.filter).map((c) => [c.key, c.filter!]))
-    const active = Object.entries(colFilters)
+    const active = Object.entries(colFilters || {})
     if (active.length > 0) {
       rows = rows.filter((row) =>
         active.every(([key, values]) => {
@@ -367,23 +376,23 @@ export function DataTable<T extends { id?: string | number }>({
   }
 
   const rangeLabel = pagination || paginate
-    ? `Showing ${currentPage === 0 ? 0 : ((currentPage - 1) * (pagination ? pagination.pageSize : pageSize)) + 1}-${Math.min(currentPage * (pagination ? pagination.pageSize : pageSize), pagination ? pagination.total : filtered.length)} of ${pagination ? pagination.total : filtered.length}`
-    : `${filtered.length} row${filtered.length === 1 ? '' : 's'}`
+    ? `${t('table.showing')} ${currentPage === 0 ? 0 : ((currentPage - 1) * (pagination ? pagination.pageSize : pageSize)) + 1}-${Math.min(currentPage * (pagination ? pagination.pageSize : pageSize), pagination ? pagination.total : filtered.length)} ${t('table.of')} ${pagination ? pagination.total : filtered.length}`
+    : `${filtered.length} ${t('table.records')}`
 
   return (
     <div className="dtable-wrap" ref={wrapRef}>
       {showToolbar && (searchPlaceholder || filters || toolbarActions || rowSelection || showExport) && (
         <div className="table-toolbar">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, flexWrap: 'wrap' }}>
-            {searchPlaceholder && (
+            {(searchPlaceholder || showToolbar) && (
               <div className="input-search" style={{ maxWidth: 280, width: '100%' }}>
                 <Search size={15} />
                 <input
                   className="input"
-                  placeholder={searchPlaceholder}
+                  placeholder={effectiveSearchPlaceholder}
                   value={localSearch}
                   onChange={(e) => setSearch(e.target.value)}
-                  aria-label={searchPlaceholder}
+                  aria-label={effectiveSearchPlaceholder}
                 />
               </div>
             )}
@@ -392,7 +401,7 @@ export function DataTable<T extends { id?: string | number }>({
           <div className="table-tool-actions" role="toolbar" aria-label="Table tools">
             {rowSelection && selection.size > 0 && (
               <button className="btn btn-ghost btn-sm" onClick={clearSelection}>
-                <X size={14} /> Clear ({selection.size})
+                <X size={14} /> {t('common.cancel')} ({selection.size})
               </button>
             )}
             {bulkActions}
@@ -400,7 +409,7 @@ export function DataTable<T extends { id?: string | number }>({
               <span className="t-caption" style={{ whiteSpace: 'nowrap' }}>{rangeLabel}</span>
             )}
             {showExport && (
-              <button className="btn btn-ghost btn-sm" onClick={exportSelected} title="Export CSV">
+              <button className="btn btn-ghost btn-sm" onClick={exportSelected} title={t('common.export')}>
                 <Download size={14} /> CSV
               </button>
             )}
@@ -466,10 +475,13 @@ export function DataTable<T extends { id?: string | number }>({
         </div>
       )}
 
-      <div className="dtable-scroll">
+      <div className="dtable-scroll overflow-x-auto w-full min-w-0">
         <table
-          className={`dtable density-${density}${stickyCheckColumn ? ' bdt-sticky' : ''}`}
-          style={stickyCheckColumn ? { borderCollapse: 'separate' } : undefined}
+          className={`dtable density-${density}${stickyCheckColumn ? ' bdt-sticky' : ''}${tableClassName ? ` ${tableClassName}` : ''}`}
+          style={{
+            ...(stickyCheckColumn ? { borderCollapse: 'separate' } : {}),
+            ...(minWidth ? { minWidth: typeof minWidth === 'number' ? `${minWidth}px` : minWidth } : {}),
+          }}
         >
           <thead>
             <tr>
@@ -491,6 +503,7 @@ export function DataTable<T extends { id?: string | number }>({
                 return (
                   <th
                     key={col.key}
+                    className="micro-label"
                     style={{ textAlign: col.align || 'left', width: col.width }}
                     aria-sort={
                       col.sortable && sortKey === col.key
@@ -557,7 +570,7 @@ export function DataTable<T extends { id?: string | number }>({
                   </th>
                 )
               })}
-              {rowActions && <th style={{ width: 42 }} aria-label="Row actions" />}
+              {rowActions && <th style={{ width: 88, textAlign: 'right' }} aria-label="Row actions" />}
             </tr>
           </thead>
           <tbody>
@@ -590,45 +603,68 @@ export function DataTable<T extends { id?: string | number }>({
                     <td
                       key={col.key}
                       style={{ textAlign: col.align || 'left' }}
-                      className={col.align === 'right' ? 'cell-num' : undefined}
+                      className={col.align === 'right' ? 'cell-num data-numeric' : undefined}
                     >
                       {col.render
                         ? col.render(row, idx)
                         : highlightText(cellText(col, row), localSearch)}
                     </td>
                   ))}
-                  {rowActions && (
-                    <td className="dt-row-actions" onClick={(e) => e.stopPropagation()}>
-                      <span className="menu-anchor">
-                        <IconButton
-                          icon={<MoreVertical size={15} />}
-                          label="Row actions"
-                          onClick={() => toggleMenu(rid === undefined ? null : { kind: 'kebab', rowId: String(rid) })}
-                          variant="ghost"
-                          size="sm"
-                          className="dt-icon-btn kebab"
-                          aria-haspopup="menu"
-                          aria-expanded={menu?.kind === 'kebab' && menu.rowId === String(rid)}
-                        />
-                        {menu?.kind === 'kebab' && rid !== undefined && menu.rowId === String(rid) && (
-                          <div className="menu" role="menu" style={{ right: 0 }}>
-                            {(rowActions(row) || []).map((act, i) => (
-                              <button
-                                key={i}
-                                className={`menu-item${act.danger ? ' menu-danger' : ''}${act.disabled ? ' menu-disabled' : ''}`}
-                                role="menuitem"
-                                disabled={act.disabled}
-                                onClick={() => { setMenu(null); act.onClick() }}
-                              >
-                                {act.icon}
-                                {act.label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </span>
-                    </td>
-                  )}
+                  {rowActions && (() => {
+                    const acts = rowActions(row) || []
+                    const primaryActs = acts.slice(0, 2)
+                    const overflowActs = acts.length > 2 ? acts.slice(2) : []
+                    return (
+                      <td className="dt-row-actions" onClick={(e) => e.stopPropagation()}>
+                        <div className="dt-quick-actions justify-end" style={{ gap: 4 }}>
+                          {primaryActs.map((act, i) => (
+                            <IconButton
+                              key={i}
+                              icon={act.icon || <Eye size={14} />}
+                              label={act.label}
+                              title={act.label}
+                              onClick={act.onClick}
+                              variant="ghost"
+                              size="sm"
+                              className={`dt-icon-btn ${act.danger ? 'text-rose-600' : ''}`}
+                              disabled={act.disabled}
+                            />
+                          ))}
+                          {overflowActs.length > 0 && (
+                            <span className="menu-anchor">
+                              <IconButton
+                                icon={<MoreVertical size={15} />}
+                                label="More actions"
+                                title="More actions"
+                                onClick={() => toggleMenu(rid === undefined ? null : { kind: 'kebab', rowId: String(rid) })}
+                                variant="ghost"
+                                size="sm"
+                                className="dt-icon-btn kebab"
+                                aria-haspopup="menu"
+                                aria-expanded={menu?.kind === 'kebab' && menu.rowId === String(rid)}
+                              />
+                              {menu?.kind === 'kebab' && rid !== undefined && menu.rowId === String(rid) && (
+                                <div className="menu" role="menu" style={{ right: 0 }}>
+                                  {overflowActs.map((act, i) => (
+                                    <button
+                                      key={i}
+                                      className={`menu-item${act.danger ? ' menu-danger' : ''}${act.disabled ? ' menu-disabled' : ''}`}
+                                      role="menuitem"
+                                      disabled={act.disabled}
+                                      onClick={() => { setMenu(null); act.onClick() }}
+                                    >
+                                      {act.icon}
+                                      {act.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    )
+                  })()}
                 </tr>
               )
             })}
@@ -734,11 +770,10 @@ export function DataTable<T extends { id?: string | number }>({
         </div>
 
         {loading && (
-          <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[...Array(5)].map((_, i) => (
-              <Skeleton key={i} h={38} />
-            ))}
-          </div>
+          <ZenTableSkeleton
+            rows={5}
+            columns={visibleCols.length + (rowSelection ? 1 : 0) + (rowActions ? 1 : 0)}
+          />
         )}
 
         {!loading && error && (
@@ -751,15 +786,25 @@ export function DataTable<T extends { id?: string | number }>({
 
         {!loading && !error && data && data.length === 0 && (
           <EmptyState
-            icon={emptyIcon || <Filter size={36} />}
-            title={emptyTitle || 'No matching records found'}
-            message={emptyMessage || 'Try adjusting your filters, search terms, or role selection.'}
-            action={emptyAction}
+            illustration={emptyIcon || (localSearch ? 'search' : 'filter')}
+            title={emptyTitle || (localSearch ? `No results for "${localSearch}"` : 'No matching records found')}
+            description={emptyMessage || (localSearch ? 'Check for typos or try clearing your search query.' : 'Try adjusting your filters, search terms, or role selection.')}
+            action={
+              emptyAction ||
+              (localSearch ? {
+                label: 'Clear Search',
+                onClick: () => {
+                  setLocalSearch('')
+                  onSearch?.('')
+                },
+                variant: 'secondary' as const,
+              } : undefined)
+            }
           />
         )}
       </div>
 
-      {(pagination || paginate) && (
+      {(pagination || paginate) && data && data.length > 0 && (
         <div className="dtable-foot">
           <span className="t-caption">
             {rangeLabel}
@@ -767,7 +812,7 @@ export function DataTable<T extends { id?: string | number }>({
           <div className="dtable-foot-right">
             {(pagination?.onPageSizeChange || paginate) && (
               <label className="dtable-page-size">
-                <span className="t-caption">Rows</span>
+                <span className="t-caption">{t('table.rows')}</span>
                 <select
                   className="select"
                   value={pagination ? pagination.pageSize : pageSize}
@@ -789,7 +834,7 @@ export function DataTable<T extends { id?: string | number }>({
               <ChevronLeft size={14} style={{ marginLeft: -8 }} />
             </button>
             <button className="btn btn-ghost btn-sm" disabled={currentPage <= 1} onClick={() => (pagination ? pagination.onPageChange(currentPage - 1) : setPage(currentPage - 1))}>
-              <ChevronLeft size={14} /> Prev
+              <ChevronLeft size={14} /> {t('table.prev')}
             </button>
             <span className="dtable-page-jump">
               <input
@@ -809,7 +854,7 @@ export function DataTable<T extends { id?: string | number }>({
               <span className="t-caption">/ {totalPagesDecided}</span>
             </span>
             <button className="btn btn-ghost btn-sm" disabled={currentPage >= totalPagesDecided} onClick={() => (pagination ? pagination.onPageChange(currentPage + 1) : setPage(currentPage + 1))}>
-              Next <ChevronRight size={14} />
+              {t('table.next')} <ChevronRight size={14} />
             </button>
             <button className="btn btn-ghost btn-sm" disabled={currentPage >= totalPagesDecided} onClick={() => (pagination ? pagination.onPageChange(totalPagesDecided) : setPage(totalPagesDecided))} aria-label="Last page">
               <ChevronRight size={14} />

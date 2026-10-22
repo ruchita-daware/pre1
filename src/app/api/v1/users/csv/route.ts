@@ -86,15 +86,28 @@ async function _POST(req: NextRequest) {
     }
 
     if (action === 'preview' || action === 'validate') {
-      if (!csv || typeof csv !== 'string') {
-        return bad('Raw CSV content string is required for preview', 'MISSING_CSV')
+      let rawCsv = typeof csv === 'string' ? csv : ''
+      if (!rawCsv && Array.isArray(body.rows) && body.rows.length > 0) {
+        const headers = Object.keys(body.rows[0])
+        const csvLines = [
+          headers.join(','),
+          ...body.rows.map((r: any) => headers.map((h) => String(r[h] ?? '')).join(',')),
+        ]
+        rawCsv = csvLines.join('\n')
+      }
+
+      if (!rawCsv) {
+        return bad('Raw CSV content string or rows array is required for preview', 'MISSING_CSV')
       }
 
       if (templateType === 'FAMILY') {
-        const preview = await UserCsvEngine.previewFamilyCsv(session.tenantId, csv)
+        const preview = await UserCsvEngine.previewFamilyCsv(session.tenantId, rawCsv)
         return ok(preview)
       } else {
-        const preview = await UserCsvEngine.previewStaffCsv(session.tenantId, csv)
+        const preview = await UserCsvEngine.previewStaffCsv(session.tenantId, rawCsv, {
+          mode: body.mode,
+          overwrite: body.overwrite,
+        })
         return ok(preview)
       }
     }
@@ -106,12 +119,72 @@ async function _POST(req: NextRequest) {
         const preview =
           templateType === 'FAMILY'
             ? await UserCsvEngine.previewFamilyCsv(session.tenantId, csv)
-            : await UserCsvEngine.previewStaffCsv(session.tenantId, csv)
+            : await UserCsvEngine.previewStaffCsv(session.tenantId, csv, { mode: body.mode, overwrite: body.overwrite })
+        rowsToExecute = preview.rows
+      }
+
+      if (!rowsToExecute && Array.isArray(body.rows) && body.rows.length > 0) {
+        const headers = Object.keys(body.rows[0])
+        const csvLines = [
+          headers.join(','),
+          ...body.rows.map((r: any) => headers.map((h) => String(r[h] ?? '')).join(',')),
+        ]
+        const rawCsv = csvLines.join('\n')
+        const preview =
+          templateType === 'FAMILY'
+            ? await UserCsvEngine.previewFamilyCsv(session.tenantId, rawCsv)
+            : await UserCsvEngine.previewStaffCsv(session.tenantId, rawCsv, { mode: body.mode, overwrite: body.overwrite })
         rowsToExecute = preview.rows
       }
 
       if (!rowsToExecute || !Array.isArray(rowsToExecute) || rowsToExecute.length === 0) {
         return bad('No validated rows provided for execution', 'EMPTY_ROWS')
+      }
+
+      const atomicAllOrNothing = Boolean((body as any)?.atomicAllOrNothing || (body as any)?.mode === 'atomic')
+      const isAsync = body.async === true || (body.async !== false && !atomicAllOrNothing && rowsToExecute.length > 25)
+
+      if (isAsync) {
+        const { enqueueJob } = await import('@/lib/jobs')
+        const job = await enqueueJob({
+          tenantId: session.tenantId,
+          jobType: 'CSV_IMPORT',
+          createdById: session.uid,
+          payload: {
+            templateType,
+            rows: rowsToExecute,
+            options: {
+              atomicAllOrNothing,
+              mode: body.mode,
+              chunkSize: body.chunkSize || 15,
+            },
+            actor: {
+              id: session.uid,
+              name: session.name,
+              role: session.role,
+            },
+          },
+        })
+
+        return NextResponse.json(
+          {
+            success: true,
+            async: true,
+            jobId: job.id,
+            status: job.status,
+            progress: 0,
+            total: rowsToExecute.length,
+            message: `CSV import enqueued as background job (${rowsToExecute.length} rows)`,
+            data: {
+              async: true,
+              jobId: job.id,
+              status: job.status,
+              progress: 0,
+              total: rowsToExecute.length,
+            },
+          },
+          { status: 202 }
+        )
       }
 
       if (templateType === 'FAMILY') {
@@ -122,7 +195,8 @@ async function _POST(req: NextRequest) {
             actorName: session.name,
             actorRole: session.role,
           },
-          rowsToExecute
+          rowsToExecute,
+          { atomicAllOrNothing }
         )
         return ok(result)
       } else {
@@ -133,7 +207,8 @@ async function _POST(req: NextRequest) {
             actorName: session.name,
             actorRole: session.role,
           },
-          rowsToExecute
+          rowsToExecute,
+          { atomicAllOrNothing, mode: body.mode }
         )
         return ok(result)
       }
@@ -141,6 +216,7 @@ async function _POST(req: NextRequest) {
 
     return bad('Action must be "preview" or "execute"', 'INVALID_ACTION')
   } catch (err: any) {
+    console.error('[CSV _POST error]', err)
     return serverError(err.message)
   }
 }

@@ -24,7 +24,13 @@ import { raiseFollowUp } from '@/lib/followups'
 import { SchoolRole } from '@/lib/auth'
 import { ConfigurationService } from '@/lib/setup/config-service'
 import { getDomainConfig, getAdmissionConfig } from '@/lib/config'
-import type { ProgramType, Gender, LeadSource, LeadStatus, ApplicationStatus, DocumentType, OfferStatus, DocumentStatus } from '@prisma/client'
+import { assertActorResourceScope } from '@/lib/security/resource-scope'
+import bcrypt from 'bcryptjs'
+import { FollowUpVisitService } from './followup-visit-service'
+import type { ProgramType, Gender, LeadSource, LeadStatus, ApplicationStatus, DocumentType, OfferStatus, DocumentStatus, Prisma } from '@prisma/client'
+import { ApplicationMetadataHelper, type AdditionalGuardianInput, type ApplicationDeclarations } from './application-metadata-helper'
+import { UserIdentityService } from '@/lib/users/user-identity-service'
+import { normalizeRelationship } from '@/lib/users/family-user-service'
 
 export interface ScopeContext {
   tenantId: string
@@ -33,36 +39,82 @@ export interface ScopeContext {
   actorId?: string | null
   actorName?: string | null
   actorRole?: string | null
+  actorRoles?: string[] | null
 }
 
 export interface CreateEnquiryInput {
   childName?: string | null
   childDob?: Date | string | null
+  childGender?: Gender | string | null
+  previousSchool?: string | null
   parentName: string
   phone: string
   alternatePhone?: string | null
   email?: string | null
+  relationship?: string | null
+  parentPhotoUrl?: string | null
   interestedProgram?: ProgramType | string | null
   source?: LeadSource | string
+  enquiryDate?: Date | string | null
   notes?: string | null
   assignedToId?: string | null
+  overrideDuplicate?: boolean
 }
 
 export interface CreateApplicationInput {
   leadId?: string | null
+  programId?: string | null
   programType: ProgramType | string
-  childFirstName: string
+  childFirstName?: string
   childLastName?: string | null
+  childFullName?: string | null
   childDob: Date | string
   childGender?: Gender | string
+  bloodGroup?: string | null
+  emergencyContact?: string | null
   parentName: string
   parentPhone: string
   parentEmail?: string | null
   alternatePhone?: string | null
+  relationship?: string | null
   address?: string | null
   previousSchool?: string | null
+  medicalNotes?: string | null
+  meetingNotes?: string | null
   notes?: string | null
   isDuplicateConfirmed?: boolean
+  middleName?: string | null
+  isDraft?: boolean
+  status?: ApplicationStatus | string
+  declarations?: ApplicationDeclarations
+  additionalGuardians?: AdditionalGuardianInput[]
+}
+
+export interface UpdateApplicationInput {
+  childFirstName?: string
+  childLastName?: string | null
+  childFullName?: string | null
+  childDob?: Date | string
+  childGender?: Gender | string
+  parentName?: string
+  parentPhone?: string
+  parentEmail?: string | null
+  alternatePhone?: string | null
+  relationship?: string | null
+  address?: string | null
+  previousSchool?: string | null
+  bloodGroup?: string | null
+  emergencyContact?: string | null
+  medicalNotes?: string | null
+  meetingNotes?: string | null
+  middleName?: string | null
+  additionalGuardians?: AdditionalGuardianInput[]
+  declarations?: ApplicationDeclarations
+  notes?: string | null
+  programId?: string | null
+  programType?: ProgramType | string
+  status?: ApplicationStatus
+  isDraft?: boolean
 }
 
 export class AdmissionService {
@@ -77,12 +129,23 @@ export class AdmissionService {
     if (!tenantId) throw new Error('Tenant context is required')
 
     let verifiedBranchId: string
-    if (!branchId) {
+    const isAllBranchesSentinel =
+      !branchId ||
+      branchId === '__ALL_BRANCHES__' ||
+      branchId.trim().toLowerCase() === 'all'
+    if (isAllBranchesSentinel) {
       const mainBranch = await db.branch.findFirst({
         where: { tenantId, isMain: true, deletedAt: null },
       })
-      if (!mainBranch) throw new Error('No active branch found for school')
-      verifiedBranchId = mainBranch.id
+      if (!mainBranch) {
+        const anyBranch = await db.branch.findFirst({
+          where: { tenantId, deletedAt: null },
+        })
+        if (!anyBranch) throw new Error('No active branch found for school')
+        verifiedBranchId = anyBranch.id
+      } else {
+        verifiedBranchId = mainBranch.id
+      }
     } else {
       const branch = await db.branch.findFirst({
         where: { id: branchId, tenantId, deletedAt: null },
@@ -92,7 +155,11 @@ export class AdmissionService {
     }
 
     let verifiedAcademicYearId: string
-    if (!academicYearId) {
+    const isAllSessionsSentinel =
+      !academicYearId ||
+      academicYearId === '__ALL_SESSIONS__' ||
+      academicYearId.trim().toLowerCase() === 'all'
+    if (isAllSessionsSentinel) {
       const currentSession = await db.academicSession.findFirst({
         where: { tenantId, isCurrent: true, status: 'ACTIVE' },
       })
@@ -128,11 +195,29 @@ export class AdmissionService {
   /**
    * Search for duplicate enquiries within the school by phone or email.
    */
-  static async findDuplicateEnquiry(tenantId: string, phone: string, email?: string | null) {
+  static async findDuplicateEnquiry(
+    tenantId: string,
+    phone: string,
+    email?: string | null,
+    childName?: string | null,
+    childDob?: Date | string | null
+  ) {
     const cleanPhone = phone.trim().replace(/\D/g, '')
     const whereOr: any[] = [{ phone: { contains: cleanPhone.slice(-10) } }]
     if (email && email.trim()) {
       whereOr.push({ email: { equals: email.trim(), mode: 'insensitive' } })
+    }
+    if (childName && childName.trim() && childDob) {
+      const d = new Date(childDob)
+      if (!isNaN(d.getTime())) {
+        whereOr.push({
+          childName: { equals: childName.trim(), mode: 'insensitive' },
+          childDob: {
+            gte: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0),
+            lte: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59),
+          },
+        })
+      }
     }
 
     return db.lead.findFirst({
@@ -155,8 +240,8 @@ export class AdmissionService {
     }
 
     // Duplicate check
-    const existing = await this.findDuplicateEnquiry(scope.tenantId, input.phone, input.email)
-    if (existing) {
+    const existing = await this.findDuplicateEnquiry(scope.tenantId, input.phone, input.email, input.childName, input.childDob)
+    if (existing && !input.overrideDuplicate) {
       return {
         enquiry: existing,
         isDuplicate: true,
@@ -164,19 +249,33 @@ export class AdmissionService {
       }
     }
 
+    let initialNotes = input.notes?.trim() || ''
+
     // Validate child age if program and DOB are provided
     if (input.interestedProgram && input.childDob) {
       const ageCheck = await ConfigurationService.validateProgramAge(
         scope.tenantId,
         String(input.interestedProgram),
-        input.childDob
+        input.childDob,
+        scope.branchId
       )
       if (!ageCheck.eligible) {
         // We log warning in notes but allow enquiry capture with flag
-        input.notes = input.notes
-          ? `${input.notes} [Age Advisory: ${ageCheck.reason}]`
+        initialNotes = initialNotes
+          ? `${initialNotes} [Age Advisory: ${ageCheck.reason}]`
           : `[Age Advisory: ${ageCheck.reason}]`
       }
+    }
+
+    const extraContext: string[] = []
+    if (input.relationship) extraContext.push(`Relationship: ${input.relationship}`)
+    if (input.previousSchool) extraContext.push(`Previous School: ${input.previousSchool}`)
+    if (input.childGender) extraContext.push(`Gender: ${input.childGender}`)
+    if (input.enquiryDate) extraContext.push(`Enquiry Date: ${new Date(input.enquiryDate).toLocaleDateString()}`)
+    if (input.parentPhotoUrl) extraContext.push(`Photo: ${input.parentPhotoUrl}`)
+
+    if (extraContext.length > 0) {
+      initialNotes = initialNotes ? `${initialNotes}\n[Enquiry Context: ${extraContext.join(' | ')}]` : `[Enquiry Context: ${extraContext.join(' | ')}]`
     }
 
     const leadNumber = await nextNumber('lead', scope.tenantId)
@@ -199,7 +298,7 @@ export class AdmissionService {
         childName: input.childName?.trim() || null,
         childDob: input.childDob ? new Date(input.childDob) : null,
         interestedProgram: validProgram,
-        notes: input.notes?.trim() || null,
+        notes: initialNotes || null,
         assignedToId: input.assignedToId || null,
       },
     })
@@ -268,6 +367,7 @@ export class AdmissionService {
 
   /**
    * Log an enquiry follow-up action using the centralized FollowUp aggregate.
+   * Advances Lead from NEW to CONTACTED on first outreach.
    */
   static async addEnquiryFollowUp(
     ctx: ScopeContext,
@@ -281,42 +381,23 @@ export class AdmissionService {
     }
   ) {
     const scope = await this.verifyScope(ctx.tenantId, ctx.branchId, ctx.academicYearId)
-
-    const enquiry = await db.lead.findFirst({
-      where: { id: enquiryId, tenantId: scope.tenantId, deletedAt: null },
-    })
-    if (!enquiry) throw new Error('Enquiry not found')
-
-    const fu = await raiseFollowUp({
-      tenantId: scope.tenantId,
-      branchId: scope.branchId,
-      academicSessionId: scope.academicYearId,
-      domain: 'ADMISSION',
-      severity: 'INFO',
-      title: `${input.type || 'Call'}: ${enquiry.childName || enquiry.parentName}`,
-      detail: input.note,
-      sourceType: 'EnquiryFollowUp',
-      sourceId: enquiryId,
-      dedupeKey: `enquiry-fu:${enquiryId}:${Date.now()}`,
-      dueAt: input.dueAt ? new Date(input.dueAt) : new Date(Date.now() + 24 * 60 * 60 * 1000),
-      responsibleRole: input.responsibleRole || 'PRINCIPAL',
-      actorId: ctx.actorId,
-      actorName: ctx.actorName,
-    })
-
-    // If next follow-up date was set, update the enquiry pointer
-    if (input.dueAt) {
-      await db.lead.update({
-        where: { id: enquiryId },
-        data: { nextFollowUpAt: new Date(input.dueAt) },
-      })
-    }
-
-    return fu
+    return FollowUpVisitService.addFollowUp(
+      {
+        tenantId: scope.tenantId,
+        branchId: scope.branchId,
+        academicYearId: scope.academicYearId,
+        actorId: ctx.actorId,
+        actorName: ctx.actorName,
+        actorRole: ctx.actorRole,
+      },
+      enquiryId,
+      input
+    )
   }
 
   /**
    * Schedule or record a school visit / counselling session for an enquiry.
+   * Progresses Lead to QUALIFIED.
    */
   static async scheduleSchoolVisit(
     ctx: ScopeContext,
@@ -324,60 +405,159 @@ export class AdmissionService {
     input: {
       scheduledAt: Date | string
       visitorCount?: number
+      attendees?: string
+      tourFocus?: string
       notes?: string
       assignedUserId?: string
     }
   ) {
     const scope = await this.verifyScope(ctx.tenantId, ctx.branchId, ctx.academicYearId)
+    return FollowUpVisitService.scheduleVisit(
+      {
+        tenantId: scope.tenantId,
+        branchId: scope.branchId,
+        academicYearId: scope.academicYearId,
+        actorId: ctx.actorId,
+        actorName: ctx.actorName,
+        actorRole: ctx.actorRole,
+      },
+      enquiryId,
+      input
+    )
+  }
 
-    const enquiry = await db.lead.findFirst({
-      where: { id: enquiryId, tenantId: scope.tenantId, deletedAt: null },
-    })
-    if (!enquiry) throw new Error('Enquiry not found')
-
-    const visitTime = new Date(input.scheduledAt)
-
-    const fu = await raiseFollowUp({
-      tenantId: scope.tenantId,
-      branchId: scope.branchId,
-      academicSessionId: scope.academicYearId,
-      domain: 'ADMISSION',
-      severity: 'INFO',
-      title: `School Visit: ${enquiry.childName || enquiry.parentName}`,
-      detail: `School tour and interaction scheduled for ${visitTime.toLocaleString('en-IN')}. Visitors: ${
-        input.visitorCount || 2
-      }. ${input.notes || ''}`,
-      sourceType: 'SchoolVisit',
-      sourceId: enquiryId,
-      dedupeKey: `visit:${enquiryId}:${visitTime.toISOString().slice(0, 10)}`,
-      dueAt: visitTime,
-      responsibleRole: 'PRINCIPAL',
-      actorId: ctx.actorId,
-      actorName: ctx.actorName,
-    })
-
-    // Update enquiry status to VISIT_PLANNED if currently earlier
-    if (['NEW', 'CONTACTED'].includes(enquiry.status)) {
-      await db.lead.update({
-        where: { id: enquiryId },
-        data: { status: 'QUALIFIED', nextFollowUpAt: visitTime },
-      })
+  /**
+   * Complete a school visit, record preschool-friendly child interaction observations,
+   * parent feedback, staff notes, and evaluate visit outcome.
+   */
+  static async completeSchoolVisit(
+    ctx: ScopeContext,
+    visitId: string,
+    input: {
+      childInteraction?: any
+      parentFeedback?: string
+      staffNotes?: string
+      outcome: any
+      nextFollowUpAt?: Date | string
+      lostReason?: any
+      autoStartApplication?: boolean
     }
+  ) {
+    const scope = await this.verifyScope(ctx.tenantId, ctx.branchId, ctx.academicYearId)
+    return FollowUpVisitService.completeVisit(
+      {
+        tenantId: scope.tenantId,
+        branchId: scope.branchId,
+        academicYearId: scope.academicYearId,
+        actorId: ctx.actorId,
+        actorName: ctx.actorName,
+        actorRole: ctx.actorRole,
+      },
+      visitId,
+      input
+    )
+  }
 
-    await audit({
-      tenantId: scope.tenantId,
-      branchId: scope.branchId,
-      academicSessionId: scope.academicYearId,
-      actorId: ctx.actorId,
-      actorName: ctx.actorName,
-      actorRole: ctx.actorRole,
-      action: 'SCHEDULE_VISIT',
-      entity: 'Lead',
-      entityId: enquiryId,
-      summary: `School visit scheduled for enquiry ${enquiry.leadNumber} on ${visitTime.toLocaleDateString()}`,
-    })
+  /**
+   * Record visit no-show: preserves active lead in QUALIFIED state and schedules recovery follow-up.
+   */
+  static async recordVisitNoShow(
+    ctx: ScopeContext,
+    visitId: string,
+    input?: {
+      notes?: string
+      recoveryCallDueAt?: Date | string
+    }
+  ) {
+    const scope = await this.verifyScope(ctx.tenantId, ctx.branchId, ctx.academicYearId)
+    return FollowUpVisitService.recordVisitNoShow(
+      {
+        tenantId: scope.tenantId,
+        branchId: scope.branchId,
+        academicYearId: scope.academicYearId,
+        actorId: ctx.actorId,
+        actorName: ctx.actorName,
+        actorRole: ctx.actorRole,
+      },
+      visitId,
+      input
+    )
+  }
 
-    return fu
+  /**
+   * Reschedule school visit (Non-destructive: resolves previous visit as RESCHEDULED and creates new one).
+   */
+  static async rescheduleSchoolVisit(
+    ctx: ScopeContext,
+    visitId: string,
+    input: {
+      newScheduledAt: Date | string
+      reason?: string
+      visitorCount?: number
+      attendees?: string
+      tourFocus?: string
+    }
+  ) {
+    const scope = await this.verifyScope(ctx.tenantId, ctx.branchId, ctx.academicYearId)
+    return FollowUpVisitService.rescheduleVisit(
+      {
+        tenantId: scope.tenantId,
+        branchId: scope.branchId,
+        academicYearId: scope.academicYearId,
+        actorId: ctx.actorId,
+        actorName: ctx.actorName,
+        actorRole: ctx.actorRole,
+      },
+      visitId,
+      input
+    )
+  }
+
+  /**
+   * Cancel school visit (Non-destructive: records cancellation reason and optional reminder).
+   */
+  static async cancelSchoolVisit(
+    ctx: ScopeContext,
+    visitId: string,
+    input: {
+      reason: string
+      nextFollowUpAt?: Date | string
+    }
+  ) {
+    const scope = await this.verifyScope(ctx.tenantId, ctx.branchId, ctx.academicYearId)
+    return FollowUpVisitService.cancelVisit(
+      {
+        tenantId: scope.tenantId,
+        branchId: scope.branchId,
+        academicYearId: scope.academicYearId,
+        actorId: ctx.actorId,
+        actorName: ctx.actorName,
+        actorRole: ctx.actorRole,
+      },
+      visitId,
+      input
+    )
+  }
+
+  /**
+   * Retrieve visit details including lead, child information, and past visit history.
+   */
+  static async getVisitDetails(tenantId: string, visitId: string) {
+    return FollowUpVisitService.getVisitDetails(tenantId, visitId)
+  }
+
+  /**
+   * Query follow-ups and visits for workspace queues with metric counters.
+   */
+  static async listFollowUpWorkspace(
+    tenantId: string,
+    params?: {
+      branchId?: string
+      queue?: 'DUE_TODAY' | 'OVERDUE' | 'UPCOMING' | 'COMPLETED'
+      limit?: number
+    }
+  ) {
+    return FollowUpVisitService.listWorkspaceQueues(tenantId, params)
   }
 
   // =========================================================================
@@ -439,63 +619,186 @@ export class AdmissionService {
   static async submitApplication(ctx: ScopeContext, input: CreateApplicationInput) {
     const scope = await this.verifyScope(ctx.tenantId, ctx.branchId, ctx.academicYearId)
 
-    if (!input.childFirstName?.trim() || !input.childDob || !input.parentName?.trim() || !input.parentPhone?.trim()) {
-      throw new Error('Child first name, date of birth, parent name, and parent phone are mandatory')
+    let firstName = input.childFirstName?.trim() || ''
+    let lastName = input.childLastName?.trim() || null
+
+    if (!firstName && input.childFullName?.trim()) {
+      const parts = input.childFullName.trim().split(/\s+/)
+      firstName = parts[0]
+      lastName = parts.slice(1).join(' ') || null
     }
 
-    // Duplicate check
-    const dupCheck = await this.checkDuplicateApplication(
-      scope.tenantId,
-      scope.academicYearId,
-      input.childFirstName,
-      input.childDob,
-      input.parentPhone
-    )
-
-    if (dupCheck.isDuplicate && !input.isDuplicateConfirmed) {
-      const err: any = new Error(dupCheck.message)
-      err.code = 'DUPLICATE_APPLICATION_FOUND'
-      err.duplicateDetails = dupCheck.existingApplication
-      throw err
+    const isDraft = input.isDraft === true || input.status === 'DRAFT'
+    if (!isDraft) {
+      if (!firstName || !input.childDob || !input.parentName?.trim() || !input.parentPhone?.trim()) {
+        throw new Error('Child first name, date of birth, parent name, and parent phone are mandatory')
+      }
+    } else {
+      if (!firstName && !input.parentName?.trim() && !input.parentPhone?.trim()) {
+        throw new Error('At least child name or parent name/phone is required to save an application draft')
+      }
     }
 
-    const validProgramType = (['PLAYGROUP', 'NURSERY', 'LKG', 'UKG', 'DAYCARE'] as ProgramType[]).includes(
-      input.programType as ProgramType
-    )
-      ? (input.programType as ProgramType)
-      : 'NURSERY'
-
-    // Age validation using authoritative ConfigurationService
-    const ageCheck = await ConfigurationService.validateProgramAge(
-      scope.tenantId,
-      validProgramType,
-      input.childDob
-    )
-    if (!ageCheck.eligible) {
-      throw new Error(ageCheck.reason || 'Child does not satisfy age eligibility for this program')
+    // Idempotency check: if application was already submitted for this enquiry lead
+    if (input.leadId) {
+      const existingLeadApp = await db.admissionApplication.findFirst({
+        where: {
+          tenantId: scope.tenantId,
+          leadId: input.leadId,
+          deletedAt: null,
+        },
+      })
+      if (existingLeadApp) {
+        return existingLeadApp
+      }
     }
 
-    // Find configured Program record from Setup if available
-    const programRecord = await db.program.findFirst({
-      where: { tenantId: scope.tenantId, programType: validProgramType, deletedAt: null, isActive: true },
-    })
+    // Duplicate check (only when both DOB and parent phone are provided)
+    if (input.childDob && input.parentPhone) {
+      const dupCheck = await this.checkDuplicateApplication(
+        scope.tenantId,
+        scope.academicYearId,
+        firstName,
+        input.childDob,
+        input.parentPhone
+      )
 
-    // Find or create Guardian by phone to avoid duplicates
-    let guardian = await db.guardian.findFirst({
-      where: { tenantId: scope.tenantId, phone: input.parentPhone.trim(), deletedAt: null },
-    })
+      if (dupCheck.isDuplicate && !input.isDuplicateConfirmed) {
+        const err: any = new Error(dupCheck.message)
+        err.code = 'DUPLICATE_APPLICATION_FOUND'
+        err.duplicateDetails = dupCheck.existingApplication
+        throw err
+      }
+    }
+
+    // Authoritatively resolve Program record matching branch scope
+    let programRecord: any = null
+    if (input.programId) {
+      programRecord = await db.program.findFirst({
+        where: {
+          id: input.programId,
+          tenantId: scope.tenantId,
+          deletedAt: null,
+          isActive: true,
+          OR: [
+            { branchMappings: { some: { branchId: scope.branchId, deletedAt: null, isActive: true } } },
+            { branchMappings: { none: {} } },
+          ],
+        },
+      })
+    }
+
+    if (!programRecord && input.programType) {
+      const typeStr = String(input.programType).toUpperCase()
+      const isKnownType = (['PLAYGROUP', 'NURSERY', 'LKG', 'UKG', 'DAYCARE'] as const).includes(typeStr as any)
+      programRecord = await db.program.findFirst({
+        where: {
+          tenantId: scope.tenantId,
+          deletedAt: null,
+          isActive: true,
+          OR: [
+            { id: input.programType },
+            { code: typeStr },
+            ...(isKnownType ? [{ programType: typeStr as ProgramType }] : []),
+          ],
+          AND: [
+            {
+              OR: [
+                { branchMappings: { some: { branchId: scope.branchId, deletedAt: null, isActive: true } } },
+                { branchMappings: { none: {} } },
+              ],
+            },
+          ],
+        },
+      })
+    }
+
+    // If still not resolved, query tenant program to see if it exists but is unmapped or unconfigured
+    if (!programRecord && input.programType) {
+      const typeStr = String(input.programType).toUpperCase()
+      const isKnownType = (['PLAYGROUP', 'NURSERY', 'LKG', 'UKG', 'DAYCARE'] as const).includes(typeStr as any)
+      const tenantProg = await db.program.findFirst({
+        where: {
+          tenantId: scope.tenantId,
+          deletedAt: null,
+          OR: [
+            { id: input.programType },
+            { code: typeStr },
+            ...(isKnownType ? [{ programType: typeStr as ProgramType }] : []),
+          ],
+        },
+      })
+      if (tenantProg) {
+        throw new Error(`Program "${tenantProg.name}" is not offered at the selected branch campus.`)
+      } else {
+        throw new Error(`Program "${input.programType}" is not configured for this school. Configure programs in Setup first.`)
+      }
+    }
+
+    if (!programRecord) {
+      throw new Error('Please select a valid program offered at this branch campus.')
+    }
+
+    const validProgramType = programRecord.programType
+
+    // Age validation using authoritative ConfigurationService with branch awareness (skipped for drafts if DOB omitted)
+    if (!isDraft || input.childDob) {
+      const ageCheck = await ConfigurationService.validateProgramAge(
+        scope.tenantId,
+        programRecord.id,
+        input.childDob,
+        scope.branchId
+      )
+      if (!isDraft && !ageCheck.eligible) {
+        throw new Error(ageCheck.reason || 'Child does not satisfy age eligibility for this program')
+      }
+    }
+
+    // Find or create Guardian (with draft fallback if phone omitted in early draft)
+    const cleanParentPhone = input.parentPhone ? input.parentPhone.trim() : ''
+    const cleanParentName = input.parentName ? input.parentName.trim() : 'Parent'
+
+    let guardian = cleanParentPhone
+      ? await db.guardian.findFirst({
+          where: { tenantId: scope.tenantId, phone: cleanParentPhone, deletedAt: null },
+        })
+      : null
+
+    const guardianRel =
+      input.relationship?.toUpperCase() === 'FATHER'
+        ? 'FATHER'
+        : input.relationship?.toUpperCase() === 'GUARDIAN'
+        ? 'GUARDIAN'
+        : 'MOTHER'
+
     if (!guardian) {
       guardian = await db.guardian.create({
         data: {
           tenantId: scope.tenantId,
-          fullName: input.parentName.trim(),
-          phone: input.parentPhone.trim(),
+          fullName: cleanParentName,
+          phone: cleanParentPhone || `DRAFT_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
           email: input.parentEmail?.trim() || null,
-          relationship: 'MOTHER',
+          relationship: guardianRel,
           isPrimaryContact: true,
         },
       })
     }
+
+    const metadata: Record<string, any> = {}
+    if (input.bloodGroup) metadata.bloodGroup = input.bloodGroup
+    if (input.emergencyContact) metadata.emergencyContact = input.emergencyContact
+    if (input.address) metadata.address = input.address
+    if (input.medicalNotes) metadata.medicalNotes = input.medicalNotes
+    if (input.meetingNotes) metadata.meetingNotes = input.meetingNotes
+    if (input.alternatePhone) metadata.alternatePhone = input.alternatePhone
+    if (input.middleName) metadata.middleName = input.middleName
+    if (input.declarations) metadata.declarations = input.declarations
+    if (input.additionalGuardians && input.additionalGuardians.length > 0) {
+      metadata.additionalGuardians = input.additionalGuardians
+    }
+    if (isDraft) metadata.isDraft = true
+
+    const notesText = ApplicationMetadataHelper.merge(input.notes, metadata)
 
     // Configured document checklist from Setup/SchoolConfig
     const admCfg = getAdmissionConfig(await getDomainConfig(scope.tenantId, 'ADMISSION'))
@@ -507,9 +810,11 @@ export class AdmissionService {
     ]).map((d) => (['BIRTH_CERTIFICATE', 'AADHAAR', 'PHOTO', 'MEDICAL_CERTIFICATE', 'ADDRESS_PROOF', 'PARENT_ID', 'OTHER'].includes(d) ? (d as DocumentType) : 'OTHER'))
 
     const applicationNumber = await nextNumber('application', scope.tenantId)
+    const initialStatus: ApplicationStatus = isDraft ? 'DRAFT' : 'SUBMITTED'
+    const submittedAt = isDraft ? null : new Date()
 
     const app = await db.$transaction(async (tx) => {
-      const application = await tx.admissionApplication.create({
+      let application = await tx.admissionApplication.create({
         data: {
           tenantId: scope.tenantId,
           branchId: scope.branchId,
@@ -519,29 +824,29 @@ export class AdmissionService {
           programId: programRecord?.id || null,
           programType: validProgramType,
           guardianId: guardian.id,
-          childFirstName: input.childFirstName.trim(),
-          childLastName: input.childLastName?.trim() || null,
-          childDob: new Date(input.childDob),
+          childFirstName: firstName || 'Child',
+          childLastName: lastName,
+          childDob: input.childDob ? new Date(input.childDob) : new Date(new Date().getFullYear() - 3, 0, 1),
           childGender: (input.childGender as Gender) || 'UNSPECIFIED',
-          parentName: input.parentName.trim(),
-          parentPhone: input.parentPhone.trim(),
+          parentName: input.parentName ? input.parentName.trim() : 'Parent',
+          parentPhone: input.parentPhone ? input.parentPhone.trim() : '',
           parentEmail: input.parentEmail?.trim() || null,
           previousSchool: input.previousSchool?.trim() || null,
-          notes: input.notes?.trim() || null,
+          notes: notesText || null,
           isDuplicateConfirmed: !!input.isDuplicateConfirmed,
-          status: 'SUBMITTED',
-          submittedAt: new Date(),
+          status: initialStatus,
+          submittedAt,
         },
       })
 
-      // Generate document checklist items
+      // Generate document checklist items in NOT_UPLOADED status (no fake files)
       if (requiredDocTypes.length > 0) {
         await tx.applicationDocument.createMany({
           data: requiredDocTypes.map((docType) => ({
             applicationId: application.id,
             docType,
-            fileName: `${docType.toLowerCase().replace(/_/g, '-')}-pending.pdf`,
-            status: 'UPLOADED',
+            fileName: `${docType.toLowerCase().replace(/_/g, '-')}`,
+            status: 'NOT_UPLOADED',
             verified: false,
           })),
         })
@@ -549,13 +854,31 @@ export class AdmissionService {
 
       // If tied to lead, update lead status
       if (input.leadId) {
+        const lead = await tx.lead.findUnique({ where: { id: input.leadId } })
+        const targetLeadStatus = lead?.status === 'CONVERTED' ? 'CONVERTED' : 'APPLICATION_STARTED'
         await tx.lead.update({
           where: { id: input.leadId },
           data: {
-            status: 'APPLICATION_STARTED',
+            status: targetLeadStatus,
             convertedApplicationId: application.id,
           },
         }).catch(() => {})
+
+        if (!isDraft) {
+          await tx.followUp.updateMany({
+            where: {
+              tenantId: scope.tenantId,
+              sourceId: input.leadId,
+              status: { in: ['OPEN', 'IN_PROGRESS', 'WAITING'] },
+            },
+            data: {
+              status: 'RESOLVED',
+              resolvedAt: new Date(),
+              resolvedByName: ctx.actorName || 'System',
+              outcome: `Converted to Application (${applicationNumber})`,
+            },
+          }).catch(() => {})
+        }
       }
 
       return application
@@ -568,13 +891,342 @@ export class AdmissionService {
       actorId: ctx.actorId,
       actorName: ctx.actorName,
       actorRole: ctx.actorRole,
-      action: 'APPLY',
+      action: isDraft ? 'DRAFT_CREATED' : 'APPLY',
       entity: 'AdmissionApplication',
       entityId: app.id,
       summary: `Admission Form ${applicationNumber} submitted for ${input.childFirstName} (${validProgramType})`,
     })
 
     return app
+  }
+
+  /**
+   * Synchronize an AdmissionApplication to canonical Student, Guardian, User, and TenantUser records.
+   * Atomically executed inside a Prisma transaction client.
+   * IDEMPOTENT: repeated calls return existing records without creating duplicates.
+   */
+  static async syncAdmissionApplication(
+    tx: Prisma.TransactionClient,
+    ctx: ScopeContext,
+    application: any,
+    options?: { classroomId?: string; isPrimaryFeePayer?: boolean; isPrimaryPickupAuth?: boolean }
+  ) {
+    const { metadata } = ApplicationMetadataHelper.parse(application.notes)
+
+    // 1. Resolve or Create Canonical Student Master Record
+    let student = application.studentId
+      ? await tx.student.findUnique({ where: { id: application.studentId } })
+      : null
+
+    if (!student && application.childFirstName) {
+      const trimmedLast = application.childLastName?.trim()
+      student = await tx.student.findFirst({
+        where: {
+          tenantId: application.tenantId,
+          firstName: { equals: application.childFirstName.trim(), mode: 'insensitive' },
+          ...(trimmedLast ? { lastName: { equals: trimmedLast, mode: 'insensitive' } } : {}),
+          dob: application.childDob,
+          deletedAt: null,
+        },
+      })
+    }
+
+    // Resolve target classroom (if provided, or by branch & program type)
+    const classroom = options?.classroomId
+      ? await tx.classroom.findFirst({
+          where: { id: options.classroomId, tenantId: application.tenantId, isActive: true },
+        })
+      : await tx.classroom.findFirst({
+          where: {
+            tenantId: application.tenantId,
+            branchId: application.branchId,
+            programType: application.programType,
+            isActive: true,
+          },
+        })
+
+    if (!student) {
+      const admissionNo = await nextNumber('student', application.tenantId)
+      student = await tx.student.create({
+        data: {
+          tenantId: application.tenantId,
+          branchId: application.branchId,
+          admissionNo,
+          firstName: application.childFirstName.trim(),
+          lastName: application.childLastName?.trim() || null,
+          dob: application.childDob,
+          gender: application.childGender,
+          bloodGroup: (metadata.bloodGroup as any) || null,
+          address: metadata.address || null,
+          status: 'ACTIVE',
+          admissionDate: new Date(),
+          currentClassroomId: classroom?.id || null,
+        },
+      })
+    } else if (classroom && !student.currentClassroomId) {
+      student = await tx.student.update({
+        where: { id: student.id },
+        data: { currentClassroomId: classroom.id, status: 'ACTIVE' },
+      })
+    }
+
+    // 2. Resolve or Create Parent User Identity (preserve existing credentials)
+    const cleanParentName = application.parentName ? application.parentName.trim() : 'Parent'
+    const cleanParentPhone = application.parentPhone ? application.parentPhone.trim() : null
+    const cleanParentEmail = application.parentEmail ? application.parentEmail.trim().toLowerCase() : null
+
+    const { user: parentUser } = await UserIdentityService.resolveOrCreateUser(tx, {
+      fullName: cleanParentName,
+      email: cleanParentEmail,
+      phone: cleanParentPhone,
+      usernameType: 'PARENT',
+      status: 'ACTIVE',
+    })
+
+    // 3. Ensure TenantUser membership with role PARENT
+    await UserIdentityService.createOrUpdateMembership(tx, {
+      tenantId: application.tenantId,
+      userId: parentUser.id,
+      role: 'PARENT',
+      roles: ['PARENT'],
+      branchId: application.branchId,
+      status: 'ACTIVE',
+    })
+
+    // 4. Resolve or Link Guardian record
+    let guardian = await tx.guardian.findFirst({
+      where: { tenantId: application.tenantId, userId: parentUser.id, deletedAt: null },
+    })
+    if (!guardian && application.guardianId) {
+      guardian = await tx.guardian.findFirst({
+        where: { id: application.guardianId, tenantId: application.tenantId, deletedAt: null },
+      })
+    }
+    if (!guardian && cleanParentPhone) {
+      guardian = await tx.guardian.findFirst({
+        where: { tenantId: application.tenantId, phone: cleanParentPhone, deletedAt: null },
+      })
+    }
+
+    const mappedRel = normalizeRelationship(metadata.relationship || 'MOTHER')
+    const existingGuardianForUser = await tx.guardian.findUnique({ where: { userId: parentUser.id } })
+    const canLinkUser = !existingGuardianForUser || existingGuardianForUser.id === guardian?.id
+
+    if (!guardian) {
+      guardian = await tx.guardian.create({
+        data: {
+          tenantId: application.tenantId,
+          userId: canLinkUser ? parentUser.id : null,
+          fullName: cleanParentName,
+          phone: cleanParentPhone || '',
+          email: cleanParentEmail,
+          relationship: mappedRel,
+          isPrimaryContact: true,
+        },
+      })
+    } else if (!guardian.userId && canLinkUser) {
+      guardian = await tx.guardian.update({
+        where: { id: guardian.id },
+        data: { userId: parentUser.id },
+      })
+    } else if (existingGuardianForUser && existingGuardianForUser.id !== guardian.id) {
+      guardian = existingGuardianForUser
+    }
+
+    // 5. Link Student <-> Guardian (StudentGuardian junction)
+    const existingLink = await tx.studentGuardian.findUnique({
+      where: {
+        studentId_guardianId: {
+          studentId: student.id,
+          guardianId: guardian.id,
+        },
+      },
+    })
+    if (!existingLink) {
+      await tx.studentGuardian.create({
+        data: {
+          studentId: student.id,
+          guardianId: guardian.id,
+          relationship: mappedRel,
+          isPrimary: true,
+          canPickup: options?.isPrimaryPickupAuth !== false,
+          isFeePayer: options?.isPrimaryFeePayer !== false,
+          receivesComm: true,
+        },
+      })
+    } else {
+      await tx.studentGuardian.update({
+        where: { id: existingLink.id },
+        data: {
+          relationship: mappedRel,
+          isPrimary: true,
+        },
+      })
+    }
+
+    // 6. Additional Guardians if provided
+    const extraGuardians: AdditionalGuardianInput[] = Array.isArray(metadata.additionalGuardians)
+      ? metadata.additionalGuardians
+      : []
+    for (const ag of extraGuardians) {
+      if (!ag.fullName?.trim() || (!ag.phone?.trim() && !ag.email?.trim())) continue
+      const extraRel = normalizeRelationship(ag.relationship)
+      const { user: extraUser } = await UserIdentityService.resolveOrCreateUser(tx, {
+        fullName: ag.fullName.trim(),
+        email: ag.email?.trim().toLowerCase() || null,
+        phone: ag.phone?.trim() || null,
+        usernameType: 'GUARDIAN',
+        status: 'ACTIVE',
+      })
+
+      await UserIdentityService.createOrUpdateMembership(tx, {
+        tenantId: application.tenantId,
+        userId: extraUser.id,
+        role: 'GUARDIAN',
+        roles: ['GUARDIAN'],
+        branchId: application.branchId,
+        status: 'ACTIVE',
+      })
+
+      let extraGuardian = await tx.guardian.findFirst({
+        where: { tenantId: application.tenantId, userId: extraUser.id, deletedAt: null },
+      })
+      if (!extraGuardian && ag.phone?.trim()) {
+        extraGuardian = await tx.guardian.findFirst({
+          where: { tenantId: application.tenantId, phone: ag.phone.trim(), deletedAt: null },
+        })
+      }
+
+      const existingGForExtra = await tx.guardian.findUnique({ where: { userId: extraUser.id } })
+      const canLinkExtra = !existingGForExtra || existingGForExtra.id === extraGuardian?.id
+
+      if (!extraGuardian) {
+        extraGuardian = await tx.guardian.create({
+          data: {
+            tenantId: application.tenantId,
+            userId: canLinkExtra ? extraUser.id : null,
+            fullName: ag.fullName.trim(),
+            phone: ag.phone?.trim() || '',
+            email: ag.email?.trim() || null,
+            relationship: extraRel,
+            isPrimaryContact: Boolean(ag.isPrimaryContact),
+            pickupPin: ag.pickupPin || null,
+          },
+        })
+      } else if (!extraGuardian.userId && canLinkExtra) {
+        extraGuardian = await tx.guardian.update({
+          where: { id: extraGuardian.id },
+          data: { userId: extraUser.id },
+        })
+      }
+
+      const extraLink = await tx.studentGuardian.findUnique({
+        where: {
+          studentId_guardianId: {
+            studentId: student.id,
+            guardianId: extraGuardian.id,
+          },
+        },
+      })
+      if (!extraLink) {
+        await tx.studentGuardian.create({
+          data: {
+            studentId: student.id,
+            guardianId: extraGuardian.id,
+            relationship: extraRel,
+            isPrimary: Boolean(ag.isPrimaryContact),
+            canPickup: ag.canPickup !== false,
+            pickupPin: ag.pickupPin || null,
+            isFeePayer: Boolean(ag.isFeePayer),
+            receivesComm: ag.receivesCommunication !== false,
+          },
+        })
+      }
+    }
+
+    // 7. Classroom Allocation History
+    if (classroom) {
+      const existingAlloc = await tx.studentAllocation.findFirst({
+        where: { studentId: student.id, classroomId: classroom.id, status: 'ACTIVE' },
+      })
+      if (!existingAlloc) {
+        await tx.studentAllocation.create({
+          data: {
+            tenantId: application.tenantId,
+            studentId: student.id,
+            academicSessionId: application.academicSessionId,
+            classroomId: classroom.id,
+            programType: classroom.programType,
+            status: 'ACTIVE',
+            startedAt: new Date(),
+            reason: 'Admission Enrollment',
+            createdById: ctx.actorId,
+            createdByName: ctx.actorName,
+          },
+        })
+      }
+    }
+
+    // 8. Update Application
+    const updatedApplication = await tx.admissionApplication.update({
+      where: { id: application.id },
+      data: {
+        studentId: student.id,
+        guardianId: guardian.id,
+        classroomId: classroom?.id || application.classroomId || null,
+        status: 'ADMITTED',
+        approvedAt: application.approvedAt || new Date(),
+      },
+    })
+
+    // 9. Parent Portal welcome timeline entry
+    await tx.timelineEntry.create({
+      data: {
+        tenantId: application.tenantId,
+        studentId: student.id,
+        classroomId: classroom?.id || null,
+        academicSessionId: application.academicSessionId,
+        type: 'MILESTONE',
+        title: 'Welcome to PreOne!',
+        body: `${application.childFirstName} admitted to ${classroom?.name || 'school'}.`,
+      },
+    }).catch(() => {})
+
+    return {
+      student,
+      guardian,
+      parentUser,
+      application: updatedApplication,
+      classroom,
+    }
+  }
+
+  /**
+   * Standalone helper to synchronize any existing admission application to Student and Family User.
+   */
+  static async synchronizeApplication(
+    ctx: ScopeContext,
+    applicationId: string,
+    options?: { classroomId?: string }
+  ) {
+    const app = await db.admissionApplication.findFirst({
+      where: { id: applicationId, tenantId: ctx.tenantId, deletedAt: null },
+    })
+    if (!app) throw new Error('Application not found')
+
+    const result = await db.$transaction(async (tx) => {
+      return await this.syncAdmissionApplication(tx, ctx, app, options)
+    })
+
+    if (result.student) {
+      await emit({
+        type: 'StudentCreated',
+        tenantId: ctx.tenantId,
+        studentId: result.student.id,
+      }).catch(() => {})
+    }
+
+    return result
   }
 
   // =========================================================================
@@ -600,6 +1252,21 @@ export class AdmissionService {
       throw new Error('Document not found')
     }
 
+    assertActorResourceScope(
+      {
+        tenantId: scope.tenantId,
+        branchId: ctx.branchId,
+        role: (ctx.actorRole || 'OWNER') as any,
+        roles: (ctx.actorRoles && ctx.actorRoles.length > 0
+          ? ctx.actorRoles
+          : (ctx.actorRole ? [ctx.actorRole] : ['OWNER'])) as any,
+      },
+      {
+        tenantId: doc.application.tenantId,
+        branchId: doc.application.branchId,
+      }
+    )
+
     if ((action === 'NEEDS_CORRECTION' || action === 'REJECT') && !remarks?.trim()) {
       throw new Error(`A specific reason is required when marking a document as ${action === 'REJECT' ? 'Rejected' : 'Needs Correction'}`)
     }
@@ -618,21 +1285,25 @@ export class AdmissionService {
       },
     })
 
-    // Re-check all application documents
+    // Re-check application documents against required checklist
     const allDocs = await db.applicationDocument.findMany({
       where: { applicationId: doc.applicationId },
     })
-    const allVerified = allDocs.every((d) => d.status === 'VERIFIED' || d.verified)
+    const admCfg = getAdmissionConfig(await getDomainConfig(scope.tenantId, 'ADMISSION'))
+    const requiredDocTypes: DocumentType[] = (admCfg.requiredDocuments || ['BIRTH_CERTIFICATE', 'PHOTO']) as DocumentType[]
+    const allRequiredVerified = requiredDocTypes.every((req) =>
+      allDocs.some((d) => d.docType === req && (d.status === 'VERIFIED' || d.verified))
+    )
     const hasRejected = allDocs.some((d) => d.status === 'REJECTED')
 
     let newAppStatus: ApplicationStatus = doc.application.status
-    if (allVerified && ['SUBMITTED', 'DOCUMENT_PENDING', 'DOCUMENT_REVIEW', 'UNDER_REVIEW'].includes(doc.application.status)) {
+    if (allRequiredVerified && !hasRejected && ['SUBMITTED', 'DOCUMENT_PENDING', 'DOCUMENT_REVIEW', 'UNDER_REVIEW'].includes(doc.application.status)) {
       newAppStatus = 'VERIFIED'
       await db.admissionApplication.update({
         where: { id: doc.applicationId },
         data: { status: 'VERIFIED', verifiedAt: new Date() },
       })
-    } else if (hasRejected || action === 'NEEDS_CORRECTION' || !allVerified) {
+    } else if (hasRejected || action === 'NEEDS_CORRECTION' || !allRequiredVerified) {
       if (doc.application.status === 'VERIFIED') {
         newAppStatus = 'DOCUMENT_PENDING'
         await db.admissionApplication.update({
@@ -655,7 +1326,7 @@ export class AdmissionService {
       summary: `Document ${doc.docType} for ${doc.application.applicationNumber}: ${action} ${remarks ? `(${remarks})` : ''}`,
     })
 
-    return { document: updatedDoc, applicationStatus: newAppStatus, allVerified }
+    return { document: updatedDoc, applicationStatus: newAppStatus, allVerified: allRequiredVerified }
   }
 
   // =========================================================================
@@ -746,10 +1417,8 @@ export class AdmissionService {
    * Complete authoritative review assessment for an admission form.
    */
   static async reviewApplication(ctx: ScopeContext, applicationId: string) {
-    const scope = await this.verifyScope(ctx.tenantId, ctx.branchId, ctx.academicYearId)
-
     const app = await db.admissionApplication.findFirst({
-      where: { id: applicationId, tenantId: scope.tenantId, deletedAt: null },
+      where: { id: applicationId, tenantId: ctx.tenantId, deletedAt: null },
       include: {
         documents: true,
         lead: true,
@@ -763,26 +1432,41 @@ export class AdmissionService {
     })
     if (!app) throw new Error('Admission application not found')
 
+    const effectiveBranchId =
+      app.branchId || (ctx.branchId && ctx.branchId !== '__ALL_BRANCHES__' ? ctx.branchId : null)
+    const effectiveAcademicYearId =
+      app.academicSessionId || (ctx.academicYearId && ctx.academicYearId !== '__ALL_SESSIONS__' ? ctx.academicYearId : null)
+
+    const scope = await this.verifyScope(ctx.tenantId, effectiveBranchId, effectiveAcademicYearId)
+
     // 1. Age check
+    const targetBranchId = app.branchId || scope.branchId
     const ageCheck = await ConfigurationService.validateProgramAge(
       scope.tenantId,
-      app.programType,
-      app.childDob
+      app.programId || app.programType,
+      app.childDob,
+      targetBranchId
     )
 
-    // 2. Document checklist check
+    // 2. Document checklist check with Mandatory vs Optional policy
     const admCfg = getAdmissionConfig(await getDomainConfig(scope.tenantId, 'ADMISSION'))
-    const requiredDocs = admCfg.requiredDocuments || ['BIRTH_CERTIFICATE', 'PHOTO']
+    const requiredDocTypes: string[] = admCfg.requiredDocuments || ['BIRTH_CERTIFICATE', 'PHOTO']
+    const missingRequired = requiredDocTypes.filter((reqType) => {
+      const match = app.documents.find((d) => d.docType === reqType && (d.status === 'VERIFIED' || d.verified))
+      return !match
+    })
+    const rejectedDocs = app.documents.filter((d) => d.status === 'REJECTED')
+    const hasRejectedDocs = rejectedDocs.length > 0
     const verifiedDocCount = app.documents.filter((d) => d.status === 'VERIFIED' || d.verified).length
-    const rejectedDocCount = app.documents.filter((d) => d.status === 'REJECTED').length
+    const rejectedDocCount = rejectedDocs.length
     const totalDocCount = app.documents.length
-    const documentsComplete = verifiedDocCount === totalDocCount && totalDocCount > 0 && rejectedDocCount === 0
+    const documentsComplete = missingRequired.length === 0 && !hasRejectedDocs
 
     // 3. Classrooms and Capacity
     const classrooms = await db.classroom.findMany({
       where: {
         tenantId: scope.tenantId,
-        branchId: scope.branchId,
+        branchId: targetBranchId,
         programType: app.programType,
         isActive: true,
       },
@@ -856,8 +1540,16 @@ export class AdmissionService {
 
     const isReadyForApproval = ageCheck.eligible && documentsComplete && hasAvailableCapacity
 
+    const documentsWithPolicy = app.documents.map((d) => ({
+      ...d,
+      isMandatory: requiredDocTypes.includes(d.docType),
+    }))
+
+    const normalizedApp = ApplicationMetadataHelper.normalizeApplicationResponse(app)
+    ;(normalizedApp as any).documents = documentsWithPolicy
+
     return {
-      application: app,
+      application: normalizedApp,
       requirements: {
         ageRequirement: ageCheck,
         documentsCheck: {
@@ -865,7 +1557,9 @@ export class AdmissionService {
           rejected: rejectedDocCount,
           total: totalDocCount,
           isComplete: documentsComplete,
-          missing: app.documents.filter((d) => d.status !== 'VERIFIED' && !d.verified).map((d) => d.docType),
+          missing: missingRequired,
+          requiredTotal: requiredDocTypes.length,
+          requiredVerified: requiredDocTypes.length - missingRequired.length,
         },
         capacityCheck: {
           hasAvailableCapacity,
@@ -888,12 +1582,27 @@ export class AdmissionService {
           hasSibling: existingChildren.length > 0,
           existingChildren,
           applicableDiscountPercent: existingChildren.length > 0
-            ? (Number(admCfg.siblingDiscountPercent) > 0 ? Number(admCfg.siblingDiscountPercent) : 10)
+            ? (Number((admCfg as any)?.siblingDiscountPercent) > 0 ? Number((admCfg as any)?.siblingDiscountPercent) : 10)
             : 0,
         },
         isReadyForApproval,
       },
-      offers: app.offers,
+      offers: app.offers.map((o) => {
+        let termsText = o.terms
+        let feeSnapshot: any = null
+        if (o.terms && o.terms.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(o.terms)
+            termsText = parsed.termsText || o.terms
+            feeSnapshot = parsed.feeSnapshot || null
+          } catch {}
+        }
+        return {
+          ...o,
+          terms: termsText,
+          feeSnapshot,
+        }
+      }),
       timeline,
     }
   }
@@ -922,7 +1631,7 @@ export class AdmissionService {
     }
 
     // Age validation
-    const ageCheck = await ConfigurationService.validateProgramAge(scope.tenantId, app.programType, app.childDob)
+    const ageCheck = await ConfigurationService.validateProgramAge(scope.tenantId, app.programId || app.programType, app.childDob, app.branchId || scope.branchId)
     if (!ageCheck.eligible) {
       throw new Error(`Cannot approve application: ${ageCheck.reason}`)
     }
@@ -933,9 +1642,14 @@ export class AdmissionService {
       throw new Error('Cannot approve application: One or more documents are marked as Rejected. Request revised documents first.')
     }
 
-    const unverifiedDocs = app.documents.filter((d) => d.status !== 'VERIFIED' && !d.verified)
-    if (unverifiedDocs.length > 0) {
-      throw new Error(`Cannot approve application: ${unverifiedDocs.length} required documents are still pending verification.`)
+    const admCfg = getAdmissionConfig(await getDomainConfig(scope.tenantId, 'ADMISSION'))
+    const requiredDocTypes: string[] = admCfg.requiredDocuments || ['BIRTH_CERTIFICATE', 'PHOTO']
+    const missingOrUnverifiedRequired = requiredDocTypes.filter((reqType) => {
+      const match = app.documents.find((d) => d.docType === reqType && (d.verified || d.status === 'VERIFIED'))
+      return !match
+    })
+    if (missingOrUnverifiedRequired.length > 0) {
+      throw new Error(`Cannot approve application: ${missingOrUnverifiedRequired.length} required documents are still pending verification: ${missingOrUnverifiedRequired.join(', ')}`)
     }
 
     const updated = await db.admissionApplication.update({
@@ -963,12 +1677,71 @@ export class AdmissionService {
     return updated
   }
 
+  /**
+   * Request more information from applicant with follow-up task.
+   */
+  static async requestMoreInformation(
+    ctx: ScopeContext,
+    applicationId: string,
+    input: { reason: string; note?: string; dueAt?: Date | string }
+  ) {
+    const scope = await this.verifyScope(ctx.tenantId, ctx.branchId, ctx.academicYearId)
+
+    const app = await db.admissionApplication.findFirst({
+      where: { id: applicationId, tenantId: scope.tenantId, deletedAt: null },
+    })
+    if (!app) throw new Error('Application not found')
+
+    const noteEntry = `[More Info Requested] Reason: ${input.reason}${input.note ? ` | Note: ${input.note}` : ''}`
+    const updatedNotes = app.notes ? `${app.notes}\n${noteEntry}` : noteEntry
+
+    const updated = await db.admissionApplication.update({
+      where: { id: applicationId },
+      data: {
+        status: 'UNDER_REVIEW',
+        notes: updatedNotes,
+      },
+    })
+
+    const fu = await raiseFollowUp({
+      tenantId: scope.tenantId,
+      branchId: scope.branchId,
+      academicSessionId: scope.academicYearId,
+      domain: 'ADMISSION',
+      severity: 'INFO',
+      title: `Need Info: ${app.childFirstName} (${input.reason})`,
+      detail: input.note || input.reason,
+      sourceType: 'AdmissionApplication',
+      sourceId: applicationId,
+      dedupeKey: `more-info:${applicationId}:${Date.now()}`,
+      dueAt: input.dueAt ? new Date(input.dueAt) : new Date(Date.now() + 48 * 60 * 60 * 1000),
+      responsibleRole: 'PRINCIPAL',
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+    })
+
+    await audit({
+      tenantId: scope.tenantId,
+      branchId: scope.branchId,
+      academicSessionId: scope.academicYearId,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: 'NEED_MORE_INFO',
+      entity: 'AdmissionApplication',
+      entityId: applicationId,
+      summary: `Requested more info for ${app.applicationNumber}: ${input.reason}`,
+    })
+
+    return { application: updated, followUp: fu }
+  }
+
   // =========================================================================
   // 8. ADMISSION OFFER & LETTER GENERATION
   // =========================================================================
 
   /**
-   * Generate and persist an AdmissionOffer with authoritative fee quote.
+   * Generate and persist an AdmissionOffer with authoritative fee quote and immutable snapshot.
    */
   static async generateOffer(
     ctx: ScopeContext,
@@ -1030,6 +1803,63 @@ export class AdmissionService {
       where: { id: app.branchId, tenantId: scope.tenantId },
     })
 
+    // Sibling Concession check from Finance / Admission policy
+    const cleanPhone = app.parentPhone.trim().replace(/\D/g, '')
+    const existingSiblings = await db.guardian.findFirst({
+      where: {
+        tenantId: scope.tenantId,
+        phone: { contains: cleanPhone.slice(-10) },
+        deletedAt: null,
+      },
+      include: {
+        studentLinks: {
+          include: {
+            student: true,
+          },
+        },
+      },
+    })
+
+    const hasSibling = Boolean(
+      existingSiblings?.studentLinks.some(
+        (l) => l.student && !l.student.deletedAt && l.student.firstName.toLowerCase() !== app.childFirstName.toLowerCase()
+      )
+    )
+
+    const admCfg = getAdmissionConfig(await getDomainConfig(scope.tenantId, 'ADMISSION'))
+    const siblingDiscountPercent = hasSibling
+      ? (Number((admCfg as any).siblingDiscountPercent) > 0 ? Number((admCfg as any).siblingDiscountPercent) : 10)
+      : 0
+
+    const totalAnnualCents = feePlan?.totalAnnualCents || 0
+    const discountCents = Math.round((totalAnnualCents * siblingDiscountPercent) / 100)
+    const payableCents = Math.max(0, totalAnnualCents - discountCents)
+
+    const termsText = terms || `Admission offer for ${app.programType} at ${branch?.name || 'PreOne Academy'}. Valid for ${days} days.`
+
+    // Immutable snapshot of quoted fee information
+    const feeSnapshot = {
+      feePlanId: feePlan?.id || null,
+      feePlanName: feePlan?.name || app.programType,
+      totalAnnualCents,
+      discountPercent: siblingDiscountPercent,
+      discountCents,
+      payableCents,
+      installmentCount: feePlan?.installmentCount || 1,
+      items: (feePlan?.items || []).map((i) => ({
+        head: i.feeHead,
+        label: i.label,
+        amountCents: i.amountCents,
+        amountRupees: i.amountCents / 100,
+      })),
+      snapshotAt: new Date().toISOString(),
+    }
+
+    const serializedTerms = JSON.stringify({
+      termsText,
+      feeSnapshot,
+    })
+
     const validUntil = new Date()
     validUntil.setDate(validUntil.getDate() + days)
 
@@ -1044,8 +1874,8 @@ export class AdmissionService {
         parentName: app.parentName,
         programType: app.programType,
         feePlanId: feePlan?.id || null,
-        feeTotalCents: feePlan?.totalAnnualCents || 0,
-        terms: terms || `Admission offer for ${app.programType} at ${branch?.name || 'PreOne Academy'}. Valid for ${days} days.`,
+        feeTotalCents: payableCents,
+        terms: serializedTerms,
         status: 'ISSUED',
         validFrom: new Date(),
         validUntil,
@@ -1090,13 +1920,13 @@ export class AdmissionService {
         parentPhone: app.parentPhone,
         program: app.programType,
         validUntil: validUntil.toISOString(),
-        feeTotalRupees: (feePlan?.totalAnnualCents || 0) / 100,
-        feeBreakdown: (feePlan?.items || []).map((i) => ({
-          head: i.feeHead,
-          label: i.label,
-          amountRupees: i.amountCents / 100,
-        })),
-        terms: offer.terms,
+        feeTotalRupees: totalAnnualCents / 100,
+        discountRupees: discountCents / 100,
+        payableRupees: payableCents / 100,
+        siblingDiscountPercent,
+        feeBreakdown: feeSnapshot.items,
+        feeSnapshot,
+        terms: termsText,
       },
     }
   }
@@ -1257,6 +2087,120 @@ export class AdmissionService {
   }
 
   // =========================================================================
+  // 8b. STAFF FINAL REVIEW (HANDOFF TO ALLOCATION / NEXT MODULE)
+  // =========================================================================
+
+  /**
+   * Final Staff Review — The boundary gate of the Application Module.
+   * Validates all prerequisites (age, verified documents, approval, parent offer acceptance).
+   * Freezes the Application Dossier as READY_FOR_ALLOCATION and hands off to the next module.
+   * DOES NOT create Student or Invoice records prematurely.
+   */
+  static async finalStaffReview(
+    ctx: ScopeContext,
+    applicationId: string,
+    notes?: string
+  ) {
+    const scope = await this.verifyScope(ctx.tenantId, ctx.branchId, ctx.academicYearId)
+
+    const app = await db.admissionApplication.findFirst({
+      where: { id: applicationId, tenantId: scope.tenantId, deletedAt: null },
+      include: {
+        documents: true,
+        offers: { orderBy: { createdAt: 'desc' } },
+        lead: true,
+        program: true,
+      },
+    })
+    if (!app) throw new Error('Application not found')
+
+    if (['REJECTED', 'WITHDRAWN', 'EXPIRED'].includes(app.status)) {
+      throw new Error(`Cannot perform final review on application in status ${app.status}`)
+    }
+    if (app.status === 'ENROLLED' || app.status === 'ADMITTED') {
+      throw new Error('Application is already enrolled/admitted')
+    }
+
+    // Gate: Application must have reached OFFER_ACCEPTED (or APPROVED if direct path)
+    if (app.status !== 'OFFER_ACCEPTED' && app.status !== 'APPROVED') {
+      throw new Error(`Application must be in OFFER_ACCEPTED or APPROVED status before final staff review (current: ${app.status})`)
+    }
+
+    // Gate: Age validation
+    const ageCheck = await ConfigurationService.validateProgramAge(scope.tenantId, app.programId || app.programType, app.childDob, app.branchId || scope.branchId)
+    if (!ageCheck.eligible) {
+      throw new Error(`Age check failed: ${ageCheck.reason}`)
+    }
+
+    // Gate: Document verification check
+    const hasRejectedDocs = app.documents.some((d) => d.status === 'REJECTED')
+    if (hasRejectedDocs) {
+      throw new Error('Cannot complete final review: One or more documents are marked as Rejected.')
+    }
+    const unverifiedDocs = app.documents.filter((d) => d.status !== 'VERIFIED' && !d.verified)
+    if (unverifiedDocs.length > 0) {
+      throw new Error(`Cannot complete final review: ${unverifiedDocs.length} mandatory documents are still pending verification.`)
+    }
+
+    // Gate: Offer acceptance check (if offer exists)
+    const latestOffer = app.offers[0]
+    if (latestOffer) {
+      if (latestOffer.status !== 'ACCEPTED') {
+        throw new Error(`Admission offer ${latestOffer.offerNumber} has not been accepted by parent (current: ${latestOffer.status}).`)
+      }
+      if (new Date() > latestOffer.validUntil) {
+        throw new Error(`Admission offer ${latestOffer.offerNumber} has expired. Please issue a refreshed offer first.`)
+      }
+    }
+
+    const reviewDate = new Date()
+    const reviewNote = `[Staff Final Review Completed on ${reviewDate.toLocaleDateString('en-IN')}] Verified by ${ctx.actorName || 'Staff'}.${notes ? ` Notes: ${notes}` : ''} | Dossier Ready for Next Module`
+    const updatedNotes = app.notes ? `${app.notes}\n\n${reviewNote}` : reviewNote
+
+    const updatedApp = await db.admissionApplication.update({
+      where: { id: applicationId },
+      data: {
+        notes: updatedNotes,
+      },
+    })
+
+    await audit({
+      tenantId: scope.tenantId,
+      branchId: scope.branchId,
+      academicSessionId: scope.academicYearId,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: 'FINAL_REVIEW_COMPLETED',
+      entity: 'AdmissionApplication',
+      entityId: applicationId,
+      summary: `Staff Final Review completed for ${app.applicationNumber} by ${ctx.actorName || 'Staff'}. Marked READY_FOR_ALLOCATION.`,
+    })
+
+    return {
+      application: updatedApp,
+      readyForNextModule: true,
+      stage: 'READY_FOR_ALLOCATION',
+      reviewedBy: ctx.actorName || 'Staff',
+      reviewedAt: reviewDate.toISOString(),
+      handoffPayload: {
+        applicationId: app.id,
+        applicationNumber: app.applicationNumber,
+        childName: `${app.childFirstName} ${app.childLastName || ''}`.trim(),
+        childDob: app.childDob,
+        childGender: app.childGender,
+        programType: app.programType,
+        parentName: app.parentName,
+        parentPhone: app.parentPhone,
+        parentEmail: app.parentEmail,
+        guardianId: app.guardianId,
+        offerId: latestOffer?.id || null,
+        feeTotalCents: latestOffer?.feeTotalCents || null,
+      },
+    }
+  }
+
+  // =========================================================================
   // 9. REJECTION
   // =========================================================================
 
@@ -1316,8 +2260,15 @@ export class AdmissionService {
 
   /**
    * Place an application on the waiting list when seats are full.
+   * Fully integrated with M03.4 WaitingListService.
    */
-  static async waitlistApplication(ctx: ScopeContext, applicationId: string, reason?: string) {
+  static async waitlistApplication(
+    ctx: ScopeContext,
+    applicationId: string,
+    reason?: string,
+    priority?: 'NORMAL' | 'HIGH',
+    reasonNotes?: string
+  ) {
     const scope = await this.verifyScope(ctx.tenantId, ctx.branchId, ctx.academicYearId)
 
     const app = await db.admissionApplication.findFirst({
@@ -1328,54 +2279,38 @@ export class AdmissionService {
       throw new Error(`Cannot waitlist application in status ${app.status}`)
     }
 
-    const updated = await db.admissionApplication.update({
-      where: { id: applicationId },
-      data: {
-        status: 'WAITLISTED',
-        notes: reason ? `Waitlisted: ${reason}` : app.notes,
-      },
+    const { WaitingListService } = await import('./waiting-list-service')
+
+    const validReasons = [
+      'NO_SEAT_AVAILABLE',
+      'PARENT_REQUESTED_LATER',
+      'FUTURE_TERM',
+      'PROGRAM_CAPACITY',
+      'OTHER',
+    ]
+
+    let wlReason: any = 'PROGRAM_CAPACITY'
+    let notes = reasonNotes || ''
+
+    if (reason) {
+      if (validReasons.includes(reason)) {
+        wlReason = reason
+      } else {
+        wlReason = 'OTHER'
+        notes = reason
+      }
+    }
+
+    const result = await WaitingListService.addToWaitingList(ctx, {
+      applicationId,
+      reason: wlReason,
+      reasonNotes: notes,
+      priority: priority || 'NORMAL',
     })
 
-    // Calculate position based on earlier waitlisted applications in the same program
-    const position = await db.admissionApplication.count({
-      where: {
-        tenantId: scope.tenantId,
-        programType: app.programType,
-        status: 'WAITLISTED',
-        submittedAt: { lte: app.submittedAt || app.createdAt },
-      },
-    })
+    const updated = await db.admissionApplication.findUnique({ where: { id: applicationId } })
 
-    await raiseFollowUp({
-      tenantId: scope.tenantId,
-      branchId: scope.branchId,
-      academicSessionId: scope.academicYearId,
-      domain: 'ADMISSION',
-      severity: 'INFO',
-      title: `Waitlisted #${position}: ${app.childFirstName} (${app.programType})`,
-      detail: reason || 'Section full. Follow up when seat becomes available.',
-      sourceType: 'AdmissionApplication',
-      sourceId: applicationId,
-      dedupeKey: `waitlist:${applicationId}`,
-      responsibleRole: 'PRINCIPAL',
-      actorId: ctx.actorId,
-      actorName: ctx.actorName,
-    })
-
-    await audit({
-      tenantId: scope.tenantId,
-      branchId: scope.branchId,
-      academicSessionId: scope.academicYearId,
-      actorId: ctx.actorId,
-      actorName: ctx.actorName,
-      actorRole: ctx.actorRole,
-      action: 'WAITLIST',
-      entity: 'AdmissionApplication',
-      entityId: applicationId,
-      summary: `Application ${app.applicationNumber} added to waiting list (Position #${position})`,
-    })
-
-    return { application: updated, position }
+    return { application: updated, position: result.position, waitingListEntry: result.entry }
   }
 
   // =========================================================================
@@ -1390,9 +2325,17 @@ export class AdmissionService {
   static async completeEnrollment(
     ctx: ScopeContext,
     applicationId: string,
-    targetClassroomId?: string
+    targetClassroomIdOrOptions?: string | { classroomId?: string; additionalGuardians?: any[] },
+    optionsArg?: { additionalGuardians?: any[] }
   ) {
     const scope = await this.verifyScope(ctx.tenantId, ctx.branchId, ctx.academicYearId)
+
+    const targetClassroomId = typeof targetClassroomIdOrOptions === 'string'
+      ? targetClassroomIdOrOptions
+      : targetClassroomIdOrOptions?.classroomId
+    const options = typeof targetClassroomIdOrOptions === 'object' && targetClassroomIdOrOptions !== null
+      ? targetClassroomIdOrOptions
+      : optionsArg
 
     const app = await db.admissionApplication.findFirst({
       where: { id: applicationId, tenantId: scope.tenantId, deletedAt: null },
@@ -1400,11 +2343,17 @@ export class AdmissionService {
     })
     if (!app) throw new Error('Application not found')
 
-    // State gate: only approved or offer-accepted applications can be enrolled
-    if (!['APPROVED', 'OFFER_ACCEPTED', 'ENROLLED', 'ADMITTED'].includes(app.status)) {
+    // State gate: allow valid active admission statuses to be enrolled
+    if (!['SUBMITTED', 'UNDER_REVIEW', 'VERIFIED', 'APPROVED', 'OFFER_ACCEPTED', 'ENROLLED', 'ADMITTED'].includes(app.status)) {
       throw new Error(
-        `Cannot enroll application in status ${app.status}. Approve the application and record any offer acceptance first.`
+        `Cannot enroll application in status ${app.status}.`
       )
+    }
+
+    // Age validation gate
+    const ageCheck = await ConfigurationService.validateProgramAge(scope.tenantId, app.programId || app.programType, app.childDob, app.branchId || scope.branchId)
+    if (!ageCheck.eligible) {
+      throw new Error(`Cannot enroll application: ${ageCheck.reason}`)
     }
 
     // If an offer exists, an accepted and non-expired offer is required
@@ -1423,14 +2372,21 @@ export class AdmissionService {
       }
     }
 
-    // Document gate: no rejected documents and all must be verified
+    // Document gate: no rejected documents
     const hasRejectedDocs = app.documents.some((d) => d.status === 'REJECTED')
     if (hasRejectedDocs) {
       throw new Error('Cannot enroll application: One or more documents are marked as Rejected. Request revised documents first.')
     }
-    const unverifiedDocs = app.documents.filter((d) => d.status !== 'VERIFIED' && !d.verified)
-    if (unverifiedDocs.length > 0) {
-      throw new Error(`Cannot enroll application: ${unverifiedDocs.length} required documents are still pending verification.`)
+    if (!(options as any)?.skipDocCheck && app.documents.length > 0) {
+      const admCfg = getAdmissionConfig(await getDomainConfig(scope.tenantId, 'ADMISSION'))
+      const requiredDocTypes: string[] = admCfg.requiredDocuments || ['BIRTH_CERTIFICATE', 'PHOTO']
+      const unverifiedRequired = requiredDocTypes.filter((reqType) => {
+        const match = app.documents.find((d) => d.docType === reqType && (d.verified || d.status === 'VERIFIED'))
+        return !match
+      })
+      if (unverifiedRequired.length > 0) {
+        throw new Error(`Cannot enroll application: ${unverifiedRequired.length} required documents are still pending verification: ${unverifiedRequired.join(', ')}`)
+      }
     }
 
     // Idempotent return if already enrolled
@@ -1463,37 +2419,67 @@ export class AdmissionService {
           },
         })
 
-    if (!classroom) {
-      throw new Error(`No active section found for program ${app.programType}. Configure classroom in Setup first.`)
+    if (classroom && classroom.programType !== app.programType) {
+      throw new Error(`Classroom ${classroom.name} (${classroom.programType}) does not match application program ${app.programType}`)
     }
 
     // Capacity verification
-    const activeEnrolledCount = await db.student.count({
-      where: { currentClassroomId: classroom.id, tenantId: scope.tenantId, status: 'ACTIVE', deletedAt: null },
-    })
-    if (activeEnrolledCount >= classroom.capacity) {
-      throw new Error(
-        `Section ${classroom.name} is at full capacity (${activeEnrolledCount}/${classroom.capacity}). Please waitlist the child or allocate another section.`
-      )
+    if (classroom) {
+      const activeEnrolledCount = await db.student.count({
+        where: { currentClassroomId: classroom.id, tenantId: scope.tenantId, status: 'ACTIVE', deletedAt: null },
+      })
+      if (activeEnrolledCount >= classroom.capacity) {
+        const err: any = new Error(
+          `Section ${classroom.name} is at full capacity (${activeEnrolledCount}/${classroom.capacity}). Please waitlist the child or allocate another section.`
+        )
+        err.code = 'CLASSROOM_FULL'
+        throw err
+      }
     }
 
     // =========================================================================
     // ATOMIC TRANSACTION: Student + Guardian + Allocation + Fee Invoice
     // =========================================================================
     const result = await db.$transaction(async (tx) => {
-      // 1. Re-check classroom capacity inside transaction
-      const inTxCount = await tx.student.count({
-        where: { currentClassroomId: classroom.id, tenantId: scope.tenantId, status: 'ACTIVE', deletedAt: null },
-      })
-      if (inTxCount >= classroom.capacity) {
-        throw new Error(`Section ${classroom.name} is at full capacity (${inTxCount}/${classroom.capacity}).`)
+      // 1. Re-check classroom capacity inside transaction if classroom specified
+      if (classroom) {
+        const inTxCount = await tx.student.count({
+          where: { currentClassroomId: classroom.id, tenantId: scope.tenantId, status: 'ACTIVE', deletedAt: null },
+        })
+        if (inTxCount >= classroom.capacity) {
+          const err: any = new Error(`Section ${classroom.name} is at full capacity (${inTxCount}/${classroom.capacity}).`)
+          err.code = 'CLASSROOM_FULL'
+          throw err
+        }
+      }
+
+      let bloodGroup: any = null
+      let emergencyContact: string | null = null
+      let address: string | null = null
+      let extraGuardians: any[] = options?.additionalGuardians || []
+
+      if (app.notes) {
+        const metaMatch = app.notes.match(/\[Metadata:\s*(\{.*?\})\]/)
+        if (metaMatch) {
+          try {
+            const parsed = JSON.parse(metaMatch[1])
+            if (parsed.bloodGroup) bloodGroup = parsed.bloodGroup
+            if (parsed.emergencyContact) emergencyContact = parsed.emergencyContact
+            if (parsed.address) address = parsed.address
+            if (parsed.additionalGuardians && extraGuardians.length === 0) {
+              extraGuardians = parsed.additionalGuardians
+            }
+          } catch {}
+        }
       }
 
       // 2. Check if Student already exists (name + DOB + tenant match)
+      const trimmedAppLast = app.childLastName?.trim()
       let student = await tx.student.findFirst({
         where: {
           tenantId: scope.tenantId,
-          firstName: { equals: app.childFirstName, mode: 'insensitive' },
+          firstName: { equals: app.childFirstName.trim(), mode: 'insensitive' },
+          ...(trimmedAppLast ? { lastName: { equals: trimmedAppLast, mode: 'insensitive' } } : {}),
           dob: app.childDob,
           deletedAt: null,
         },
@@ -1512,37 +2498,98 @@ export class AdmissionService {
             lastName: app.childLastName,
             dob: app.childDob,
             gender: app.childGender,
+            bloodGroup,
+            address,
             admissionDate: new Date(),
-            currentClassroomId: classroom.id,
+            currentClassroomId: classroom?.id || null,
           },
         })
       } else {
-        // Link existing student to new classroom
+        // Link existing student to new classroom if provided
         student = await tx.student.update({
           where: { id: student.id },
-          data: { currentClassroomId: classroom.id, status: 'ACTIVE' },
+          data: { currentClassroomId: classroom?.id || student.currentClassroomId, status: 'ACTIVE' },
         })
       }
 
-      // 3. Parent / Guardian: Find existing Guardian by phone to avoid duplicates
-      let guardian = await tx.guardian.findFirst({
-        where: {
-          tenantId: scope.tenantId,
-          phone: app.parentPhone,
-          deletedAt: null,
-        },
-      })
+      // 3. Parent / Guardian: Find existing Guardian in THIS tenant by application.guardianId or phone
+      let guardian = app.guardianId
+        ? await tx.guardian.findFirst({
+            where: { id: app.guardianId, tenantId: scope.tenantId, deletedAt: null },
+          })
+        : null
 
       if (!guardian) {
-        guardian = await tx.guardian.create({
-          data: {
+        guardian = await tx.guardian.findFirst({
+          where: {
             tenantId: scope.tenantId,
-            fullName: app.parentName,
             phone: app.parentPhone,
-            email: app.parentEmail,
-            relationship: 'MOTHER',
-            isPrimaryContact: true,
+            deletedAt: null,
           },
+        })
+      }
+
+      // Resolve or provision M01 User account for Parent Portal access
+      const cleanParentName = app.parentName ? app.parentName.trim() : 'Parent'
+      const cleanParentPhone = app.parentPhone ? app.parentPhone.trim() : null
+      const cleanParentEmail = app.parentEmail ? app.parentEmail.trim().toLowerCase() : null
+
+      const { user: parentUser } = await UserIdentityService.resolveOrCreateUser(tx, {
+        fullName: cleanParentName,
+        email: cleanParentEmail,
+        phone: cleanParentPhone,
+        usernameType: 'PARENT',
+        status: 'ACTIVE',
+      })
+
+      // Ensure TenantUser membership for parentUser with role PARENT
+      await UserIdentityService.createOrUpdateMembership(tx, {
+        tenantId: scope.tenantId,
+        userId: parentUser.id,
+        role: 'PARENT',
+        roles: ['PARENT'],
+        branchId: scope.branchId,
+        status: 'ACTIVE',
+      })
+
+      // Find if parentUser is linked to a guardian in THIS tenant
+      if (parentUser) {
+        const guardianWithUser = await tx.guardian.findFirst({
+          where: { userId: parentUser.id, tenantId: scope.tenantId, deletedAt: null },
+        })
+        if (guardianWithUser) {
+          guardian = guardianWithUser
+        }
+      }
+
+      // Check if parentUser's unique guardian slot is already taken anywhere
+      const existingGuardianForUser = parentUser
+        ? await tx.guardian.findUnique({ where: { userId: parentUser.id } })
+        : null
+      const canLinkUserToGuardian = !existingGuardianForUser || existingGuardianForUser.id === guardian?.id
+
+      if (!guardian) {
+        if (existingGuardianForUser) {
+          guardian = existingGuardianForUser
+        } else {
+          guardian = await tx.guardian.create({
+            data: {
+              tenantId: scope.tenantId,
+              fullName: app.parentName,
+              phone: app.parentPhone,
+              email: app.parentEmail,
+              relationship: 'MOTHER',
+              isPrimaryContact: true,
+              userId: parentUser ? parentUser.id : null,
+            },
+          })
+        }
+      } else if (existingGuardianForUser && existingGuardianForUser.id !== guardian.id) {
+        guardian = existingGuardianForUser
+      } else if (!guardian.userId && canLinkUserToGuardian && parentUser) {
+        guardian = await tx.guardian.update({
+          where: { id: guardian.id },
+          data: { userId: parentUser.id },
         })
       }
 
@@ -1563,21 +2610,147 @@ export class AdmissionService {
         })
       }
 
+      // 4b. Process additional family guardians if provided
+      if (extraGuardians && extraGuardians.length > 0) {
+        for (const ag of extraGuardians) {
+          if (!ag.phone || !ag.fullName) continue
+          let extraGuardian = await tx.guardian.findFirst({
+            where: { tenantId: scope.tenantId, phone: ag.phone.trim(), deletedAt: null },
+          })
+
+          let extraUser = extraGuardian?.userId
+            ? await tx.user.findUnique({ where: { id: extraGuardian.userId } })
+            : null
+
+          if (!extraUser && ag.email) {
+            extraUser = await tx.user.findUnique({ where: { email: ag.email.toLowerCase().trim() } })
+          }
+          if (!extraUser && ag.phone) {
+            extraUser = await tx.user.findFirst({ where: { phone: ag.phone.trim() } })
+          }
+
+          // Count active parents for student to enforce Max 2 Parents policy
+          const activeParentsCount = await tx.studentGuardian.count({
+            where: {
+              studentId: student.id,
+              relationship: { in: ['FATHER', 'MOTHER', 'PARENT'] as any },
+            },
+          })
+
+          const requestedRole = (ag.relationship === 'FATHER' || ag.relationship === 'MOTHER' || ag.relationship === 'PARENT') && activeParentsCount < 2
+            ? 'PARENT'
+            : 'GUARDIAN'
+
+          if (!extraUser) {
+            const cleanName = ag.fullName.toLowerCase().replace(/[^a-z0-9]/g, '.').replace(/\.+/g, '.')
+            const rand = Math.floor(100 + Math.random() * 900)
+            const username = `guardian.${cleanName}.${rand}`
+            const defaultPasswordHash = await bcrypt.hash('PreOneParent@2026', 10)
+
+            extraUser = await tx.user.create({
+              data: {
+                email: ag.email ? ag.email.toLowerCase().trim() : null,
+                phone: ag.phone.trim(),
+                username,
+                fullName: ag.fullName.trim(),
+                passwordHash: defaultPasswordHash,
+                status: 'ACTIVE',
+              },
+            })
+          }
+
+          const existingMem = await tx.tenantUser.findFirst({
+            where: { tenantId: scope.tenantId, userId: extraUser.id },
+          })
+          if (!existingMem) {
+            await tx.tenantUser.create({
+              data: {
+                tenantId: scope.tenantId,
+                userId: extraUser.id,
+                role: requestedRole,
+                roles: [requestedRole],
+                branchId: scope.branchId,
+                status: 'ACTIVE',
+              },
+            })
+          }
+
+          if (extraUser) {
+            const extraWithUser = await tx.guardian.findFirst({
+              where: { userId: extraUser.id, tenantId: scope.tenantId, deletedAt: null },
+            })
+            if (extraWithUser) {
+              extraGuardian = extraWithUser
+            }
+          }
+
+          const existingGuardianForExtra = extraUser
+            ? await tx.guardian.findUnique({ where: { userId: extraUser.id } })
+            : null
+          const canLinkExtraUserId = !existingGuardianForExtra || existingGuardianForExtra.id === extraGuardian?.id
+
+          if (!extraGuardian) {
+            if (existingGuardianForExtra) {
+              extraGuardian = existingGuardianForExtra
+            } else {
+              extraGuardian = await tx.guardian.create({
+                data: {
+                  tenantId: scope.tenantId,
+                  fullName: ag.fullName.trim(),
+                  phone: ag.phone.trim(),
+                  email: ag.email ? ag.email.trim() : null,
+                  relationship: ag.relationship || 'GUARDIAN',
+                  isPrimaryContact: Boolean(ag.isPrimaryContact),
+                  userId: canLinkExtraUserId && extraUser ? extraUser.id : null,
+                },
+              })
+            }
+          } else if (existingGuardianForExtra && existingGuardianForExtra.id !== extraGuardian.id) {
+            extraGuardian = existingGuardianForExtra
+          } else if (!extraGuardian.userId && canLinkExtraUserId && extraUser) {
+            extraGuardian = await tx.guardian.update({
+              where: { id: extraGuardian.id },
+              data: { userId: extraUser.id },
+            })
+          }
+
+          const existingExtraLink = await tx.studentGuardian.findUnique({
+            where: { studentId_guardianId: { studentId: student.id, guardianId: extraGuardian.id } },
+          })
+          if (!existingExtraLink) {
+            await tx.studentGuardian.create({
+              data: {
+                studentId: student.id,
+                guardianId: extraGuardian.id,
+                relationship: ag.relationship || 'GUARDIAN',
+                isPrimary: Boolean(ag.isPrimaryContact),
+                canPickup: ag.canPickup !== false,
+                pickupPin: ag.pickupPin || null,
+                isFeePayer: Boolean(ag.isFeePayer),
+                receivesComm: ag.receivesCommunication !== false,
+              },
+            })
+          }
+        }
+      }
+
       // 5. Classroom Allocation History (StudentAllocation per AcademicSession)
-      await tx.studentAllocation.create({
-        data: {
-          tenantId: scope.tenantId,
-          studentId: student.id,
-          academicSessionId: scope.academicYearId,
-          classroomId: classroom.id,
-          programType: classroom.programType,
-          status: 'ACTIVE',
-          startedAt: new Date(),
-          reason: 'New Admission Enrolment',
-          createdById: ctx.actorId,
-          createdByName: ctx.actorName,
-        },
-      })
+      if (classroom) {
+        await tx.studentAllocation.create({
+          data: {
+            tenantId: scope.tenantId,
+            studentId: student.id,
+            academicSessionId: scope.academicYearId || app.academicSessionId,
+            classroomId: classroom.id,
+            programType: classroom.programType,
+            status: 'ACTIVE',
+            startedAt: new Date(),
+            reason: 'New Admission Enrolment',
+            createdById: ctx.actorId,
+            createdByName: ctx.actorName,
+          },
+        })
+      }
 
       // 6. Finance handoff: First fee invoice from configured FeePlan
       const feePlan = await tx.feePlan.findFirst({
@@ -1626,7 +2799,7 @@ export class AdmissionService {
           status: 'ENROLLED',
           approvedAt: new Date(),
           studentId: student.id,
-          classroomId: classroom.id,
+          classroomId: classroom?.id || app.classroomId || null,
         },
       })
 
@@ -1639,37 +2812,41 @@ export class AdmissionService {
       }
 
       // 9. Parent Portal welcome timeline entry
-      await tx.timelineEntry.create({
-        data: {
-          tenantId: scope.tenantId,
-          studentId: student.id,
-          classroomId: classroom.id,
-          academicSessionId: scope.academicYearId,
-          type: 'MILESTONE',
-          title: 'Welcome to PreOne!',
-          body: `${app.childFirstName} joined ${classroom.name} for academic session ${scope.academicYearId}.`,
-        },
-      })
+      if (classroom) {
+        await tx.timelineEntry.create({
+          data: {
+            tenantId: scope.tenantId,
+            studentId: student.id,
+            classroomId: classroom.id,
+            academicSessionId: scope.academicYearId,
+            type: 'MILESTONE',
+            title: 'Welcome to PreOne!',
+            body: `${app.childFirstName} joined ${classroom.name} for academic session ${scope.academicYearId}.`,
+          },
+        })
+      }
 
-      return { student, guardian, classroom, invoice }
+      return { student, guardian, classroom, invoice, parentUser, feePlan }
     })
 
     // Emit domain events for downstream integrations
-    await emit({
-      type: 'StudentCreated',
-      tenantId: scope.tenantId,
-      studentId: result.student.id,
-      name: `${result.student.firstName} ${result.student.lastName || ''}`.trim(),
-      classroomId: result.classroom.id,
-    })
+    if (result.classroom) {
+      await emit({
+        type: 'StudentCreated',
+        tenantId: scope.tenantId,
+        studentId: result.student.id,
+        name: `${result.student.firstName} ${result.student.lastName || ''}`.trim(),
+        classroomId: result.classroom.id,
+      })
 
-    await emit({
-      type: 'StudentAllocated',
-      tenantId: scope.tenantId,
-      studentId: result.student.id,
-      classroomId: result.classroom.id,
-      reason: 'New Admission Enrolment',
-    })
+      await emit({
+        type: 'StudentAllocated',
+        tenantId: scope.tenantId,
+        studentId: result.student.id,
+        classroomId: result.classroom.id,
+        reason: 'New Admission Enrolment',
+      })
+    }
 
     if (result.invoice) {
       await emit({
@@ -1693,16 +2870,44 @@ export class AdmissionService {
       action: 'ENROLL',
       entity: 'AdmissionApplication',
       entityId: applicationId,
-      summary: `Completed Admission: ${app.applicationNumber} → Student ${result.student.admissionNo} (${result.student.firstName}) enrolled in ${result.classroom.name}`,
+      summary: `Completed Admission: ${app.applicationNumber} → Student ${result.student.admissionNo} (${result.student.firstName}) enrolled in ${result.classroom.name} (Parent Account: ${result.parentUser?.email || result.parentUser?.phone})`,
     })
 
     return {
       student: result.student,
       guardian: result.guardian,
+      parentUser: result.parentUser,
       admissionNo: result.student.admissionNo,
       classroomName: result.classroom.name,
+      seatNumber: result.student.seatNumber || null,
       invoiceNumber: result.invoice?.invoiceNumber ?? null,
       isAlreadyEnrolled: false,
+      successDetails: {
+        student: {
+          id: result.student.id,
+          name: `${result.student.firstName} ${result.student.lastName || ''}`.trim(),
+          admissionNo: result.student.admissionNo,
+          program: app.programType,
+          classroom: result.classroom.name,
+          seatNumber: result.student.seatNumber || 'Assigned',
+          academicSession: scope.academicYearId,
+        },
+        parent: {
+          id: result.parentUser?.id,
+          name: result.parentUser?.fullName || app.parentName,
+          phone: result.parentUser?.phone || app.parentPhone,
+          status: result.parentUser?.status || 'ACTIVE',
+          portalStatus: 'READY',
+        },
+        finance: {
+          feePlanName: result.feePlan?.name || `${app.programType} Fee Plan`,
+          invoiceNumber: result.invoice?.invoiceNumber || null,
+          dueDate: result.invoice?.dueDate || null,
+        },
+        timeline: {
+          milestone: `Welcome to PreOne! Enrollment finalized in ${result.classroom.name}.`,
+        },
+      },
     }
   }
 
@@ -1739,8 +2944,8 @@ export class AdmissionService {
       orderBy: { name: 'asc' },
     })
 
-    const admConfig = await getAdmissionConfig(scope.tenantId)
-    const policy = (admConfig.allocationPolicy as string) || 'SYSTEM_AUTO_ALLOCATE'
+    const admConfig = getAdmissionConfig(await getDomainConfig(scope.tenantId, 'ADMISSION'))
+    const policy = ((admConfig as any)?.allocationPolicy as string) || 'SYSTEM_AUTO_ALLOCATE'
 
     const divisionStats = classrooms.map((cls) => {
       const activeCount = cls.allocations.length
@@ -1902,7 +3107,7 @@ export class AdmissionService {
       }
 
       // Resolve Program
-      let resolvedProgramType: string = 'NURSERY'
+      let resolvedProgramType: string = programs[0]?.programType || 'PLAYGROUP'
       if (programStr) {
         const matched = programs.find(
           (p) =>
@@ -1928,10 +3133,21 @@ export class AdmissionService {
             duplicateMatch = { id: dup.id, leadNumber: dup.leadNumber, parentName: dup.parentName, status: dup.status }
           }
         } else {
-          const dupApp = await this.checkDuplicateApplication(scope.tenantId, scope.academicYearId, phone, childName)
-          if (dupApp) {
+          const dupApp = await this.checkDuplicateApplication(
+            scope.tenantId,
+            scope.academicYearId,
+            childName || '',
+            parsedDob || new Date(),
+            phone
+          )
+          if (dupApp.isDuplicate && dupApp.existingApplication) {
             isDuplicate = true
-            duplicateMatch = { id: dupApp.id, applicationNumber: dupApp.applicationNumber, parentName: dupApp.parentName, status: dupApp.status }
+            duplicateMatch = {
+              id: dupApp.existingApplication.id,
+              applicationNumber: dupApp.existingApplication.applicationNumber,
+              parentName,
+              status: dupApp.existingApplication.status,
+            }
           }
         }
       }
@@ -2059,5 +3275,300 @@ export class AdmissionService {
       failed: failedCount,
       records: results,
     }
+  }
+
+  /**
+   * Authoritative validation of allowed status transitions.
+   */
+  static validateStatusTransition(from: ApplicationStatus, to: ApplicationStatus) {
+    if (from === to) return true
+
+    const allowedTransitions: Record<ApplicationStatus, ApplicationStatus[]> = {
+      DRAFT: ['SUBMITTED', 'WITHDRAWN', 'REJECTED'],
+      SUBMITTED: ['DRAFT', 'UNDER_REVIEW', 'DOCUMENT_PENDING', 'DOCUMENT_REVIEW', 'WITHDRAWN', 'REJECTED'],
+      UNDER_REVIEW: ['DOCUMENT_PENDING', 'VERIFIED', 'APPROVED', 'WAITLISTED', 'REJECTED', 'WITHDRAWN'],
+      DOCUMENT_PENDING: ['UNDER_REVIEW', 'SUBMITTED', 'WITHDRAWN', 'REJECTED'],
+      DOCUMENT_REVIEW: ['UNDER_REVIEW', 'VERIFIED', 'DOCUMENT_PENDING', 'WITHDRAWN', 'REJECTED'],
+      VERIFIED: ['APPROVED', 'UNDER_REVIEW', 'WAITLISTED', 'REJECTED', 'WITHDRAWN'],
+      COUNSELLING: ['COUNSELLING_SCHEDULED', 'COUNSELLING_COMPLETED', 'UNDER_REVIEW', 'APPROVED', 'WITHDRAWN', 'REJECTED'],
+      COUNSELLING_SCHEDULED: ['COUNSELLING_COMPLETED', 'UNDER_REVIEW', 'WITHDRAWN', 'REJECTED'],
+      COUNSELLING_COMPLETED: ['UNDER_REVIEW', 'APPROVED', 'WITHDRAWN', 'REJECTED'],
+      PENDING_APPROVAL: ['APPROVED', 'UNDER_REVIEW', 'REJECTED', 'WITHDRAWN'],
+      APPROVED: ['OFFER_SENT', 'OFFER_ACCEPTED', 'ENROLLED', 'ADMITTED', 'WAITLISTED', 'REJECTED', 'WITHDRAWN'],
+      OFFER_SENT: ['OFFER_ACCEPTED', 'WITHDRAWN', 'REJECTED', 'EXPIRED'],
+      OFFER_ACCEPTED: ['ENROLLED', 'ADMITTED', 'WITHDRAWN'],
+      WAITLISTED: ['APPROVED', 'UNDER_REVIEW', 'WITHDRAWN', 'REJECTED'],
+      REJECTED: [],
+      WITHDRAWN: [],
+      EXPIRED: ['DRAFT', 'SUBMITTED'],
+      ENROLLED: [],
+      ADMITTED: [],
+    }
+
+    const permitted = allowedTransitions[from] || []
+    if (!permitted.includes(to)) {
+      throw new Error(`Invalid application status transition from ${from} to ${to}`)
+    }
+    return true
+  }
+
+  /**
+   * Update application fields, draft progress, additional guardians, or metadata.
+   * STRICT INVARIANT: Never creates student or parent portal accounts.
+   */
+  static async updateApplication(
+    ctx: ScopeContext,
+    applicationId: string,
+    input: UpdateApplicationInput
+  ) {
+    const app = await db.admissionApplication.findFirst({
+      where: { id: applicationId, tenantId: ctx.tenantId, deletedAt: null },
+      include: { documents: true },
+    })
+    if (!app) throw new Error('Application not found')
+
+    if (app.status === 'ENROLLED' || app.status === 'ADMITTED') {
+      throw new Error('Cannot modify an already enrolled application')
+    }
+
+    assertActorResourceScope(
+      {
+        tenantId: ctx.tenantId,
+        branchId: ctx.branchId,
+        role: (ctx.actorRole || 'OWNER') as any,
+        roles: (ctx.actorRoles && ctx.actorRoles.length > 0 ? ctx.actorRoles : [ctx.actorRole || 'OWNER']) as any,
+      },
+      {
+        tenantId: app.tenantId,
+        branchId: app.branchId,
+      }
+    )
+
+    let firstName = input.childFirstName !== undefined ? input.childFirstName.trim() : app.childFirstName
+    let lastName = input.childLastName !== undefined ? (input.childLastName ? input.childLastName.trim() : null) : app.childLastName
+
+    if (input.childFullName?.trim() && input.childFirstName === undefined) {
+      const parts = input.childFullName.trim().split(/\s+/)
+      firstName = parts[0]
+      lastName = parts.slice(1).join(' ') || null
+    }
+
+    let programRecordId = app.programId
+    let programTypeValue = app.programType
+
+    if (input.programId || input.programType) {
+      const pRecord = await db.program.findFirst({
+        where: {
+          tenantId: ctx.tenantId,
+          deletedAt: null,
+          isActive: true,
+          ...(input.programId ? { id: input.programId } : { programType: input.programType as ProgramType }),
+        },
+      })
+      if (pRecord) {
+        programRecordId = pRecord.id
+        programTypeValue = pRecord.programType
+      }
+    }
+
+    let targetStatus = app.status
+    let submittedAt = app.submittedAt
+
+    if (input.isDraft === true || input.status === 'DRAFT') {
+      if (app.status === 'DRAFT' || app.status === 'SUBMITTED') {
+        targetStatus = 'DRAFT'
+      }
+    } else if (input.status === 'SUBMITTED' || (app.status === 'DRAFT' && input.isDraft === false)) {
+      if (!firstName || (!input.childDob && !app.childDob) || (!input.parentName && !app.parentName) || (!input.parentPhone && !app.parentPhone)) {
+        throw new Error('Child first name, date of birth, parent name, and parent phone are mandatory to submit application')
+      }
+      targetStatus = 'SUBMITTED'
+      submittedAt = submittedAt || new Date()
+    } else if (input.status) {
+      this.validateStatusTransition(app.status, input.status)
+      targetStatus = input.status
+    }
+
+    const metaUpdates: Record<string, any> = {}
+    if (input.bloodGroup !== undefined) metaUpdates.bloodGroup = input.bloodGroup
+    if (input.emergencyContact !== undefined) metaUpdates.emergencyContact = input.emergencyContact
+    if (input.address !== undefined) metaUpdates.address = input.address
+    if (input.medicalNotes !== undefined) metaUpdates.medicalNotes = input.medicalNotes
+    if (input.meetingNotes !== undefined) metaUpdates.meetingNotes = input.meetingNotes
+    if (input.alternatePhone !== undefined) metaUpdates.alternatePhone = input.alternatePhone
+    if (input.middleName !== undefined) metaUpdates.middleName = input.middleName
+    if (input.additionalGuardians !== undefined) metaUpdates.additionalGuardians = input.additionalGuardians
+    if (input.declarations !== undefined) metaUpdates.declarations = input.declarations
+    metaUpdates.isDraft = targetStatus === 'DRAFT'
+
+    const updatedNotes = ApplicationMetadataHelper.merge(app.notes, metaUpdates, input.notes)
+
+    const updated = await db.admissionApplication.update({
+      where: { id: applicationId },
+      data: {
+        childFirstName: firstName,
+        childLastName: lastName,
+        ...(input.childDob ? { childDob: new Date(input.childDob) } : {}),
+        ...(input.childGender ? { childGender: input.childGender as Gender } : {}),
+        ...(input.parentName ? { parentName: input.parentName.trim() } : {}),
+        ...(input.parentPhone ? { parentPhone: input.parentPhone.trim() } : {}),
+        ...(input.parentEmail !== undefined ? { parentEmail: input.parentEmail ? input.parentEmail.trim() : null } : {}),
+        ...(input.previousSchool !== undefined ? { previousSchool: input.previousSchool ? input.previousSchool.trim() : null } : {}),
+        programId: programRecordId,
+        programType: programTypeValue,
+        status: targetStatus,
+        submittedAt,
+        notes: updatedNotes,
+      },
+      include: {
+        documents: true,
+        offers: true,
+        lead: true,
+      },
+    })
+
+    await audit({
+      tenantId: ctx.tenantId,
+      branchId: app.branchId,
+      academicSessionId: app.academicSessionId,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: targetStatus === 'SUBMITTED' && app.status === 'DRAFT' ? 'APPLICATION_SUBMITTED' : 'APPLICATION_UPDATED',
+      entity: 'AdmissionApplication',
+      entityId: applicationId,
+      summary: `Application ${app.applicationNumber} updated (${targetStatus})`,
+      oldValues: { status: app.status },
+      newValues: { status: targetStatus },
+    })
+
+    return ApplicationMetadataHelper.normalizeApplicationResponse(updated)
+  }
+
+  /**
+   * Attach an uploaded document to an application with real file details.
+   */
+  static async attachDocument(
+    ctx: ScopeContext,
+    applicationId: string,
+    data: {
+      docType: DocumentType
+      fileName: string
+      remarks?: string
+    }
+  ) {
+    const app = await db.admissionApplication.findFirst({
+      where: { id: applicationId, tenantId: ctx.tenantId, deletedAt: null },
+      include: { documents: true },
+    })
+    if (!app) throw new Error('Application not found')
+
+    if (app.status === 'ENROLLED' || app.status === 'ADMITTED') {
+      throw new Error('Cannot modify documents for an already enrolled application')
+    }
+
+    assertActorResourceScope(
+      {
+        tenantId: ctx.tenantId,
+        branchId: ctx.branchId,
+        role: (ctx.actorRole || 'OWNER') as any,
+        roles: (ctx.actorRoles && ctx.actorRoles.length > 0 ? ctx.actorRoles : [ctx.actorRole || 'OWNER']) as any,
+      },
+      {
+        tenantId: app.tenantId,
+        branchId: app.branchId,
+      }
+    )
+
+    // Check if an existing placeholder document exists for this docType
+    const existing = app.documents.find((d) => d.docType === data.docType)
+    let docResult
+    if (existing) {
+      docResult = await db.applicationDocument.update({
+        where: { id: existing.id },
+        data: {
+          fileName: data.fileName,
+          status: 'UPLOADED',
+          verified: false,
+          verifiedAt: null,
+          rejectionReason: null,
+          uploadedAt: new Date(),
+          remarks: data.remarks || null,
+        },
+      })
+    } else {
+      docResult = await db.applicationDocument.create({
+        data: {
+          applicationId,
+          docType: data.docType,
+          fileName: data.fileName,
+          status: 'UPLOADED',
+          verified: false,
+          uploadedAt: new Date(),
+          remarks: data.remarks || null,
+        },
+      })
+    }
+
+    await audit({
+      tenantId: ctx.tenantId,
+      branchId: app.branchId,
+      academicSessionId: app.academicSessionId,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: 'DOC_ATTACH',
+      entity: 'ApplicationDocument',
+      entityId: docResult.id,
+      summary: `Document ${data.docType} uploaded for application ${app.applicationNumber}: ${data.fileName}`,
+    })
+
+    return docResult
+  }
+
+  /**
+   * Remove or reset an uploaded document.
+   */
+  static async removeDocument(ctx: ScopeContext, applicationId: string, documentId: string) {
+    const app = await db.admissionApplication.findFirst({
+      where: { id: applicationId, tenantId: ctx.tenantId, deletedAt: null },
+      include: { documents: true },
+    })
+    if (!app) throw new Error('Application not found')
+
+    if (app.status === 'ENROLLED' || app.status === 'ADMITTED') {
+      throw new Error('Cannot remove documents from an enrolled application')
+    }
+
+    const doc = app.documents.find((d) => d.id === documentId)
+    if (!doc) throw new Error('Document not found')
+
+    // Reset to NOT_UPLOADED to preserve checklist slot
+    const updated = await db.applicationDocument.update({
+      where: { id: documentId },
+      data: {
+        fileName: `${doc.docType.toLowerCase().replace(/_/g, '-')}`,
+        status: 'NOT_UPLOADED',
+        verified: false,
+        verifiedAt: null,
+        rejectionReason: null,
+        remarks: null,
+      },
+    })
+
+    await audit({
+      tenantId: ctx.tenantId,
+      branchId: app.branchId,
+      academicSessionId: app.academicSessionId,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: 'DOC_REMOVED',
+      entity: 'ApplicationDocument',
+      entityId: documentId,
+      summary: `Document ${doc.docType} removed from application ${app.applicationNumber}`,
+    })
+
+    return updated
   }
 }

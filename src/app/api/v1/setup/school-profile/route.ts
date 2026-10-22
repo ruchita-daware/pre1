@@ -14,15 +14,21 @@ async function _PATCH(req: NextRequest) {
   try {
     const body = await req.json()
     const allowed = [
-      'name', 'email', 'phone', 'website', 'address', 'city', 'state', 'pincode',
+      'name', 'legalName', 'email', 'phone', 'website', 'address', 'city', 'state', 'pincode',
       'timezone', 'locale', 'logoUrl', 'principalSignatureUrl', 'academicYearStartMonth',
     ] as const
     const data: Record<string, unknown> = {}
     for (const k of allowed) {
-      if (k in body) data[k] = body[k]
+      if (k in body) {
+        if (k === 'legalName') {
+          data['name'] = body['legalName']
+        } else {
+          data[k] = body[k]
+        }
+      }
     }
-    if ((data.name ?? '').toString().trim() === '') {
-      return Errors.validation('School name cannot be empty', 'name')
+    if ('name' in data && (data.name ?? '').toString().trim() === '') {
+      return Errors.validation('School legal name cannot be empty', 'name')
     }
     if (Object.keys(data).length === 0) {
       return Errors.validation('No editable fields provided')
@@ -54,7 +60,16 @@ async function _GET(req: NextRequest) {
   if (isResponse(session)) return session
   if (!session.tenantId) return Errors.forbidden('No tenant context')
   try {
-    const tenant = await db.tenant.findUnique({ where: { id: session.tenantId } })
+    const tenant = await db.tenant.findUnique({
+      where: { id: session.tenantId },
+      include: {
+        branches: {
+          where: { deletedAt: null },
+          orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
+          select: { id: true, name: true, code: true, city: true, phone: true, address: true, capacity: true, isMain: true, isActive: true },
+        },
+      },
+    })
     if (!tenant) return Errors.notFound('Tenant')
     return ok({
       id: tenant.id, name: tenant.name, legalName: tenant.name, code: tenant.code,
@@ -63,6 +78,7 @@ async function _GET(req: NextRequest) {
       timezone: tenant.timezone, locale: tenant.locale, logoUrl: tenant.logoUrl,
       principalSignatureUrl: tenant.principalSignatureUrl,
       academicYearStartMonth: tenant.academicYearStartMonth,
+      branches: tenant.branches || [],
     })
   } catch (e) {
     return Errors.system(e)
