@@ -29,6 +29,10 @@ import type {
   InvoiceStatus,
   PaymentMethod,
   PaymentStatus,
+  FeeStructureStatus,
+  FeeType,
+  FeeScheduleStatus,
+  DepositStatus,
 } from '@prisma/client'
 
 export interface ScopeContext {
@@ -47,6 +51,63 @@ export interface FeeItemInput {
   label: string
   amountCents: number
   frequency?: FeeFrequency
+}
+
+export interface CreateFeeStructureItemInput {
+  feeHeadId?: string | null
+  name: string
+  description?: string | null
+  feeType?: FeeType
+  amountCents: number
+  currency?: string
+  frequency?: FeeFrequency
+  dueRule?: string | null
+  dueDate?: string | Date | null
+  lateFeeApplicable?: boolean
+  lateFeeAmountCents?: number
+  isRefundable?: boolean
+  sortOrder?: number
+}
+
+export interface CreateFeeStructureInput {
+  branchId?: string | null
+  academicSessionId?: string | null
+  programId?: string | null
+  classroomId?: string | null
+  programType?: ProgramType | null
+  name: string
+  description?: string | null
+  effectiveFrom?: string | Date | null
+  effectiveTo?: string | Date | null
+  status?: FeeStructureStatus
+  items: CreateFeeStructureItemInput[]
+}
+
+export interface RecordSchedulePaymentInput {
+  feeScheduleId: string
+  studentId: string
+  amountCents: number
+  method: PaymentMethod
+  paymentDate?: string | Date
+  transactionRef?: string
+  notes?: string
+}
+
+export interface ProcessRefundInput {
+  depositId?: string | null
+  feeScheduleId?: string | null
+  studentId: string
+  amountCents: number
+  refundMode?: PaymentMethod
+  reference?: string | null
+  reason: string
+}
+
+export interface AdjustDepositInput {
+  depositId: string
+  studentId: string
+  adjustmentAmountCents: number
+  reason: string
 }
 
 export interface CreateFeePlanInput {
@@ -275,7 +336,7 @@ export class FeeService {
         type: 'InvoiceOverdue',
         tenantId,
         invoiceId: inv.id,
-        studentId: inv.studentId,
+        studentId: inv.studentId || '',
         invoiceNumber: inv.invoiceNumber,
         balanceCents: inv.balanceCents,
       })
@@ -283,7 +344,7 @@ export class FeeService {
   }
 
   /**
-   * 2. FEE STRUCTURES / PLANS
+   * 2. LEGACY FEE PLANS
    */
   static async getFeePlans(tenantId: string, programType?: ProgramType) {
     return db.feePlan.findMany({
@@ -752,48 +813,87 @@ export class FeeService {
    */
   static async initiatePayment(ctx: ScopeContext, input: InitiatePaymentInput) {
     const { invoiceId, amountCents, method, transactionRef, notes } = input
+    const ref = transactionRef?.trim()
     if (!invoiceId || !amountCents || amountCents <= 0 || !method) {
       throw new Error('invoiceId, positive amountCents, and method are required')
     }
-
-    const invoice = await db.invoice.findFirst({
-      where: { id: invoiceId, tenantId: ctx.tenantId, deletedAt: null },
-      include: { student: true },
-    })
-    if (!invoice) throw new Error('Invoice not found')
-    if (['CANCELLED', 'WRITTEN_OFF'].includes(invoice.status)) {
-      throw new Error(`Cannot pay an invoice with status ${invoice.status}`)
+    if (!ref) {
+      throw new Error('transactionRef or Idempotency-Key is required for payment writes')
     }
 
-    // Cash limit check (IT Act 269ST: cash > ₹50,000 strictly prohibited)
+    const existing = await db.payment.findUnique({
+      where: {
+        tenantId_transactionRef: {
+          tenantId: ctx.tenantId,
+          transactionRef: ref,
+        },
+      },
+      include: { invoice: true, receipt: true },
+    })
+    if (existing) {
+      const sameRequest = existing.invoiceId === invoiceId && existing.amountCents === amountCents && existing.method === method
+      if (!sameRequest) throw new Error('IDEMPOTENCY_CONFLICT')
+      return existing
+    }
+
     if (method === 'CASH' && amountCents > 5000000) {
       throw new Error('Cash payments above ₹50,000 are not allowed (IT Act Section 269ST)')
     }
 
-    if (amountCents > invoice.balanceCents) {
-      throw new Error(`Amount ₹${amountCents / 100} exceeds invoice balance ₹${invoice.balanceCents / 100}`)
-    }
+    const payment = await db.$transaction(async (tx) => {
+      const invoice = await tx.invoice.findFirst({
+        where: { id: invoiceId, tenantId: ctx.tenantId, deletedAt: null },
+      })
+      if (!invoice) throw new Error('Invoice not found')
+      if (['CANCELLED', 'WRITTEN_OFF'].includes(invoice.status)) {
+        throw new Error(`Cannot pay an invoice with status ${invoice.status}`)
+      }
 
-    const paymentNumber = await nextNumber('payment', ctx.tenantId)
+      await tx.$queryRaw`
+        SELECT 1 FROM "invoices"
+        WHERE "id" = ${invoice.id} AND "tenantId" = ${ctx.tenantId}
+        FOR UPDATE
+      `
 
-    const payment = await db.payment.create({
-      data: {
-        tenantId: ctx.tenantId,
-        invoiceId: invoice.id,
-        studentId: invoice.studentId,
-        paymentNumber,
-        amountCents,
-        method,
-        transactionRef: transactionRef || `TXN-${Date.now()}`,
-        status: 'PENDING',
-        receivedById: ctx.actorId,
-        notes: notes || null,
-      },
+      const duplicate = await tx.payment.findUnique({
+        where: {
+          tenantId_transactionRef: {
+            tenantId: ctx.tenantId,
+            transactionRef: ref,
+          },
+        },
+        include: { invoice: true, receipt: true },
+      })
+      if (duplicate) {
+        const sameRequest = duplicate.invoiceId === invoice.id && duplicate.amountCents === amountCents && duplicate.method === method
+        if (!sameRequest) throw new Error('IDEMPOTENCY_CONFLICT')
+        return duplicate
+      }
+
+      const balanceCents = invoice.totalCents - invoice.paidCents
+      if (amountCents > balanceCents) {
+        throw new Error(`BUSINESS_OVERPAY: Amount ₹${amountCents / 100} exceeds invoice balance ₹${balanceCents / 100}`)
+      }
+
+      const paymentNumber = await nextNumber('payment', ctx.tenantId)
+      return tx.payment.create({
+        data: {
+          tenantId: ctx.tenantId,
+          invoiceId: invoice.id,
+          studentId: invoice.studentId,
+          paymentNumber,
+          amountCents,
+          method,
+          transactionRef: ref,
+          status: 'PENDING',
+          receivedById: ctx.actorId,
+          notes: notes || null,
+        },
+      })
     })
 
     await recordAudit({
       tenantId: ctx.tenantId,
-      branchId: invoice.branchId,
       actorId: ctx.actorId,
       actorName: ctx.actorName,
       actorRole: ctx.actorRole,
@@ -801,15 +901,12 @@ export class FeeService {
       entity: 'Payment',
       entityId: payment.id,
       module: 'Fees',
-      summary: `Payment initiated ${paymentNumber} (₹${amountCents / 100}) via ${method}`,
+      summary: `Payment initiated ${payment.paymentNumber} (₹${amountCents / 100}) via ${method}`,
     })
 
     return payment
   }
 
-  /**
-   * 7. VERIFY PAYMENT & ISSUE RECEIPT (IDEMPOTENT)
-   */
   static async verifyPayment(ctx: ScopeContext, input: VerifyPaymentInput) {
     const { paymentId, paymentNumber, invoiceId, transactionRef, gatewayStatus = 'SUCCESS', failureReason } = input
 
@@ -870,16 +967,35 @@ export class FeeService {
     const receiptNumber = await nextNumber('receipt', ctx.tenantId)
 
     const result = await db.$transaction(async (tx) => {
-      // 1. Mark payment SUCCESS
+      await tx.$queryRaw`SELECT 1 FROM "payments" WHERE "id" = ${payment.id} AND "tenantId" = ${ctx.tenantId} FOR UPDATE`
+      const lockedPayment = await tx.payment.findFirst({
+        where: { id: payment.id, tenantId: ctx.tenantId },
+        include: { invoice: true, receipt: true },
+      })
+      if (!lockedPayment) throw new Error('Payment record not found')
+
+      if (lockedPayment.status === 'SUCCESS' && lockedPayment.receipt) {
+        return {
+          payment: lockedPayment,
+          receipt: lockedPayment.receipt,
+          invoice: lockedPayment.invoice!,
+          alreadyVerified: true,
+        }
+      }
+
+      if (!lockedPayment.invoice) throw new Error('Associated invoice not found')
+
+      await tx.$queryRaw`SELECT 1 FROM "invoices" WHERE "id" = ${lockedPayment.invoice.id} AND "tenantId" = ${ctx.tenantId} FOR UPDATE`
+      const lockedInvoice = await tx.invoice.findFirst({
+        where: { id: lockedPayment.invoice.id, tenantId: ctx.tenantId },
+      })
+      if (!lockedInvoice) throw new Error('Associated invoice not found')
+
       const confirmedPayment = await tx.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: 'SUCCESS',
-          paymentDate: new Date(),
-        },
+        where: { id: lockedPayment.id },
+        data: { status: 'SUCCESS', paymentDate: new Date() },
       })
 
-      // 2. Issue Receipt
       const receipt = await tx.receipt.create({
         data: {
           paymentId: confirmedPayment.id,
@@ -889,26 +1005,20 @@ export class FeeService {
         },
       })
 
-      // 3. Update Invoice Balance & Status
-      const paidCents = invoice.paidCents + confirmedPayment.amountCents
-      const balanceCents = Math.max(0, invoice.totalCents - paidCents)
+      const paidCents = lockedInvoice.paidCents + confirmedPayment.amountCents
+      const balanceCents = Math.max(0, lockedInvoice.totalCents - paidCents)
       const newStatus: InvoiceStatus = balanceCents === 0 ? 'PAID' : 'PARTIALLY_PAID'
 
       const updatedInvoice = await tx.invoice.update({
-        where: { id: invoice.id },
-        data: {
-          paidCents,
-          balanceCents,
-          status: newStatus,
-        },
+        where: { id: lockedInvoice.id },
+        data: { paidCents, balanceCents, status: newStatus },
       })
 
-      // 4. Create Parent Portal Timeline Entry
       await tx.timelineEntry.create({
         data: {
           tenantId: ctx.tenantId,
-          studentId: invoice.studentId,
-          academicSessionId: invoice.academicSessionId,
+          studentId: lockedInvoice.studentId,
+          academicSessionId: lockedInvoice.academicSessionId,
           type: 'NOTE',
           title: `Fee Payment Confirmed — Receipt ${receiptNumber}`,
           body: `Payment of ₹${confirmedPayment.amountCents / 100} received via ${confirmedPayment.method}. Receipt ${receiptNumber} issued. Remaining balance: ₹${balanceCents / 100}.`,
@@ -916,36 +1026,38 @@ export class FeeService {
         },
       })
 
-      return { payment: confirmedPayment, receipt, invoice: updatedInvoice }
+      return { payment: confirmedPayment, receipt, invoice: updatedInvoice, alreadyVerified: false }
     })
 
-    // Emit domain event to resolve overdue follow-ups
-    await emit({
-      type: 'PaymentReceived',
-      tenantId: ctx.tenantId,
-      invoiceId: invoice.id,
-      studentId: invoice.studentId,
-      paymentNumber: result.payment.paymentNumber,
-      amountCents: result.payment.amountCents,
-      fullyPaid: result.invoice.status === 'PAID',
-    })
+    if (!result.alreadyVerified) {
+      // Emit domain event to resolve overdue follow-ups only for a new verification.
+      await emit({
+        type: 'PaymentReceived',
+        tenantId: ctx.tenantId,
+        invoiceId: invoice.id,
+        studentId: invoice.studentId,
+        paymentNumber: result.payment.paymentNumber,
+        amountCents: result.payment.amountCents,
+        fullyPaid: result.invoice.status === 'PAID',
+      })
 
-    await recordAudit({
-      tenantId: ctx.tenantId,
-      branchId: invoice.branchId,
-      actorId: ctx.actorId,
-      actorName: ctx.actorName,
-      actorRole: ctx.actorRole,
-      action: 'PAYMENT_CONFIRMED',
-      entity: 'Payment',
-      entityId: result.payment.id,
-      module: 'Fees',
-      summary: `Confirmed payment ${result.payment.paymentNumber} (₹${result.payment.amountCents / 100}). Receipt: ${result.receipt.receiptNumber}`,
-    })
+      await recordAudit({
+        tenantId: ctx.tenantId,
+        branchId: invoice.branchId,
+        actorId: ctx.actorId,
+        actorName: ctx.actorName,
+        actorRole: ctx.actorRole,
+        action: 'PAYMENT_CONFIRMED',
+        entity: 'Payment',
+        entityId: result.payment.id,
+        module: 'Fees',
+        summary: `Confirmed payment ${result.payment.paymentNumber} (₹${result.payment.amountCents / 100}). Receipt: ${result.receipt.receiptNumber}`,
+      })
+    }
 
     return {
       success: true,
-      alreadyVerified: false,
+      alreadyVerified: result.alreadyVerified,
       payment: result.payment,
       receipt: result.receipt,
       invoice: result.invoice,
@@ -1089,11 +1201,11 @@ export class FeeService {
         email: receipt.tenant.email,
         gstNumber: receipt.tenant.gstNumber,
       },
-      student: {
+      student: student ? {
         name: `${student.firstName} ${student.lastName || ''}`.trim(),
         admissionNo: student.admissionNo,
         classroom: student.currentClassroom?.name || 'Unassigned',
-      },
+      } : { name: 'N/A', admissionNo: 'N/A', classroom: 'N/A' },
       payment: {
         paymentNumber: payment.paymentNumber,
         method: payment.method,
@@ -1420,7 +1532,7 @@ export class FeeService {
         include: { student: true },
       })
       if (inv) {
-        studentName = `${inv.student.firstName} ${inv.student.lastName || ''}`.trim()
+        studentName = inv.student ? `${inv.student.firstName} ${inv.student.lastName || ''}`.trim() : ''
         invoiceNumber = inv.invoiceNumber
         totalRupees = (inv.totalCents / 100).toFixed(2)
       }
@@ -1605,8 +1717,8 @@ export class FeeService {
 
     const rows = invoices.map((i) => [
       i.invoiceNumber,
-      `"${i.student.firstName} ${i.student.lastName || ''}".trim()`,
-      i.student.admissionNo,
+      i.student ? `"${i.student.firstName} ${i.student.lastName || ''}".trim()` : '',
+      i.student?.admissionNo || '',
       i.issueDate.toISOString().slice(0, 10),
       i.dueDate.toISOString().slice(0, 10),
       (i.subtotalCents / 100).toFixed(2),
@@ -1649,8 +1761,8 @@ export class FeeService {
       p.paymentNumber,
       p.receipt?.receiptNumber || '',
       p.invoice?.invoiceNumber || '',
-      `"${p.student.firstName} ${p.student.lastName || ''}".trim()`,
-      p.student.admissionNo,
+      p.student ? `"${p.student.firstName} ${p.student.lastName || ''}".trim()` : '',
+      p.student?.admissionNo || '',
       (p.amountCents / 100).toFixed(2),
       p.method,
       p.status,
@@ -1659,5 +1771,955 @@ export class FeeService {
     ])
 
     return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+  }
+
+  // =========================================================================
+  // 15. CANONICAL FEE STRUCTURE & AUTOMATIC APPLICATION ENGINE
+  // =========================================================================
+
+  /**
+   * Helper: Generate installment periods from payment frequency
+   */
+  static generateInstallmentPeriods(
+    frequency: FeeFrequency,
+    dueRule?: string | null,
+    baseDate: Date = new Date()
+  ): { period: string; dueDate: Date }[] {
+    const year = baseDate.getFullYear()
+    const installments: { period: string; dueDate: Date }[] = []
+
+    switch (frequency) {
+      case 'MONTHLY': {
+        const months = [
+          'April', 'May', 'June', 'July', 'August', 'September',
+          'October', 'November', 'December', 'January', 'February', 'March'
+        ]
+        months.forEach((m, idx) => {
+          const mYear = idx >= 9 ? year + 1 : year
+          const mIdx = idx >= 9 ? idx - 9 : idx + 3
+          const dueDate = new Date(mYear, mIdx, 10)
+          installments.push({ period: `${m} ${mYear}`, dueDate })
+        })
+        break
+      }
+      case 'QUARTERLY': {
+        installments.push({ period: `Q1 ${year} (Apr-Jun)`, dueDate: new Date(year, 3, 10) })
+        installments.push({ period: `Q2 ${year} (Jul-Sep)`, dueDate: new Date(year, 6, 10) })
+        installments.push({ period: `Q3 ${year} (Oct-Dec)`, dueDate: new Date(year, 9, 10) })
+        installments.push({ period: `Q4 ${year + 1} (Jan-Mar)`, dueDate: new Date(year + 1, 0, 10) })
+        break
+      }
+      case 'HALF_YEARLY': {
+        installments.push({ period: `Term 1 ${year} (Apr-Sep)`, dueDate: new Date(year, 3, 10) })
+        installments.push({ period: `Term 2 ${year} (Oct-Mar)`, dueDate: new Date(year, 9, 10) })
+        break
+      }
+      case 'ANNUALLY': {
+        installments.push({ period: `Annual ${year}-${year + 1}`, dueDate: new Date(year, 3, 10) })
+        break
+      }
+      case 'ONE_TIME':
+      default: {
+        installments.push({ period: `One Time ${year}`, dueDate: new Date(year, 3, 10) })
+        break
+      }
+    }
+
+    return installments
+  }
+
+  static async getFeeStructures(
+    tenantId: string,
+    filters?: {
+      branchId?: string
+      academicSessionId?: string
+      classroomId?: string
+      programId?: string
+      programType?: ProgramType
+      status?: FeeStructureStatus
+    }
+  ) {
+    return db.feeStructure.findMany({
+      where: {
+        tenantId,
+        deletedAt: null,
+        ...(filters?.branchId ? { branchId: filters.branchId } : {}),
+        ...(filters?.academicSessionId ? { academicSessionId: filters.academicSessionId } : {}),
+        ...(filters?.classroomId ? { classroomId: filters.classroomId } : {}),
+        ...(filters?.programId ? { programId: filters.programId } : {}),
+        ...(filters?.programType ? { programType: filters.programType } : {}),
+        ...(filters?.status ? { status: filters.status } : {}),
+      },
+      include: {
+        items: {
+          include: { feeHead: true },
+          orderBy: { sortOrder: 'asc' },
+        },
+        classroom: true,
+        academicSession: true,
+        program: true,
+        _count: { select: { schedules: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+  }
+
+  static async getFeeStructureById(tenantId: string, id: string) {
+    const structure = await db.feeStructure.findFirst({
+      where: { id, tenantId, deletedAt: null },
+      include: {
+        items: {
+          include: { feeHead: true },
+          orderBy: { sortOrder: 'asc' },
+        },
+        classroom: true,
+        academicSession: true,
+        program: true,
+        _count: { select: { schedules: true } },
+      },
+    })
+    if (!structure) throw new Error('Fee structure not found')
+    return structure
+  }
+
+  static async createFeeStructure(ctx: ScopeContext, input: CreateFeeStructureInput) {
+    if (!input.name || !input.items || !input.items.length) {
+      throw new Error('Name and at least one fee item are required')
+    }
+
+    const targetBranchId = input.branchId !== undefined ? input.branchId : ctx.branchId
+    const { session, branch } = await this.verifyScope(ctx.tenantId, targetBranchId, input.academicSessionId)
+    const targetSessionId = input.academicSessionId || session?.id
+    const finalBranchId = targetBranchId || branch?.id || null
+
+    // Validate branch exists and belongs to tenant
+    if (finalBranchId) {
+      const branchExists = await db.branch.findFirst({
+        where: { id: finalBranchId, tenantId: ctx.tenantId, deletedAt: null },
+      })
+      if (!branchExists) throw new Error('Selected branch does not belong to this school')
+    }
+
+    // Resolve program details if programId is provided
+    let resolvedProgramType = input.programType || null
+    let programRecord: any = null
+    if (input.programId) {
+      programRecord = await db.program.findFirst({
+        where: { id: input.programId, tenantId: ctx.tenantId, deletedAt: null },
+      })
+      if (!programRecord) throw new Error('Selected program was not found')
+      if (!resolvedProgramType && programRecord.programType) {
+        resolvedProgramType = programRecord.programType
+      }
+
+      // If branch is specified, verify program is mapped to this branch
+      if (finalBranchId) {
+        const mapping = await db.programBranch.findFirst({
+          where: { programId: input.programId, branchId: finalBranchId, tenantId: ctx.tenantId, isActive: true },
+        })
+        if (!mapping) {
+          const anyMapping = await db.programBranch.findFirst({
+            where: { programId: input.programId, tenantId: ctx.tenantId, isActive: true },
+          })
+          if (!anyMapping) {
+            // Auto-establish canonical ProgramBranch mapping if program has no branch mappings yet
+            await db.programBranch.create({
+              data: {
+                tenantId: ctx.tenantId,
+                programId: input.programId,
+                branchId: finalBranchId,
+                isActive: true,
+              },
+            })
+          } else {
+            throw new Error(`Program "${programRecord.name}" is not mapped to the selected branch. Please map it in Program Setup first.`)
+          }
+        }
+      }
+    }
+
+    // Validate academic session belongs to tenant
+    if (targetSessionId) {
+      const sessionExists = await db.academicSession.findFirst({
+        where: { id: targetSessionId, tenantId: ctx.tenantId },
+      })
+      if (!sessionExists) throw new Error('Selected academic session was not found')
+    }
+
+    const structureStatus = input.status || 'DRAFT'
+
+    // Prevent duplicate active fee structures for Branch + Program + Academic Session
+    if (structureStatus === 'ACTIVE' && input.programId && targetSessionId) {
+      const existingActive = await db.feeStructure.findFirst({
+        where: {
+          tenantId: ctx.tenantId,
+          branchId: finalBranchId,
+          programId: input.programId,
+          academicSessionId: targetSessionId,
+          status: 'ACTIVE',
+          deletedAt: null,
+        },
+        include: { program: true },
+      })
+      if (existingActive) {
+        const progName = existingActive.program?.name || 'this program'
+        throw new Error(
+          `An active fee structure already exists for ${progName} in the selected branch and academic year. Please edit or archive the existing structure first.`
+        )
+      }
+    }
+
+    const structure = await db.feeStructure.create({
+      data: {
+        tenantId: ctx.tenantId,
+        branchId: finalBranchId,
+        academicSessionId: targetSessionId,
+        programId: input.programId || null,
+        classroomId: input.classroomId || null,
+        programType: resolvedProgramType,
+        name: input.name.trim(),
+        description: input.description?.trim() || null,
+        status: structureStatus,
+        effectiveFrom: input.effectiveFrom ? new Date(input.effectiveFrom) : null,
+        effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : null,
+        createdById: ctx.actorId,
+        items: {
+          create: input.items.map((item, idx) => ({
+            tenantId: ctx.tenantId,
+            feeHeadId: item.feeHeadId || null,
+            name: item.name.trim(),
+            description: item.description?.trim() || null,
+            feeType: item.feeType || (item.isRefundable ? 'REFUNDABLE_DEPOSIT' : 'REGULAR'),
+            amountCents: Math.round(item.amountCents),
+            currency: item.currency || 'INR',
+            frequency: item.frequency || 'ONE_TIME',
+            dueRule: item.dueRule || null,
+            dueDate: item.dueDate ? new Date(item.dueDate) : null,
+            lateFeeApplicable: Boolean(item.lateFeeApplicable),
+            lateFeeAmountCents: item.lateFeeAmountCents ? Math.round(item.lateFeeAmountCents) : 0,
+            isRefundable: Boolean(item.isRefundable || item.feeType === 'REFUNDABLE_DEPOSIT'),
+            sortOrder: item.sortOrder ?? idx,
+          })),
+        },
+      },
+      include: { items: true, program: true, academicSession: true },
+    })
+
+    // If active and has programType, sync/upsert canonical FeePlan record so legacy readers remain consistent
+    if (structure.status === 'ACTIVE' && resolvedProgramType) {
+      try {
+        const totalAnnualCents = structure.items.reduce((s, i) => s + Math.round(i.amountCents), 0)
+        const existingPlan = await db.feePlan.findFirst({
+          where: {
+            tenantId: ctx.tenantId,
+            programType: resolvedProgramType,
+            branchId: finalBranchId,
+          },
+        })
+        if (!existingPlan) {
+          await db.feePlan.create({
+            data: {
+              tenantId: ctx.tenantId,
+              branchId: finalBranchId,
+              name: structure.name,
+              programType: resolvedProgramType,
+              totalAnnualCents,
+              installmentCount: 1,
+              isActive: true,
+              items: {
+                create: structure.items.map((item) => ({
+                  feeHeadId: item.feeHeadId || null,
+                  feeHead: 'TUITION',
+                  label: item.name,
+                  amountCents: item.amountCents,
+                  frequency: item.frequency,
+                })),
+              },
+            },
+          })
+        }
+      } catch (err) {
+        // Non-blocking log: FeeStructure remains authoritative
+        console.warn('FeePlan sync notice:', err)
+      }
+    }
+
+    await recordAudit({
+      tenantId: ctx.tenantId,
+      branchId: finalBranchId || undefined,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: 'CREATE_FEE_STRUCTURE',
+      entity: 'FeeStructure',
+      entityId: structure.id,
+      module: 'Fees',
+      summary: `Created fee structure "${structure.name}" (${structure.items.length} items)`,
+    })
+
+    if (structure.status === 'ACTIVE') {
+      await this.applyFeeStructureToClass(ctx, structure.id)
+    }
+
+    return structure
+  }
+
+  static async updateFeeStructure(
+    ctx: ScopeContext,
+    id: string,
+    input: Partial<CreateFeeStructureInput> & { status?: FeeStructureStatus }
+  ) {
+    const existing = await db.feeStructure.findFirst({
+      where: { id, tenantId: ctx.tenantId, deletedAt: null },
+      include: { items: true },
+    })
+    if (!existing) throw new Error('Fee structure not found')
+
+    const updated = await db.$transaction(async (tx) => {
+      if (input.items && input.items.length > 0) {
+        await tx.feeItem.deleteMany({ where: { feeStructureId: id } })
+        await tx.feeItem.createMany({
+          data: input.items.map((item, idx) => ({
+            tenantId: ctx.tenantId,
+            feeStructureId: id,
+            feeHeadId: item.feeHeadId || null,
+            name: item.name.trim(),
+            description: item.description?.trim() || null,
+            feeType: item.feeType || (item.isRefundable ? 'REFUNDABLE_DEPOSIT' : 'REGULAR'),
+            amountCents: Math.round(item.amountCents),
+            currency: item.currency || 'INR',
+            frequency: item.frequency || 'ONE_TIME',
+            dueRule: item.dueRule || null,
+            dueDate: item.dueDate ? new Date(item.dueDate) : null,
+            lateFeeApplicable: Boolean(item.lateFeeApplicable),
+            lateFeeAmountCents: item.lateFeeAmountCents ? Math.round(item.lateFeeAmountCents) : 0,
+            isRefundable: Boolean(item.isRefundable || item.feeType === 'REFUNDABLE_DEPOSIT'),
+            sortOrder: item.sortOrder ?? idx,
+          })),
+        })
+      }
+
+      return tx.feeStructure.update({
+        where: { id },
+        data: {
+          name: input.name ? input.name.trim() : undefined,
+          description: input.description !== undefined ? input.description?.trim() || null : undefined,
+          academicSessionId: input.academicSessionId !== undefined ? input.academicSessionId : undefined,
+          programId: input.programId !== undefined ? input.programId : undefined,
+          classroomId: input.classroomId !== undefined ? input.classroomId : undefined,
+          programType: input.programType !== undefined ? input.programType : undefined,
+          status: input.status || undefined,
+          effectiveFrom: input.effectiveFrom !== undefined ? (input.effectiveFrom ? new Date(input.effectiveFrom) : null) : undefined,
+          effectiveTo: input.effectiveTo !== undefined ? (input.effectiveTo ? new Date(input.effectiveTo) : null) : undefined,
+          updatedById: ctx.actorId,
+        },
+        include: { items: true },
+      })
+    })
+
+    await recordAudit({
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: 'UPDATE_FEE_STRUCTURE',
+      entity: 'FeeStructure',
+      entityId: updated.id,
+      module: 'Fees',
+      summary: `Updated fee structure "${updated.name}" (Status: ${updated.status})`,
+    })
+
+    if (updated.status === 'ACTIVE') {
+      await this.applyFeeStructureToClass(ctx, updated.id)
+    }
+
+    return updated
+  }
+
+  static async deleteFeeStructure(ctx: ScopeContext, id: string) {
+    const existing = await db.feeStructure.findFirst({
+      where: { id, tenantId: ctx.tenantId },
+    })
+    if (!existing) throw new Error('Fee structure not found')
+
+    const updated = await db.feeStructure.update({
+      where: { id },
+      data: { status: 'ARCHIVED', deletedAt: new Date() },
+    })
+
+    await recordAudit({
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      action: 'DELETE_FEE_STRUCTURE',
+      entity: 'FeeStructure',
+      entityId: id,
+      module: 'Fees',
+      summary: `Archived fee structure "${existing.name}"`,
+    })
+
+    return updated
+  }
+
+  /**
+   * AUTOMATIC FEE APPLICATION ENGINE (IDEMPOTENT)
+   * Applies active fee structure to all eligible enrolled students in target class(es).
+   */
+  static async applyFeeStructureToClass(ctx: ScopeContext, feeStructureId: string, classroomIdOverride?: string) {
+    const structure = await db.feeStructure.findFirst({
+      where: { id: feeStructureId, tenantId: ctx.tenantId, deletedAt: null },
+      include: { items: true, academicSession: true },
+    })
+    if (!structure) throw new Error('Fee structure not found')
+
+    let targetClassroomIds: string[] = []
+    if (classroomIdOverride) {
+      targetClassroomIds = [classroomIdOverride]
+    } else if (structure.classroomId) {
+      targetClassroomIds = [structure.classroomId]
+    } else {
+      const matchingClassrooms = await db.classroom.findMany({
+        where: {
+          tenantId: ctx.tenantId,
+          isActive: true,
+          ...(structure.programId ? { programId: structure.programId } : {}),
+          ...(structure.programType ? { programType: structure.programType } : {}),
+          ...(structure.academicSessionId ? { academicSessionId: structure.academicSessionId } : {}),
+        },
+        select: { id: true },
+      })
+      targetClassroomIds = matchingClassrooms.map((c) => c.id)
+    }
+
+    if (!targetClassroomIds.length) {
+      const allClassrooms = await db.classroom.findMany({
+        where: {
+          tenantId: ctx.tenantId,
+          isActive: true,
+          ...(structure.academicSessionId ? { academicSessionId: structure.academicSessionId } : {}),
+        },
+        select: { id: true },
+      })
+      targetClassroomIds = allClassrooms.map((c) => c.id)
+    }
+
+    const eligibleStudents = await db.student.findMany({
+      where: {
+        tenantId: ctx.tenantId,
+        status: 'ACTIVE',
+        deletedAt: null,
+        currentClassroomId: { in: targetClassroomIds },
+      },
+      select: { id: true, currentClassroomId: true, firstName: true, lastName: true },
+    })
+
+    if (!eligibleStudents.length) {
+      return {
+        success: true,
+        appliedCount: 0,
+        skippedCount: 0,
+        message: 'No active eligible students found in target class(es).',
+        schedulesCreated: 0,
+      }
+    }
+
+    const sessionStartDate = structure.academicSession?.startDate || new Date()
+    const now = new Date()
+    let schedulesCreatedCount = 0
+    let depositsCreatedCount = 0
+
+    for (const student of eligibleStudents) {
+      for (const item of structure.items) {
+        const installmentPeriods = this.generateInstallmentPeriods(item.frequency, item.dueRule, sessionStartDate)
+
+        for (const inst of installmentPeriods) {
+          const dueDate = item.dueDate || inst.dueDate
+          const isOverdue = dueDate < now
+          const status: FeeScheduleStatus = isOverdue ? 'OVERDUE' : 'PENDING'
+
+          try {
+            const existing = await db.studentFeeSchedule.findUnique({
+              where: {
+                studentId_feeItemId_period: {
+                  studentId: student.id,
+                  feeItemId: item.id,
+                  period: inst.period,
+                },
+              },
+            })
+
+            if (!existing) {
+              const schedule = await db.studentFeeSchedule.create({
+                data: {
+                  tenantId: ctx.tenantId,
+                  studentId: student.id,
+                  classroomId: student.currentClassroomId,
+                  feeStructureId: structure.id,
+                  feeItemId: item.id,
+                  academicSessionId: structure.academicSessionId,
+                  period: inst.period,
+                  amountDueCents: item.amountCents,
+                  amountPaidCents: 0,
+                  remainingAmountCents: item.amountCents,
+                  dueDate,
+                  status,
+                  feeType: item.feeType,
+                  isRefundable: item.isRefundable,
+                },
+              })
+              schedulesCreatedCount++
+
+              if (item.feeType === 'REFUNDABLE_DEPOSIT' || item.isRefundable) {
+                const existingDeposit = await db.studentDeposit.findFirst({
+                  where: { tenantId: ctx.tenantId, studentId: student.id, feeItemId: item.id },
+                })
+                if (!existingDeposit) {
+                  await db.studentDeposit.create({
+                    data: {
+                      tenantId: ctx.tenantId,
+                      studentId: student.id,
+                      feeScheduleId: schedule.id,
+                      feeItemId: item.id,
+                      name: item.name || 'Security Deposit',
+                      totalAmountCents: item.amountCents,
+                      refundedAmountCents: 0,
+                      adjustedAmountCents: 0,
+                      remainingAmountCents: item.amountCents,
+                      status: 'HELD',
+                    },
+                  })
+                  depositsCreatedCount++
+                }
+              }
+            }
+          } catch (e) {
+            // Log & continue
+          }
+        }
+      }
+    }
+
+    await recordAudit({
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      action: 'APPLY_FEE_STRUCTURE',
+      entity: 'FeeStructure',
+      entityId: structure.id,
+      module: 'Fees',
+      summary: `Applied active fee structure "${structure.name}" to ${eligibleStudents.length} students (${schedulesCreatedCount} fee schedules created, ${depositsCreatedCount} deposits tracked)`,
+    })
+
+    return {
+      success: true,
+      studentsCount: eligibleStudents.length,
+      schedulesCreated: schedulesCreatedCount,
+      depositsCreated: depositsCreatedCount,
+      message: `Successfully applied active fee structure "${structure.name}" to ${eligibleStudents.length} students.`,
+    }
+  }
+
+  /**
+   * NEW STUDENT ENROLLMENT RULE:
+   * Automatically finds and applies active fee structures for a newly enrolled/assigned student.
+   */
+  static async applyActiveFeeStructuresToStudent(ctx: ScopeContext, studentId: string) {
+    const student = await db.student.findFirst({
+      where: { id: studentId, tenantId: ctx.tenantId, deletedAt: null },
+      include: { currentClassroom: true },
+    })
+    if (!student) return null
+
+    const classroomId = student.currentClassroomId
+    const programType = student.currentClassroom?.programType
+    const programId = student.currentClassroom?.programId
+    const academicSessionId = student.currentClassroom?.academicSessionId
+    const branchId = student.branchId || student.currentClassroom?.branchId || ctx.branchId
+
+    const activeStructures = await db.feeStructure.findMany({
+      where: {
+        tenantId: ctx.tenantId,
+        status: 'ACTIVE',
+        deletedAt: null,
+        ...(branchId ? { OR: [{ branchId }, { branchId: null }] } : {}),
+        AND: [
+          {
+            OR: [
+              ...(classroomId ? [{ classroomId }] : []),
+              ...(programId ? [{ programId }] : []),
+              ...(programType ? [{ programType }] : []),
+              { classroomId: null, programId: null, programType: null },
+            ],
+          },
+        ],
+      },
+    })
+
+    for (const struct of activeStructures) {
+      await this.applyFeeStructureToClass(ctx, struct.id, classroomId || undefined)
+    }
+
+    return activeStructures.length
+  }
+
+  /**
+   * Sync Overdue Status for Fee Schedules
+   */
+  static async syncOverdueSchedules(tenantId: string, studentId?: string) {
+    const now = new Date()
+    await db.studentFeeSchedule.updateMany({
+      where: {
+        tenantId,
+        ...(studentId ? { studentId } : {}),
+        status: { in: ['PENDING', 'PARTIALLY_PAID'] },
+        dueDate: { lt: now },
+        remainingAmountCents: { gt: 0 },
+      },
+      data: { status: 'OVERDUE' },
+    })
+  }
+
+  /**
+   * RECORD PAYMENT AGAINST FEE SCHEDULE (WITH PARTIAL PAYMENT & RECEIPT)
+   */
+  static async recordFeeSchedulePayment(ctx: ScopeContext, input: RecordSchedulePaymentInput) {
+    const { feeScheduleId, studentId, amountCents, method, paymentDate, transactionRef, notes } = input
+    if (!feeScheduleId || !amountCents || amountCents <= 0 || !method) {
+      throw new Error('feeScheduleId, positive amountCents, and method are required')
+    }
+    const ref = transactionRef?.trim()
+    if (!ref) throw new Error('transactionRef or Idempotency-Key is required for payment writes')
+
+    const schedule = await db.studentFeeSchedule.findFirst({
+      where: { id: feeScheduleId, tenantId: ctx.tenantId, studentId },
+      include: { feeItem: true, student: true },
+    })
+    if (!schedule) throw new Error('Fee schedule item not found')
+    if (schedule.status === 'CANCELLED') throw new Error('Cannot record payment against a cancelled fee schedule')
+
+    if (method === 'CASH' && amountCents > 5000000) {
+      throw new Error('Cash payments above ₹50,000 are not allowed (IT Act Section 269ST)')
+    }
+
+    const existing = await db.payment.findUnique({
+      where: { tenantId_transactionRef: { tenantId: ctx.tenantId, transactionRef: ref } },
+    })
+    if (existing) {
+      const sameRequest = existing.feeScheduleId === schedule.id && existing.amountCents === amountCents && existing.method === method
+      if (!sameRequest) throw new Error('IDEMPOTENCY_CONFLICT')
+      return { payment: existing, receipt: null, schedule }
+    }
+
+    const paymentNumber = await nextNumber('payment', ctx.tenantId)
+    const receiptNumber = await nextNumber('receipt', ctx.tenantId)
+
+    const result = await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM "student_fee_schedules" WHERE "id" = ${schedule.id} AND "tenantId" = ${ctx.tenantId} FOR UPDATE`
+      const lockedSchedule = await tx.studentFeeSchedule.findFirst({ where: { id: schedule.id, tenantId: ctx.tenantId, studentId } })
+      if (!lockedSchedule) throw new Error('Fee schedule item not found')
+      const duplicate = await tx.payment.findUnique({ where: { tenantId_transactionRef: { tenantId: ctx.tenantId, transactionRef: ref } } })
+      if (duplicate) {
+        const sameRequest = duplicate.feeScheduleId === lockedSchedule.id && duplicate.amountCents === amountCents && duplicate.method === method
+        if (!sameRequest) throw new Error('IDEMPOTENCY_CONFLICT')
+        return { payment: duplicate, receipt: null, schedule: lockedSchedule }
+      }
+      if (amountCents > lockedSchedule.remainingAmountCents) throw new Error(`BUSINESS_OVERPAY: Payment amount ₹${amountCents / 100} exceeds remaining balance ₹${lockedSchedule.remainingAmountCents / 100}`)
+
+      const payment = await tx.payment.create({
+        data: {
+          tenantId: ctx.tenantId,
+          feeScheduleId: lockedSchedule.id,
+          studentId: schedule.studentId,
+          paymentNumber,
+          amountCents,
+          method,
+          transactionRef: ref,
+          status: 'SUCCESS',
+          paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
+          receivedById: ctx.actorId,
+          notes: notes || null,
+        },
+      })
+
+      const receipt = await tx.receipt.create({
+        data: {
+          tenantId: ctx.tenantId,
+          paymentId: payment.id,
+          receiptNumber,
+          amountCents,
+          issuedAt: new Date(),
+        },
+      })
+
+      const newPaidCents = lockedSchedule.amountPaidCents + amountCents
+      const newRemainingCents = Math.max(0, lockedSchedule.amountDueCents - newPaidCents)
+      const newStatus: FeeScheduleStatus = newRemainingCents === 0 ? 'PAID' : 'PARTIALLY_PAID'
+
+      const updatedSchedule = await tx.studentFeeSchedule.update({
+        where: { id: schedule.id },
+        data: {
+          amountPaidCents: newPaidCents,
+          remainingAmountCents: newRemainingCents,
+          status: newStatus,
+        },
+      })
+
+      if (schedule.feeType === 'REFUNDABLE_DEPOSIT' || schedule.isRefundable) {
+        await tx.studentDeposit.updateMany({
+          where: { tenantId: ctx.tenantId, studentId: schedule.studentId, feeScheduleId: schedule.id },
+          data: { status: 'HELD' },
+        })
+      }
+
+      await tx.timelineEntry.create({
+        data: {
+          tenantId: ctx.tenantId,
+          studentId: schedule.studentId,
+          classroomId: schedule.classroomId,
+          type: 'NOTE',
+          title: `Fee Payment Received — Receipt ${receiptNumber}`,
+          body: `Payment of ₹${amountCents / 100} received for ${schedule.feeItem.name} (${schedule.period}) via ${method}. Receipt ${receiptNumber} issued. Remaining balance: ₹${newRemainingCents / 100}.`,
+          authorId: ctx.actorId,
+        },
+      })
+
+      return { payment, receipt, schedule: updatedSchedule }
+    })
+
+    await recordAudit({
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: 'PAYMENT_CONFIRMED',
+      entity: 'Payment',
+      entityId: result.payment.id,
+      module: 'Fees',
+      summary: `Recorded payment ${result.payment.paymentNumber} (₹${amountCents / 100}) for student. Receipt: ${result.receipt.receiptNumber}`,
+    })
+
+    return result
+  }
+
+  /**
+   * REFUNDABLE DEPOSITS & REFUNDS LIFECYCLE
+   */
+  static async getStudentDeposits(tenantId: string, studentId?: string, status?: DepositStatus) {
+    return db.studentDeposit.findMany({
+      where: {
+        tenantId,
+        ...(studentId ? { studentId } : {}),
+        ...(status ? { status } : {}),
+      },
+      include: {
+        student: { select: { firstName: true, lastName: true, admissionNo: true } },
+        refunds: { orderBy: { createdAt: 'desc' } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+  }
+
+  static async processRefund(ctx: ScopeContext, input: ProcessRefundInput) {
+    const { depositId, feeScheduleId, studentId, amountCents, refundMode = 'BANK_TRANSFER', reference, reason } = input
+    if (!amountCents || amountCents <= 0 || !reason) {
+      throw new Error('Positive amountCents and reason are required for refund')
+    }
+
+    let deposit: any = null
+    if (depositId) {
+      deposit = await db.studentDeposit.findFirst({ where: { id: depositId, tenantId: ctx.tenantId, studentId } })
+    } else if (feeScheduleId) {
+      deposit = await db.studentDeposit.findFirst({ where: { feeScheduleId, tenantId: ctx.tenantId, studentId } })
+    }
+
+    if (!deposit) throw new Error('Refundable deposit record not found')
+
+    if (amountCents > deposit.remainingAmountCents) {
+      throw new Error(`Refund amount ₹${amountCents / 100} exceeds available refundable deposit balance ₹${deposit.remainingAmountCents / 100}`)
+    }
+
+    const result = await db.$transaction(async (tx) => {
+      const newRefundedCents = deposit.refundedAmountCents + amountCents
+      const newRemainingCents = deposit.remainingAmountCents - amountCents
+      const newStatus: DepositStatus = newRemainingCents === 0 ? 'REFUNDED' : 'PARTIALLY_REFUNDED'
+
+      const updatedDeposit = await tx.studentDeposit.update({
+        where: { id: deposit.id },
+        data: {
+          refundedAmountCents: newRefundedCents,
+          remainingAmountCents: newRemainingCents,
+          status: newStatus,
+        },
+      })
+
+      const refund = await tx.refund.create({
+        data: {
+          tenantId: ctx.tenantId,
+          studentId: deposit.studentId,
+          depositId: deposit.id,
+          feeScheduleId: deposit.feeScheduleId,
+          amountCents,
+          refundDate: new Date(),
+          refundMode,
+          reference: reference || null,
+          reason: reason.trim(),
+          approvedById: ctx.actorId,
+          processedById: ctx.actorId,
+        },
+      })
+
+      return { deposit: updatedDeposit, refund }
+    })
+
+    await recordAudit({
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: 'PROCESS_REFUND',
+      entity: 'Refund',
+      entityId: result.refund.id,
+      module: 'Fees',
+      summary: `Processed refund of ₹${amountCents / 100} for deposit "${deposit.name}". Reason: ${reason}`,
+    })
+
+    return result
+  }
+
+  static async adjustDeposit(ctx: ScopeContext, input: AdjustDepositInput) {
+    const { depositId, studentId, adjustmentAmountCents, reason } = input
+    if (!adjustmentAmountCents || adjustmentAmountCents <= 0 || !reason) {
+      throw new Error('Positive adjustmentAmountCents and reason are required')
+    }
+
+    const deposit = await db.studentDeposit.findFirst({
+      where: { id: depositId, tenantId: ctx.tenantId, studentId },
+    })
+    if (!deposit) throw new Error('Deposit record not found')
+
+    if (adjustmentAmountCents > deposit.remainingAmountCents) {
+      throw new Error(`Adjustment amount ₹${adjustmentAmountCents / 100} exceeds available deposit balance ₹${deposit.remainingAmountCents / 100}`)
+    }
+
+    const newAdjustedCents = deposit.adjustedAmountCents + adjustmentAmountCents
+    const newRemainingCents = deposit.remainingAmountCents - adjustmentAmountCents
+    const newStatus: DepositStatus = newRemainingCents === 0 ? 'ADJUSTED' : 'PARTIALLY_REFUNDED'
+
+    const updated = await db.studentDeposit.update({
+      where: { id: deposit.id },
+      data: {
+        adjustedAmountCents: newAdjustedCents,
+        remainingAmountCents: newRemainingCents,
+        status: newStatus,
+        notes: [deposit.notes, `Adjusted ₹${adjustmentAmountCents / 100}: ${reason}`].filter(Boolean).join('. '),
+      },
+    })
+
+    await recordAudit({
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      action: 'ADJUST_DEPOSIT',
+      entity: 'StudentDeposit',
+      entityId: deposit.id,
+      module: 'Fees',
+      summary: `Adjusted deposit "${deposit.name}" by ₹${adjustmentAmountCents / 100}. Reason: ${reason}`,
+    })
+
+    return updated
+  }
+
+  /**
+   * PARENT PORTAL MULTI-CHILD FEE ENGINE
+   */
+  static async getParentChildrenFees(tenantId: string, parentUserId: string) {
+    const guardian = await db.guardian.findFirst({
+      where: { userId: parentUserId, tenantId },
+      include: {
+        studentLinks: {
+          include: {
+            student: {
+              include: {
+                currentClassroom: true,
+                feeSchedules: {
+                  include: { feeItem: true },
+                  orderBy: { dueDate: 'asc' },
+                },
+                deposits: {
+                  include: { refunds: true },
+                },
+                payments: {
+                  include: { receipt: true },
+                  orderBy: { createdAt: 'desc' },
+                },
+                invoices: {
+                  include: { items: true },
+                  orderBy: { issueDate: 'desc' },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    if (!guardian || !guardian.studentLinks.length) {
+      return []
+    }
+
+    return guardian.studentLinks.map((link) => {
+      const s = link.student
+      const schedules = s.feeSchedules || []
+      const totalDueCents = schedules.reduce((acc, sc) => acc + sc.amountDueCents, 0)
+      const totalPaidCents = schedules.reduce((acc, sc) => acc + sc.amountPaidCents, 0)
+      const totalRemainingCents = schedules.reduce((acc, sc) => acc + sc.remainingAmountCents, 0)
+      const totalOverdueCents = schedules
+        .filter((sc) => sc.status === 'OVERDUE')
+        .reduce((acc, sc) => acc + sc.remainingAmountCents, 0)
+      const totalPendingCents = schedules
+        .filter((sc) => sc.status === 'PENDING')
+        .reduce((acc, sc) => acc + sc.remainingAmountCents, 0)
+
+      return {
+        childId: s.id,
+        childName: `${s.firstName} ${s.lastName || ''}`.trim(),
+        admissionNo: s.admissionNo,
+        classroom: s.currentClassroom?.name || 'Unassigned',
+        summary: {
+          totalDueRupees: totalDueCents / 100,
+          totalPaidRupees: totalPaidCents / 100,
+          totalRemainingRupees: totalRemainingCents / 100,
+          totalOverdueRupees: totalOverdueCents / 100,
+          totalPendingRupees: totalPendingCents / 100,
+        },
+        schedules: schedules.map((sc) => ({
+          id: sc.id,
+          itemName: sc.feeItem.name,
+          feeType: sc.feeType,
+          period: sc.period,
+          dueDate: sc.dueDate,
+          amountDueRupees: sc.amountDueCents / 100,
+          amountPaidRupees: sc.amountPaidCents / 100,
+          remainingRupees: sc.remainingAmountCents / 100,
+          status: sc.status,
+          isRefundable: sc.isRefundable,
+        })),
+        deposits: (s.deposits || []).map((d) => ({
+          id: d.id,
+          name: d.name,
+          totalRupees: d.totalAmountCents / 100,
+          refundedRupees: d.refundedAmountCents / 100,
+          adjustedRupees: d.adjustedAmountCents / 100,
+          remainingRupees: d.remainingAmountCents / 100,
+          status: d.status,
+        })),
+        payments: (s.payments || []).map((p) => ({
+          id: p.id,
+          paymentNumber: p.paymentNumber,
+          amountRupees: p.amountCents / 100,
+          method: p.method,
+          status: p.status,
+          paymentDate: p.paymentDate,
+          receiptNumber: p.receipt?.receiptNumber || null,
+        })),
+      }
+    })
   }
 }

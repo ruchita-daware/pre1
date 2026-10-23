@@ -1,6 +1,6 @@
 import { withApi } from '@/lib/with-api'
 import { NextRequest } from 'next/server'
-import { ok, created, Errors } from '@/lib/api'
+import { ok, Errors } from '@/lib/api'
 import { requireApi, isResponse } from '@/lib/auth-api'
 import { SubjectService } from '@/lib/academics/subject-service'
 import type { SubjectType } from '@prisma/client'
@@ -9,7 +9,7 @@ import type { SubjectType } from '@prisma/client'
  * GET /api/v1/subjects — list subjects for tenant
  */
 async function _GET(req: NextRequest) {
-  const session = await requireApi(req, 'academics:read')
+  const session = await requireApi(req)
   if (isResponse(session)) return session
   if (!session.tenantId) return Errors.forbidden('No tenant context')
 
@@ -17,10 +17,14 @@ async function _GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const status = searchParams.get('status') || undefined
     const subjectType = (searchParams.get('type') as SubjectType) || undefined
+    const programId = searchParams.get('programId') || undefined
+    const classroomId = searchParams.get('classroomId') || undefined
 
-    const subjects = await SubjectService.getSubjects(session.tenantId, {
+    const subjects = await SubjectService.getTeacherEligibleSubjects(session, {
       status,
       subjectType,
+      programId,
+      classroomId,
     })
 
     return ok(subjects)
@@ -62,10 +66,13 @@ async function _POST(req: NextRequest) {
       actor
     )
 
-    return created({ subject })
+    return ok({ subject }, undefined, 201)
   } catch (e: any) {
     if (e.message?.includes('already exists')) {
       return Errors.conflict('SUBJECT_EXISTS', e.message)
+    }
+    if (e.message?.includes('Tenant not found') || e.message?.includes('session')) {
+      return Errors.unauthorized(e.message)
     }
     return Errors.system(e)
   }

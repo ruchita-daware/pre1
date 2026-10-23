@@ -8,6 +8,7 @@ import { recordAudit, getRequestMeta } from '@/lib/audit'
 import { UserRole } from '@prisma/client'
 import { SessionService } from '@/lib/users/session-service'
 import { PermissionCache } from '@/lib/cache/permission-cache'
+import { BulkUpdateService } from '@/lib/users/bulk-update-service'
 
 export type BulkAction =
   | 'ACTIVATE'
@@ -20,11 +21,17 @@ export type BulkAction =
   | 'ASSIGN_CLASSROOM'
   | 'REVOKE_SESSIONS'
   | 'UPDATE_PROFILE'
+  | 'FORCE_PASSWORD_CHANGE'
+  | 'BULK_EDIT'
+  | 'CUSTOM_FIELD'
+  | 'BULK_UPDATE_FIELD'
 
 interface BulkRequest {
   action: BulkAction
   userIds: string[]
   mode?: 'PREVIEW' | 'EXECUTE'
+  field?: string
+  value?: any
   role?: UserRole
   roles?: UserRole[]
   isPrimary?: boolean
@@ -34,6 +41,12 @@ interface BulkRequest {
   status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED'
   classroomId?: string
   reason?: string
+  // Bulk Edit specific
+  field?: 'department' | 'designation' | 'branchId' | 'status' | 'customField'
+  fieldName?: string
+  fieldValue?: string | null
+  overrideMode?: 'UPDATE_ALL' | 'ONLY_EMPTY' | 'ONLY_MATCHING' | 'SKIP_EXISTING'
+  matchCurrentValue?: string
   changes?: {
     role?: UserRole
     roles?: UserRole[]
@@ -60,23 +73,46 @@ export const POST = withApi(async (req: NextRequest) => {
   const body = (await req.json()) as BulkRequest
   const {
     action,
-      userIds,
-      mode = 'EXECUTE',
-      role,
-      roles,
-      isPrimary,
-      branchId,
-      designation,
-      department,
-      status,
-      classroomId,
-      reason,
-      changes,
-    } = body
+    userIds,
+    mode = 'EXECUTE',
+    field,
+    value,
+    role,
+    roles,
+    isPrimary,
+    branchId,
+    designation,
+    department,
+    status,
+    classroomId,
+    reason,
+    changes,
+  } = body as any
 
-    if (!action || !userIds || !Array.isArray(userIds) || userIds.length === 0) {
-      return bad('Valid action and non-empty userIds array are required', 'INVALID_BULK_REQUEST')
+  if (!action || !userIds || !Array.isArray(userIds) || userIds.length === 0) {
+    return bad('Valid action and non-empty userIds array are required', 'INVALID_BULK_REQUEST')
+  }
+
+  // Route generic BULK_UPDATE_FIELD action
+  if (action === 'BULK_UPDATE_FIELD') {
+    if (!field || typeof field !== 'string') {
+      return bad('Field parameter is required for BULK_UPDATE_FIELD', 'FIELD_REQUIRED')
     }
+    const res = await BulkUpdateService.processBulkFieldUpdate({
+      tenantId: session.tenantId,
+      actorId: session.uid,
+      actorName: session.name,
+      actorRole: session.role,
+      actorBranchId: session.branchId,
+      userIds,
+      fieldKey: field,
+      value,
+      mode,
+      reason,
+      req,
+    })
+    return ok(res)
+  }
 
     const bulkOperationId = randomUUID()
 
@@ -142,9 +178,8 @@ export const POST = withApi(async (req: NextRequest) => {
         deletedAt: null,
       },
       include: {
-        user: {
-          include: { staffProfile: true },
-        },
+        staffProfile: true,
+        user: true,
       },
     })
 
@@ -203,6 +238,30 @@ export const POST = withApi(async (req: NextRequest) => {
         }
       }
 
+      // Sole Owner protection against bulk suspension, deactivation, or role removal
+      if (m.role === 'OWNER') {
+        if (
+          action === 'SUSPEND' ||
+          action === 'DEACTIVATE' ||
+          (action === 'REMOVE_ROLE' && role === 'OWNER') ||
+          (action === 'UPDATE_PROFILE' && (effectiveStatus === 'INACTIVE' || effectiveStatus === 'SUSPENDED'))
+        ) {
+          const ownerCount = await db.tenantUser.count({
+            where: {
+              tenantId: session.tenantId,
+              role: 'OWNER',
+              status: 'ACTIVE',
+              deletedAt: null,
+              id: { not: m.id },
+            },
+          })
+          if (ownerCount === 0) {
+            blocked.push({ userId: uid, reason: 'CANNOT_RESTRICT_SOLE_OWNER' })
+            continue
+          }
+        }
+      }
+
       eligibleMembers.push(m)
     }
 
@@ -216,6 +275,51 @@ export const POST = withApi(async (req: NextRequest) => {
 
     // PREVIEW MODE — Return analysis without making any database changes
     if (mode === 'PREVIEW') {
+      const diff: Array<{
+        userId: string
+        name: string
+        before: string
+        after: string
+        willChange: boolean
+      }> = []
+
+      const editField = body.field || 'department'
+      const editVal = body.fieldValue !== undefined ? String(body.fieldValue) : ''
+      const overrideMode = body.overrideMode || 'UPDATE_ALL'
+      const matchVal = body.matchCurrentValue?.trim().toLowerCase() || ''
+
+      for (const m of eligibleMembers) {
+        let beforeVal = ''
+        if (action === 'BULK_EDIT') {
+          if (editField === 'department') beforeVal = m.staffProfile?.department || ''
+          else if (editField === 'designation') beforeVal = m.staffProfile?.designation || ''
+          else if (editField === 'branchId') beforeVal = m.branchId || ''
+        } else if (action === 'CUSTOM_FIELD') {
+          const prefs: any = (m.user.preferences as any) || {}
+          const cf = prefs.customFields || {}
+          beforeVal = cf[body.fieldName || ''] !== undefined ? String(cf[body.fieldName || '']) : ''
+        } else if (action === 'CHANGE_BRANCH') {
+          beforeVal = m.branchId || ''
+        } else if (action === 'ASSIGN_ROLE') {
+          beforeVal = m.role
+        } else if (action === 'SUSPEND' || action === 'ACTIVATE') {
+          beforeVal = m.status
+        }
+
+        let willChange = true
+        if (overrideMode === 'ONLY_EMPTY') willChange = !beforeVal || beforeVal.trim() === ''
+        else if (overrideMode === 'ONLY_MATCHING') willChange = beforeVal.trim().toLowerCase() === matchVal
+        else if (overrideMode === 'SKIP_EXISTING') willChange = !beforeVal || beforeVal.trim() === ''
+
+        diff.push({
+          userId: m.userId,
+          name: m.user.fullName,
+          before: beforeVal || '(empty)',
+          after: willChange ? (action === 'CHANGE_BRANCH' ? String(branchId || '') : editVal || '(empty)') : beforeVal || '(empty)',
+          willChange,
+        })
+      }
+
       return ok({
         success: true,
         action,
@@ -225,9 +329,11 @@ export const POST = withApi(async (req: NextRequest) => {
         affected: affectedUserIds,
         blocked,
         reasons,
-        updatedCount: affectedUserIds.length,
+        updatedCount: diff.filter((d) => d.willChange).length,
+        unchangedCount: diff.filter((d) => !d.willChange).length,
         affectedUserIds,
         skippedUserIds,
+        diff: diff.slice(0, 100), // First 100 preview rows
       })
     }
 
@@ -325,9 +431,9 @@ export const POST = withApi(async (req: NextRequest) => {
               where: { id: m.id },
               data: { branchId: branchId || null },
             })
-            if (m.user.staffProfile) {
+            if (m.staffProfile) {
               await tx.staffProfile.update({
-                where: { id: m.user.staffProfile.id },
+                where: { id: m.staffProfile.id },
                 data: { branchId: branchId || null },
               })
             }
@@ -340,9 +446,9 @@ export const POST = withApi(async (req: NextRequest) => {
           const dept = department !== undefined ? department.trim() || null : undefined
 
           for (const m of eligibleMembers) {
-            if (m.user.staffProfile) {
+            if (m.staffProfile) {
               await tx.staffProfile.update({
-                where: { id: m.user.staffProfile.id },
+                where: { id: m.staffProfile.id },
                 data: {
                   ...(desig !== undefined ? { designation: desig } : {}),
                   ...(dept !== undefined ? { department: dept } : {}),
@@ -412,16 +518,26 @@ export const POST = withApi(async (req: NextRequest) => {
               })
             }
 
-            // Sync User status if status changed
+            // Sync User status if status changed and no other active memberships
             if (effectiveStatus) {
-              await tx.user.update({
-                where: { id: m.userId },
-                data: {
-                  status: effectiveStatus,
-                  ...(effectiveStatus === 'INACTIVE' ? { deletedAt: new Date() } : { deletedAt: null }),
-                  updatedAt: new Date(),
+              const otherActive = await tx.tenantUser.count({
+                where: {
+                  userId: m.userId,
+                  id: { not: m.id },
+                  status: 'ACTIVE',
+                  deletedAt: null,
                 },
               })
+              if (otherActive === 0 || effectiveStatus === 'ACTIVE' || session.role === 'PLATFORM_ADMIN') {
+                await tx.user.update({
+                  where: { id: m.userId },
+                  data: {
+                    status: effectiveStatus,
+                    ...(effectiveStatus === 'INACTIVE' ? { deletedAt: new Date() } : { deletedAt: null }),
+                    updatedAt: new Date(),
+                  },
+                })
+              }
             }
 
             // Update or create StaffProfile for designation/department/branch
@@ -434,9 +550,9 @@ export const POST = withApi(async (req: NextRequest) => {
               const dept = effectiveDepartment !== undefined ? effectiveDepartment.trim() || null : undefined
               const brId = effectiveBranchId !== undefined ? effectiveBranchId || null : undefined
 
-              if (m.user.staffProfile) {
+              if (m.staffProfile) {
                 await tx.staffProfile.update({
-                  where: { id: m.user.staffProfile.id },
+                  where: { id: m.staffProfile.id },
                   data: {
                     ...(desig !== undefined ? { designation: desig } : {}),
                     ...(dept !== undefined ? { department: dept } : {}),
@@ -460,12 +576,125 @@ export const POST = withApi(async (req: NextRequest) => {
           break
         }
 
+        case 'FORCE_PASSWORD_CHANGE': {
+          for (const m of eligibleMembers) {
+            await tx.user.update({
+              where: { id: m.userId },
+              data: { mustChangePassword: true, updatedAt: new Date() },
+            })
+          }
+          break
+        }
+
+        case 'BULK_EDIT': {
+          const editField = body.field || 'department'
+          const editVal = body.fieldValue !== undefined ? body.fieldValue : ''
+          const mode = body.overrideMode || 'UPDATE_ALL'
+          const matchVal = body.matchCurrentValue?.trim().toLowerCase() || ''
+
+          for (const m of eligibleMembers) {
+            let currentVal = ''
+            if (editField === 'department') {
+              currentVal = m.staffProfile?.department || ''
+            } else if (editField === 'designation') {
+              currentVal = m.staffProfile?.designation || ''
+            } else if (editField === 'branchId') {
+              currentVal = m.branchId || ''
+            }
+
+            // Determine if row should be modified based on overrideMode
+            let shouldUpdate = false
+            if (mode === 'UPDATE_ALL') {
+              shouldUpdate = true
+            } else if (mode === 'ONLY_EMPTY') {
+              shouldUpdate = !currentVal || currentVal.trim() === ''
+            } else if (mode === 'ONLY_MATCHING') {
+              shouldUpdate = currentVal.trim().toLowerCase() === matchVal
+            } else if (mode === 'SKIP_EXISTING') {
+              shouldUpdate = !currentVal || currentVal.trim() === ''
+            }
+
+            if (!shouldUpdate) continue
+
+            if (editField === 'department' || editField === 'designation') {
+              if (m.staffProfile) {
+                await tx.staffProfile.update({
+                  where: { id: m.staffProfile.id },
+                  data: {
+                    ...(editField === 'department' ? { department: editVal ? String(editVal) : null } : {}),
+                    ...(editField === 'designation' ? { designation: editVal ? String(editVal) : null } : {}),
+                  },
+                })
+              } else {
+                await tx.staffProfile.create({
+                  data: {
+                    tenantId: session.tenantId!,
+                    userId: m.userId,
+                    employeeCode: `EMP-${Date.now().toString().slice(-4)}-${m.userId.slice(0, 3)}`,
+                    department: editField === 'department' && editVal ? String(editVal) : null,
+                    designation: editField === 'designation' && editVal ? String(editVal) : null,
+                    branchId: m.branchId,
+                  },
+                })
+              }
+            } else if (editField === 'branchId') {
+              await tx.tenantUser.update({
+                where: { id: m.id },
+                data: { branchId: editVal ? String(editVal) : null },
+              })
+              if (m.staffProfile) {
+                await tx.staffProfile.update({
+                  where: { id: m.staffProfile.id },
+                  data: { branchId: editVal ? String(editVal) : null },
+                })
+              }
+            }
+          }
+          break
+        }
+
+        case 'CUSTOM_FIELD': {
+          const fName = body.fieldName?.trim()
+          const fVal = body.fieldValue !== undefined ? body.fieldValue : ''
+          const mode = body.overrideMode || 'UPDATE_ALL'
+          const matchVal = body.matchCurrentValue?.trim().toLowerCase() || ''
+
+          if (fName) {
+            for (const m of eligibleMembers) {
+              const prefs: Record<string, any> = (m.user.preferences as Record<string, any>) || {}
+              const customFields: Record<string, any> = prefs.customFields || {}
+              const currentVal = customFields[fName] !== undefined ? String(customFields[fName]) : ''
+
+              let shouldUpdate = false
+              if (mode === 'UPDATE_ALL') {
+                shouldUpdate = true
+              } else if (mode === 'ONLY_EMPTY') {
+                shouldUpdate = !currentVal || currentVal.trim() === ''
+              } else if (mode === 'ONLY_MATCHING') {
+                shouldUpdate = currentVal.trim().toLowerCase() === matchVal
+              } else if (mode === 'SKIP_EXISTING') {
+                shouldUpdate = !currentVal || currentVal.trim() === ''
+              }
+
+              if (shouldUpdate) {
+                customFields[fName] = fVal
+                prefs.customFields = customFields
+                await tx.user.update({
+                  where: { id: m.userId },
+                  data: { preferences: prefs, updatedAt: new Date() },
+                })
+              }
+            }
+          }
+          break
+        }
+
         default:
           throw errValidation(`Unsupported bulk action: ${action}`, 'action')
       }
     })
 
-    // Invalidate sessions for users transitioned to restricted states
+    // Invalidate sessions for users transitioned to restricted states (scoped to tenant)
     if (
       action === 'SUSPEND' ||
       action === 'DEACTIVATE' ||
@@ -473,7 +702,7 @@ export const POST = withApi(async (req: NextRequest) => {
       effectiveStatus === 'SUSPENDED'
     ) {
       for (const m of eligibleMembers) {
-        await SessionService.revokeAllUserSessions(m.userId)
+        await SessionService.revokeAllUserSessions(m.userId, undefined, session.tenantId)
         PermissionCache.bumpUserVersion(m.userId)
       }
     }

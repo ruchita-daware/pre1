@@ -4,6 +4,9 @@ import { UserStatus, Prisma } from '@prisma/client'
 import { SessionService } from '@/lib/users/session-service'
 import { PermissionCache } from '@/lib/cache/permission-cache'
 import { NextRequest } from 'next/server'
+import { resetFailedAttempts, resetPersistentFailedAttempts } from '@/lib/auth/lockout-tracker'
+
+import { PrimaryContactGuard, PrimaryContactTransfer } from '@/lib/users/primary-contact-guard'
 
 export type LifecycleActionType =
   | 'activate'
@@ -62,6 +65,10 @@ export interface TransitionStatusParams {
   reason?: string
   req?: Request | NextRequest | null
   tx?: Prisma.TransactionClient
+  alternateGuardianId?: string
+  alternateUserId?: string
+  nominateAlternateId?: string
+  alternateGuardiansByStudent?: Record<string, string>
 }
 
 export type TransitionExecutionResult =
@@ -77,6 +84,7 @@ export type TransitionExecutionResult =
       error: string
       code: string
       statusHttp: number
+      details?: Record<string, any>
     }
 
 export class UserLifecycleService {
@@ -150,10 +158,22 @@ export class UserLifecycleService {
 
   /**
    * Immediately invalidates active sessions and permission cache for restricted lifecycle states.
+   * If tenantId is provided and the user has other active memberships, only sessions for that tenant are revoked.
+   * If isGlobal is true (or user has no other memberships), all user sessions are revoked.
    */
-  static async revokeSessionsIfRestricted(userId: string, targetStatus: UserStatus): Promise<void> {
+  static async revokeSessionsIfRestricted(
+    userId: string,
+    targetStatus: UserStatus,
+    tenantId?: string | null,
+    isGlobal: boolean = false
+  ): Promise<void> {
     if (['SUSPENDED', 'LOCKED', 'DEACTIVATED', 'ARCHIVED'].includes(targetStatus)) {
-      await SessionService.revokeAllUserSessions(userId)
+      if (isGlobal || !tenantId) {
+        await SessionService.bumpTokenVersion(userId)
+        await SessionService.revokeAllUserSessions(userId)
+      } else {
+        await SessionService.revokeAllUserSessions(userId, undefined, tenantId)
+      }
       PermissionCache.bumpUserVersion(userId)
     }
   }
@@ -179,8 +199,16 @@ export class UserLifecycleService {
     req?: Request | NextRequest | null
   }): Promise<void> {
     let auditAction = 'UPDATE_USER_STATUS'
-    if (params.action) {
-      auditAction = `USER_${params.action.toUpperCase()}`
+    const actionAuditMap: Record<string, string> = {
+      suspend: 'USER_SUSPENDED',
+      activate: 'USER_ACTIVATED',
+      unlock: 'USER_UNLOCKED',
+      deactivate: 'USER_DEACTIVATED',
+      archive: 'USER_ARCHIVED',
+      lock: 'USER_LOCKED',
+    }
+    if (params.action && actionAuditMap[params.action.toLowerCase()]) {
+      auditAction = actionAuditMap[params.action.toLowerCase()]
     } else {
       const statusActionMap: Record<string, string> = {
         ACTIVE: params.previousStatus === 'LOCKED' ? 'USER_UNLOCKED' : 'USER_ACTIVATED',
@@ -216,7 +244,8 @@ export class UserLifecycleService {
 
   /**
    * Canonical execution entry point for user lifecycle status transitions.
-   * Atomically validates, persists status to both TenantUser and User, revokes sessions, and records audit.
+   * Atomically validates, persists status to TenantUser (and User if global/single-tenant),
+   * revokes sessions appropriately, and records audit.
    */
   static async transitionUserStatus(params: TransitionStatusParams): Promise<TransitionExecutionResult> {
     const { member, actorSession, action, reason, req, tx: externalTx } = params
@@ -232,8 +261,66 @@ export class UserLifecycleService {
     }
 
     const previousStatus = member.status as string
+    const userGlobalStatus = (member.user as any)?.status as string | undefined
 
-    if (previousStatus === targetStatus) {
+    // Self-suspension protection: admin cannot lock or suspend themselves
+    if (member.userId === actorSession.uid && ['SUSPENDED', 'LOCKED', 'DEACTIVATED', 'ARCHIVED'].includes(targetStatus)) {
+      return {
+        success: false,
+        error: 'Cannot suspend or deactivate your own account',
+        code: 'CANNOT_SUSPEND_SELF',
+        statusHttp: 400,
+      }
+    }
+
+    // Sole active Owner protection: cannot suspend or deactivate the only Owner
+    if (member.role === 'OWNER' && ['SUSPENDED', 'LOCKED', 'DEACTIVATED', 'ARCHIVED'].includes(targetStatus)) {
+      const activeOwners = await db.tenantUser.count({
+        where: {
+          tenantId: actorSession.tenantId || undefined,
+          role: 'OWNER',
+          status: 'ACTIVE',
+          deletedAt: null,
+          id: { not: member.id },
+        },
+      })
+      if (activeOwners === 0) {
+        return {
+          success: false,
+          error: 'Cannot suspend or deactivate the sole active Owner of the school',
+          code: 'SOLE_OWNER_PROTECTION',
+          statusHttp: 403,
+        }
+      }
+    }
+
+    // Special case for unlock: even if user is already ACTIVE, clear failed attempts and return success
+    if (action === 'unlock') {
+      await resetPersistentFailedAttempts(member.userId)
+      resetFailedAttempts(member.userId, (member.user as any)?.email, (member.user as any)?.username)
+      if (previousStatus === 'ACTIVE' && (!userGlobalStatus || userGlobalStatus === 'ACTIVE')) {
+        await this.recordLifecycleAudit({
+          tenantId: actorSession.tenantId,
+          branchId: member.branchId,
+          actorId: actorSession.uid,
+          actorName: actorSession.name,
+          actorRole: actorSession.role,
+          member,
+          previousStatus,
+          targetStatus: 'ACTIVE',
+          action: 'unlock',
+          reason,
+          req,
+        })
+        return {
+          success: true,
+          userId: member.userId,
+          status: 'ACTIVE',
+        }
+      }
+    }
+
+    if (previousStatus === targetStatus && (!userGlobalStatus || userGlobalStatus === targetStatus)) {
       return {
         success: true,
         userId: member.userId,
@@ -257,25 +344,95 @@ export class UserLifecycleService {
       }
     }
 
+    const isPlatformAdmin = actorSession.role === 'PLATFORM_ADMIN'
+
+    // Primary contact deactivation guard (Doc 3.2): cannot suspend/deactivate primary contact without nominating alternate
+    let primaryTransfers: PrimaryContactTransfer[] = []
+    if (
+      ['SUSPENDED', 'LOCKED', 'DEACTIVATED', 'ARCHIVED', 'INACTIVE'].includes(targetStatus) &&
+      actorSession.tenantId
+    ) {
+      const guardCheck = await PrimaryContactGuard.checkDeactivationSafety({
+        tenantId: actorSession.tenantId,
+        userId: member.userId,
+        targetStatus,
+        action: typeof action === 'string' ? action : undefined,
+        alternateGuardianId: params.alternateGuardianId,
+        alternateUserId: params.alternateUserId,
+        nominateAlternateId: params.nominateAlternateId,
+        alternateGuardiansByStudent: params.alternateGuardiansByStudent,
+        tx: externalTx,
+      })
+
+      if (!guardCheck.safe) {
+        return {
+          success: false,
+          error: guardCheck.error || 'Cannot deactivate primary contact without nominating an alternate contact',
+          code: guardCheck.code || 'PRIMARY_CONTACT_DEACTIVATION_BLOCKED',
+          statusHttp: 409,
+          details: { affectedStudents: guardCheck.affectedStudents },
+        }
+      }
+      primaryTransfers = guardCheck.transfers
+    }
+
     // Persist in transaction
     const executeInTx = async (tx: Prisma.TransactionClient) => {
+      // 0. Apply nominated primary contact transfers atomically if required
+      if (primaryTransfers.length > 0) {
+        await PrimaryContactGuard.applyTransfersTx(tx, primaryTransfers, actorSession)
+      }
+
+      // 1. Always update the tenant membership status
       const tu = await tx.tenantUser.update({
         where: { id: member.id },
         data: { status: targetStatus },
       })
 
-      await tx.user.update({
-        where: { id: member.userId },
-        data: { status: targetStatus, updatedAt: new Date() },
+      // 2. Check if user has other active memberships in other schools/roles
+      const otherActiveMemberships = await tx.tenantUser.count({
+        where: {
+          userId: member.userId,
+          id: { not: member.id },
+          status: 'ACTIVE',
+          deletedAt: null,
+        },
       })
 
-      return tu
+      // 3. Update global User.status if:
+      // - The actor is PLATFORM_ADMIN (explicit platform-wide control), OR
+      // - The targetStatus is ACTIVE / unlocking, OR
+      // - The user has NO other active memberships in other tenants
+      const shouldUpdateGlobalUser =
+        isPlatformAdmin ||
+        targetStatus === 'ACTIVE' ||
+        otherActiveMemberships === 0
+
+      if (shouldUpdateGlobalUser) {
+        await tx.user.update({
+          where: { id: member.userId },
+          data: { status: targetStatus, updatedAt: new Date() },
+        })
+      }
+
+      return { tu, isGlobal: shouldUpdateGlobalUser && otherActiveMemberships === 0 }
     }
 
-    const updatedMember = externalTx ? await executeInTx(externalTx) : await db.$transaction(executeInTx)
+    const { tu: updatedMember, isGlobal } = externalTx ? await executeInTx(externalTx) : await db.$transaction(executeInTx)
 
-    // Revoke sessions for restricted lifecycle states
-    await this.revokeSessionsIfRestricted(member.userId, targetStatus)
+    // Revoke sessions for restricted lifecycle states (tenant-scoped unless global lockout)
+    await this.revokeSessionsIfRestricted(
+      member.userId,
+      targetStatus,
+      actorSession.tenantId,
+      isGlobal || isPlatformAdmin
+    )
+
+    // Clear failed login attempts tracker on account activation or unlock
+    if (targetStatus === 'ACTIVE') {
+      await resetPersistentFailedAttempts(member.userId)
+      resetFailedAttempts(member.userId, (member.user as any)?.email, (member.user as any)?.username)
+    }
 
     // Record canonical audit event
     await this.recordLifecycleAudit({
