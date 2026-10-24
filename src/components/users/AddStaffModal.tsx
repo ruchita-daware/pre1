@@ -4,11 +4,15 @@ import React, { useState, useEffect } from 'react'
 import {
   Briefcase, Building, Mail, Phone, User, Shield, Check, Key,
   Calendar, GraduationCap, Sparkles, RefreshCw, Layers, Award,
-  Clock, DoorOpen, UserCheck, AlertCircle
+  Clock, DoorOpen, UserCheck, AlertCircle, AlertTriangle, ArrowRight, ArrowLeft, Eye, EyeOff, CheckCircle2
 } from 'lucide-react'
 import { Modal } from '@/components/preone/Modal'
 import { useToast } from '@/components/preone/Toast'
-import { Role, BranchOption, ClassroomOption, CANONICAL_STAFF_ROLES, ROLE_BADGE } from './types'
+import { Role, BranchOption, ClassroomOption, CANONICAL_STAFF_ROLES, ROLE_BADGE, BLOOD_GROUPS, MARITAL_STATUSES, LOCALES } from './types'
+import { UserPhotoUpload } from './UserPhotoUpload'
+import { Input } from '@/components/ui/input'
+import { validatePan, validateAadhaar, validateUan, validateEsi } from '@/lib/users/statutory-validation'
+import { validateFullName } from '@/lib/users/user-validation'
 
 interface AddStaffModalProps {
   open: boolean
@@ -20,26 +24,30 @@ interface AddStaffModalProps {
 
 export function AddStaffModal({ open, onClose, branches, classrooms, onSuccess }: AddStaffModalProps) {
   const toast = useToast()
+  const [step, setStep] = useState<1 | 2 | 3>(1)
   const [submitting, setSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
-  // Section 1: Personal Information
+  // Step 1: Basic Information
   const [avatarUrl, setAvatarUrl] = useState('')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [dateOfBirth, setDateOfBirth] = useState('')
   const [gender, setGender] = useState<'MALE' | 'FEMALE' | 'OTHER' | ''>('')
+  const [maritalStatus, setMaritalStatus] = useState('')
+  const [bloodGroup, setBloodGroup] = useState('')
+  const [emergencyContactName, setEmergencyContactName] = useState('')
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState('')
+  const [currentAddress, setCurrentAddress] = useState('')
+  const [permanentAddress, setPermanentAddress] = useState('')
+  const [locale, setLocale] = useState('en-IN')
 
-  // Section 2: Login & Access
-  const [username, setUsername] = useState('')
-  const [isUsernameCustom, setIsUsernameCustom] = useState(false)
-  const [password, setPassword] = useState('')
+  // Step 2: Work & Assignment
   const [primaryRole, setPrimaryRole] = useState<Role>('TEACHER')
   const [additionalRoles, setAdditionalRoles] = useState<Role[]>([])
   const [branchId, setBranchId] = useState(branches[0]?.id || '')
-  const [status, setStatus] = useState<'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING'>('ACTIVE')
-
-  // Section 3: Staff Information
+  const [assignedBranchIds, setAssignedBranchIds] = useState<string[]>(branches[0]?.id ? [branches[0].id] : [])
   const [employeeCode, setEmployeeCode] = useState('')
   const [designation, setDesignation] = useState('')
   const [department, setDepartment] = useState('Academics')
@@ -47,21 +55,152 @@ export function AddStaffModal({ open, onClose, branches, classrooms, onSuccess }
   const [employmentType, setEmploymentType] = useState('FULL_TIME')
   const [joiningDate, setJoiningDate] = useState('')
   const [reportingManagerId, setReportingManagerId] = useState('')
-
-  // Section 4: Teaching Assignment
   const [classroomId, setClassroomId] = useState('')
+  const [panNumber, setPanNumber] = useState('')
+  const [aadhaarNumber, setAadhaarNumber] = useState('')
+  const [uanNumber, setUanNumber] = useState('')
+  const [esiNumber, setEsiNumber] = useState('')
+  const [noticePeriodDays, setNoticePeriodDays] = useState('')
 
-  // Auto-generate employee code on open if blank
+  // Step 3: Account & Access
+  const [credentialSetupMode, setCredentialSetupMode] = useState<'MANUAL' | 'INVITE'>('MANUAL')
+  const [username, setUsername] = useState('')
+  const [isUsernameCustom, setIsUsernameCustom] = useState(false)
+  const [usernameChecking, setUsernameChecking] = useState(false)
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
+  const [usernameError, setUsernameError] = useState<string | null>(null)
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [status, setStatus] = useState<'ACTIVE' | 'PENDING'>('ACTIVE')
+  const [duplicateHint, setDuplicateHint] = useState<string | null>(null)
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false)
+
+  // Potential Reporting Managers
+  const [availableManagers, setAvailableManagers] = useState<
+    Array<{ id: string; userId: string; name: string; designation?: string | null; role?: string }>
+  >([])
+
+  // Auto-generate employee code on open if blank & fetch available managers
   useEffect(() => {
-    if (open && !employeeCode) {
-      generateEmployeeCode()
-    }
-    if (open && !branchId && branches.length > 0) {
-      setBranchId(branches[0].id)
+    if (open) {
+      if (!employeeCode) generateEmployeeCode()
+      if (!branchId && branches.length > 0) {
+        setBranchId(branches[0].id)
+        setAssignedBranchIds([branches[0].id])
+      }
+      fetch('/api/v1/users?userType=STAFF&status=ACTIVE&pageSize=100')
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success && Array.isArray(json.data?.users)) {
+            setAvailableManagers(
+              json.data.users.map((u: any) => ({
+                id: u.staffProfile?.id || u.userId || u.id,
+                userId: u.userId || u.id,
+                name: u.fullName || u.name,
+                designation: u.staffProfile?.designation || u.designation,
+                role: u.role,
+              }))
+            )
+          }
+        })
+        .catch(() => {})
     }
   }, [open, branches])
 
-  // Auto-generate username from fullName if not manually customized
+  // Check username availability with debounce
+  useEffect(() => {
+    const trimmed = username.trim().toLowerCase()
+    if (!trimmed) {
+      setUsernameAvailable(null)
+      setUsernameError(null)
+      setUsernameChecking(false)
+      return
+    }
+
+    if (trimmed.length < 3) {
+      setUsernameAvailable(false)
+      setUsernameError('Username must be at least 3 characters')
+      setUsernameChecking(false)
+      return
+    }
+
+    if (!/^[a-z0-9._-]+$/.test(trimmed) || /^[._-]|[._-]$/.test(trimmed)) {
+      setUsernameAvailable(false)
+      setUsernameError('Can only contain lowercase letters, numbers, dots, hyphens, and underscores')
+      setUsernameChecking(false)
+      return
+    }
+
+    setUsernameChecking(true)
+    setUsernameError(null)
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/v1/users/username?preferred=${encodeURIComponent(trimmed)}&type=STAFF`
+        )
+        const json = await res.json()
+        if (json.success && json.data) {
+          setUsernameAvailable(Boolean(json.data.isAvailable))
+          if (!json.data.isAvailable) {
+            setUsernameError(`Username "${trimmed}" is already taken`)
+          } else {
+            setUsernameError(null)
+          }
+        } else {
+          setUsernameAvailable(null)
+        }
+      } catch {
+        setUsernameAvailable(null)
+      } finally {
+        setUsernameChecking(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [username])
+
+  // Debounced duplicate detection on Name / Email / Phone
+  useEffect(() => {
+    const q = email.trim() || phone.trim() || (fullName.trim().length >= 3 ? fullName.trim() : '')
+    if (!q) {
+      setDuplicateHint(null)
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setCheckingDuplicate(true)
+        const res = await fetch(`/api/v1/users?q=${encodeURIComponent(q)}&pageSize=5`)
+        if (res.ok) {
+          const json = await res.json()
+          const usersList = json.data?.items || json.data || []
+          const existing = usersList.find((u: any) => {
+            const matchEmail = email.trim() && u.email?.toLowerCase() === email.trim().toLowerCase()
+            const matchPhone = phone.trim() && u.phone === phone.trim()
+            const matchName = fullName.trim().length >= 3 && u.name?.toLowerCase() === fullName.trim().toLowerCase()
+            return matchEmail || matchPhone || matchName
+          })
+          if (existing) {
+            setDuplicateHint(
+              `Notice: An account matching "${existing.name}" (${existing.email || existing.phone || existing.role}) already exists in this school.`
+            )
+          } else {
+            setDuplicateHint(null)
+          }
+        }
+      } catch {
+        // ignore network error
+      } finally {
+        setCheckingDuplicate(false)
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [fullName, email, phone])
+
+  // Auto-suggest username from fullName if not manually customized
   const handleFullNameChange = (val: string) => {
     setFullName(val)
     if (!isUsernameCustom) {
@@ -97,6 +236,7 @@ export function AddStaffModal({ open, onClose, branches, classrooms, onSuccess }
       pwd += chars.charAt(Math.floor(Math.random() * chars.length))
     }
     setPassword(pwd)
+    setConfirmPassword(pwd)
   }
 
   const toggleAdditionalRole = (r: Role) => {
@@ -114,18 +254,34 @@ export function AddStaffModal({ open, onClose, branches, classrooms, onSuccess }
   )
 
   const resetForm = () => {
+    setStep(1)
     setAvatarUrl('')
     setFullName('')
     setEmail('')
     setPhone('')
     setDateOfBirth('')
     setGender('')
+    setMaritalStatus('')
+    setBloodGroup('')
+    setEmergencyContactName('')
+    setEmergencyContactPhone('')
+    setCurrentAddress('')
+    setPermanentAddress('')
+    setLocale('en-IN')
+    setCredentialSetupMode('MANUAL')
     setUsername('')
     setIsUsernameCustom(false)
+    setUsernameChecking(false)
+    setUsernameAvailable(null)
+    setUsernameError(null)
     setPassword('')
+    setConfirmPassword('')
+    setShowConfirmPassword(false)
+    setShowPassword(false)
     setPrimaryRole('TEACHER')
     setAdditionalRoles([])
     setBranchId(branches[0]?.id || '')
+    setAssignedBranchIds(branches[0]?.id ? [branches[0].id] : [])
     setStatus('ACTIVE')
     setEmployeeCode('')
     setDesignation('')
@@ -135,59 +291,184 @@ export function AddStaffModal({ open, onClose, branches, classrooms, onSuccess }
     setJoiningDate('')
     setReportingManagerId('')
     setClassroomId('')
+    setPanNumber('')
+    setAadhaarNumber('')
+    setUanNumber('')
+    setEsiNumber('')
+    setNoticePeriodDays('')
+  }
+
+  const validateStep1 = () => {
+    const nameRes = validateFullName(fullName)
+    if (!nameRes.valid) {
+      toast.error('Validation Error', nameRes.error || 'Invalid Full Name')
+      return false
+    }
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      toast.error('Validation Error', 'A valid Work Email is required')
+      return false
+    }
+    return true
+  }
+
+  const validateStep2 = () => {
+    if (!branchId) {
+      toast.error('Validation Error', 'Campus Branch is required')
+      return false
+    }
+    if (!employeeCode.trim()) {
+      toast.error('Validation Error', 'Employee Code is required')
+      return false
+    }
+    if (!designation.trim()) {
+      toast.error('Validation Error', 'Job Designation is required')
+      return false
+    }
+
+    if (panNumber.trim()) {
+      const panRes = validatePan(panNumber)
+      if (!panRes.valid) {
+        toast.error('Validation Error', panRes.error || 'Invalid PAN format')
+        return false
+      }
+    }
+
+    if (aadhaarNumber.trim()) {
+      const aadhaarRes = validateAadhaar(aadhaarNumber)
+      if (!aadhaarRes.valid) {
+        toast.error('Validation Error', aadhaarRes.error || 'Invalid Aadhaar format')
+        return false
+      }
+    }
+
+    if (uanNumber.trim()) {
+      const uanRes = validateUan(uanNumber)
+      if (!uanRes.valid) {
+        toast.error('Validation Error', uanRes.error || 'Invalid UAN format')
+        return false
+      }
+    }
+
+    if (esiNumber.trim()) {
+      const esiRes = validateEsi(esiNumber)
+      if (!esiRes.valid) {
+        toast.error('Validation Error', esiRes.error || 'Invalid ESI format')
+        return false
+      }
+    }
+
+    return true
+  }
+
+  const handleNext = () => {
+    if (step === 1) {
+      if (validateStep1()) setStep(2)
+    } else if (step === 2) {
+      if (validateStep2()) setStep(3)
+    }
+  }
+
+  const handleBack = () => {
+    if (step === 2) setStep(1)
+    if (step === 3) setStep(2)
+  }
+
+  const validateStep3 = () => {
+    const trimmedUser = username.trim().toLowerCase()
+
+    if (credentialSetupMode === 'MANUAL') {
+      if (!trimmedUser) {
+        toast.error('Validation Error', 'Login Username is required for manual credential setup')
+        return false
+      }
+      if (trimmedUser.length < 3 || trimmedUser.length > 30) {
+        toast.error('Validation Error', 'Username must be between 3 and 30 characters')
+        return false
+      }
+      if (!/^[a-z0-9._-]+$/.test(trimmedUser) || /^[._-]|[._-]$/.test(trimmedUser)) {
+        toast.error('Validation Error', 'Username can only contain lowercase letters, numbers, dots, hyphens, and underscores')
+        return false
+      }
+      if (usernameAvailable === false) {
+        toast.error('Validation Error', usernameError || `Username "${trimmedUser}" is already taken`)
+        return false
+      }
+      if (!password || password.trim().length === 0) {
+        toast.error('Validation Error', 'Password is required for manual credential setup')
+        return false
+      }
+      if (password.length < 8) {
+        toast.error('Validation Error', 'Password must be at least 8 characters long')
+        return false
+      }
+      if (password !== confirmPassword) {
+        toast.error('Validation Error', 'Passwords do not match. Please verify both password fields')
+        return false
+      }
+    } else {
+      // INVITE mode
+      if (trimmedUser) {
+        if (trimmedUser.length < 3 || trimmedUser.length > 30) {
+          toast.error('Validation Error', 'Suggested username must be between 3 and 30 characters')
+          return false
+        }
+        if (!/^[a-z0-9._-]+$/.test(trimmedUser) || /^[._-]|[._-]$/.test(trimmedUser)) {
+          toast.error('Validation Error', 'Username can only contain lowercase letters, numbers, dots, hyphens, and underscores')
+          return false
+        }
+        if (usernameAvailable === false) {
+          toast.error('Validation Error', usernameError || `Username "${trimmedUser}" is already taken`)
+          return false
+        }
+      }
+    }
+    return true
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Client-side validations
-    if (!fullName.trim() || !email.trim()) {
-      toast.error('Validation Error', 'Full Name and Work Email are required')
+    if (step !== 3) {
+      handleNext()
       return
     }
 
-    if (!branchId) {
-      toast.error('Validation Error', 'Campus Branch is required')
-      return
-    }
-
-    if (!employeeCode.trim()) {
-      toast.error('Validation Error', 'Employee Code is required')
-      return
-    }
-
-    if (!designation.trim()) {
-      toast.error('Validation Error', 'Job Designation is required')
-      return
-    }
-
-    if (isTeacher && !classroomId && availableClassrooms.length > 0) {
-      toast.error('Validation Error', 'Class / Classroom assignment is required for Teachers')
-      return
-    }
+    if (!validateStep1() || !validateStep2() || !validateStep3()) return
 
     setSubmitting(true)
     try {
       const allRoles: Role[] = [...new Set([primaryRole, ...additionalRoles])]
+      const isInvite = credentialSetupMode === 'INVITE'
+      const finalStatus = isInvite ? 'PENDING' : status
 
       const res = await fetch('/api/v1/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          credentialSetupMode,
+          isInvite,
+          status: finalStatus,
           fullName: fullName.trim(),
           email: email.trim().toLowerCase(),
           phone: phone.trim() || undefined,
           avatarUrl: avatarUrl.trim() || undefined,
           dateOfBirth: dateOfBirth || undefined,
           gender: gender || undefined,
-          username: username.trim() || undefined,
-          password: password.trim() || undefined,
+          maritalStatus: maritalStatus || undefined,
+          bloodGroup: bloodGroup || undefined,
+          emergencyContactName: emergencyContactName.trim() || undefined,
+          emergencyContactPhone: emergencyContactPhone.trim() || undefined,
+          currentAddress: currentAddress.trim() || undefined,
+          permanentAddress: permanentAddress.trim() || undefined,
+          locale: locale || 'en-IN',
+          username: username.trim().toLowerCase() || undefined,
+          password: !isInvite ? password : undefined,
           role: primaryRole,
           primaryRole,
           roles: allRoles,
           additionalRoles,
           branchId,
-          status,
+          branchIds: assignedBranchIds,
           employeeCode: employeeCode.trim(),
           designation: designation.trim(),
           department: department.trim() || undefined,
@@ -196,18 +477,36 @@ export function AddStaffModal({ open, onClose, branches, classrooms, onSuccess }
           joiningDate: joiningDate || undefined,
           reportingManagerId: reportingManagerId || undefined,
           classroomId: isTeacher && classroomId ? classroomId : undefined,
+          panNumber: panNumber.trim().toUpperCase() || undefined,
+          aadhaarNumber: aadhaarNumber.trim() || undefined,
+          uanNumber: uanNumber.trim() || undefined,
+          esiNumber: esiNumber.trim() || undefined,
+          noticePeriodDays: noticePeriodDays ? Number(noticePeriodDays) : undefined,
         }),
       })
 
       const json = await res.json()
       if (!res.ok) {
-        throw new Error(json.error || json.message || 'Failed to create staff account')
+        const errorMsg =
+          typeof json.error === 'object'
+            ? json.error?.message
+            : typeof json.error === 'string'
+            ? json.error
+            : json.message || 'Failed to create staff account'
+        throw new Error(errorMsg)
       }
 
-      toast.success(
-        'Staff Member Onboarded',
-        `${fullName} registered as ${ROLE_BADGE[primaryRole]?.label || primaryRole} (Code: ${employeeCode.trim()}).`
-      )
+      if (isInvite) {
+        toast.success(
+          'Staff Invitation Created',
+          `${fullName} onboarded with Pending status. Invitation ready for credential setup.`
+        )
+      } else {
+        toast.success(
+          'Staff Member Onboarded',
+          `${fullName} registered as ${ROLE_BADGE[primaryRole]?.label || primaryRole} (Username: @${json.data?.username || username.trim().toLowerCase()}).`
+        )
+      }
       resetForm()
       onSuccess()
       onClose()
@@ -218,42 +517,67 @@ export function AddStaffModal({ open, onClose, branches, classrooms, onSuccess }
     }
   }
 
-  const modalFooter = (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 12 }}>
-      <div className="hidden sm:flex" style={{ alignItems: 'center', gap: 6 }}>
-        <span
-          className="badge b-primary"
-          style={{ padding: '4px 12px', fontSize: 11.5, fontWeight: 600, gap: 6 }}
-        >
-          <Briefcase style={{ width: 13, height: 13 }} />
-          Campus Workforce Member
-        </span>
-      </div>
+  const selectedBranchObj = branches.find((b) => b.id === branchId)
+  const selectedClassroomObj = classrooms.find((c) => c.id === classroomId)
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 'auto', marginLeft: 'auto' }}>
+  const modalFooter = (
+    <div className="flex items-center justify-between w-full gap-3">
+      {step > 1 ? (
         <button
           type="button"
-          className="btn btn-secondary btn-sm"
+          onClick={handleBack}
+          disabled={submitting}
+          className="btn btn-secondary text-xs flex items-center gap-1.5 py-2 px-3"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Back</span>
+        </button>
+      ) : (
+        <button
+          type="button"
           onClick={onClose}
           disabled={submitting}
+          className="btn btn-secondary text-xs py-2 px-3"
         >
           Cancel
         </button>
-        <button
-          type="submit"
-          form="add-staff-form"
-          className="btn btn-primary btn-sm"
-          disabled={submitting}
-        >
-          {submitting ? (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span className="animate-spin" style={{ width: 12, height: 12, border: '2px solid #FFFFFF', borderTopColor: 'transparent', borderRadius: '50%' }} />
-              Creating Staff Account...
-            </span>
-          ) : (
-            'Create Staff Member'
-          )}
-        </button>
+      )}
+
+      <div className="flex items-center gap-2">
+        {step < 3 ? (
+          <button
+            type="button"
+            onClick={handleNext}
+            className="btn btn-primary text-xs flex items-center gap-1.5 py-2 px-4 font-semibold shadow-xs"
+          >
+            <span>Continue</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            form="add-staff-form"
+            disabled={submitting || (credentialSetupMode === 'MANUAL' && usernameAvailable === false)}
+            className="btn btn-primary text-xs flex items-center gap-1.5 py-2 px-4 font-semibold shadow-xs"
+          >
+            {submitting ? (
+              <>
+                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Onboarding...</span>
+              </>
+            ) : credentialSetupMode === 'INVITE' ? (
+              <>
+                <Mail className="w-3.5 h-3.5" />
+                <span>Send Staff Invitation</span>
+              </>
+            ) : (
+              <>
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>Complete Onboarding &amp; Activate</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
     </div>
   )
@@ -262,566 +586,969 @@ export function AddStaffModal({ open, onClose, branches, classrooms, onSuccess }
     <Modal
       open={open}
       onClose={onClose}
-      title="Add Preschool Staff User"
-      subtitle="Complete workforce onboarding for teachers, administrators, coordinators, and campus staff"
-      icon={<Briefcase style={{ width: 20, height: 20 }} />}
+      title="Add Staff Member"
+      subtitle="Complete progressive staff onboarding in 3 simple steps"
+      icon={<Briefcase className="w-5 h-5" />}
       iconClass="ic-purple"
       wide
       footer={modalFooter}
     >
-      <form id="add-staff-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }} autoComplete="off">
-        {/* ── SECTION 1: PERSONAL INFORMATION ── */}
-        <div
-          style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-xl)',
-            padding: '16px 18px',
-            boxShadow: 'var(--shadow-soft)',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              paddingBottom: 10,
-              borderBottom: '1px solid var(--border-subtle)',
-              marginBottom: 14,
-            }}
+      <div className="space-y-4">
+        {/* Step Indicator Bar */}
+        <div className="flex items-center justify-between px-1 py-1 bg-gray-50 dark:bg-gray-900/60 rounded-xl border border-gray-100 dark:border-gray-800">
+          <button
+            type="button"
+            onClick={() => setStep(1)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-colors ${
+              step === 1
+                ? 'bg-white dark:bg-gray-800 text-purple-700 dark:text-purple-300 font-bold shadow-xs'
+                : step > 1
+                ? 'text-emerald-700 dark:text-emerald-400 font-medium'
+                : 'text-gray-400'
+            }`}
           >
-            <div
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: 6,
-                background: 'var(--primary-light)',
-                color: 'var(--primary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 12,
-                fontWeight: 700,
-              }}
-            >
-              1
-            </div>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Personal Information
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] ${
+              step === 1
+                ? 'bg-purple-600 text-white font-bold'
+                : step > 1
+                ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
+            }`}>
+              {step > 1 ? '✓' : '1'}
             </span>
-          </div>
+            <span>1. Basic Info</span>
+          </button>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
-            {/* Full Name */}
-            <div className="field">
-              <label>
-                Full Name <span className="req">*</span>
-              </label>
-              <div className="input-icon-wrap">
-                <User style={{ width: 16, height: 16 }} />
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Priya Sharma"
-                  value={fullName}
-                  onChange={(e) => handleFullNameChange(e.target.value)}
-                  className="input"
-                  style={{ paddingLeft: 38 }}
-                />
-              </div>
-            </div>
+          <div className="h-px flex-1 bg-gray-200 dark:bg-gray-800 mx-2" />
 
-            {/* Work Email */}
-            <div className="field">
-              <label>
-                Work Email <span className="req">*</span>
-              </label>
-              <div className="input-icon-wrap">
-                <Mail style={{ width: 16, height: 16 }} />
-                <input
-                  type="email"
-                  required
-                  placeholder="e.g. priya@preschool.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="input"
-                  style={{ paddingLeft: 38 }}
-                  data-lpignore="true"
-                />
-              </div>
-            </div>
-
-            {/* Mobile Phone */}
-            <div className="field">
-              <label>Mobile Phone</label>
-              <div className="input-icon-wrap">
-                <Phone style={{ width: 16, height: 16 }} />
-                <input
-                  type="tel"
-                  placeholder="e.g. +91 98765 43210"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="input"
-                  style={{ paddingLeft: 38 }}
-                />
-              </div>
-            </div>
-
-            {/* Date of Birth */}
-            <div className="field">
-              <label>Date of Birth</label>
-              <div className="input-icon-wrap">
-                <Calendar style={{ width: 16, height: 16 }} />
-                <input
-                  type="date"
-                  value={dateOfBirth}
-                  onChange={(e) => setDateOfBirth(e.target.value)}
-                  className="input"
-                  style={{ paddingLeft: 38 }}
-                />
-              </div>
-            </div>
-
-            {/* Gender */}
-            <div className="field">
-              <label>Gender</label>
-              <select
-                value={gender}
-                onChange={(e) => setGender(e.target.value as any)}
-                className="select"
-              >
-                <option value="">Select Gender</option>
-                <option value="FEMALE">Female</option>
-                <option value="MALE">Male</option>
-                <option value="OTHER">Other</option>
-              </select>
-            </div>
-
-            {/* Photo / Avatar URL */}
-            <div className="field">
-              <label>Photo / Avatar URL</label>
-              <input
-                type="url"
-                placeholder="https://example.com/photo.jpg"
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-                className="input font-mono"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* ── SECTION 2: LOGIN & ACCESS ── */}
-        <div
-          style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-xl)',
-            padding: '16px 18px',
-            boxShadow: 'var(--shadow-soft)',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              paddingBottom: 10,
-              borderBottom: '1px solid var(--border-subtle)',
-              marginBottom: 14,
-            }}
+          <button
+            type="button"
+            onClick={() => validateStep1() && setStep(2)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-colors ${
+              step === 2
+                ? 'bg-white dark:bg-gray-800 text-purple-700 dark:text-purple-300 font-bold shadow-xs'
+                : step > 2
+                ? 'text-emerald-700 dark:text-emerald-400 font-medium'
+                : 'text-gray-400'
+            }`}
           >
-            <div
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: 6,
-                background: 'var(--primary-light)',
-                color: 'var(--primary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 12,
-                fontWeight: 700,
-              }}
-            >
-              2
-            </div>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Login & Access Control
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] ${
+              step === 2
+                ? 'bg-purple-600 text-white font-bold'
+                : step > 2
+                ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
+            }`}>
+              {step > 2 ? '✓' : '2'}
             </span>
-          </div>
+            <span>2. Work & Assignment</span>
+          </button>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
-            {/* Username */}
-            <div className="field">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                <label style={{ margin: 0 }}>
-                  Username <span className="req">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsUsernameCustom(false)
-                    handleFullNameChange(fullName)
-                  }}
-                  className="btn btn-ghost btn-xs text-primary"
-                  style={{ fontSize: 11, padding: '1px 6px', height: 'auto' }}
-                >
-                  <RefreshCw style={{ width: 11, height: 11 }} /> Suggest
-                </button>
-              </div>
-              <input
-                type="text"
-                required
-                placeholder="e.g. priya.sharma"
-                value={username}
-                onChange={(e) => {
-                  setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ''))
-                  setIsUsernameCustom(true)
-                }}
-                className="input font-mono"
-              />
-              <span className="helper">Used for teacher app, portal and web login</span>
-            </div>
+          <div className="h-px flex-1 bg-gray-200 dark:bg-gray-800 mx-2" />
 
-            {/* Password */}
-            <div className="field">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                <label style={{ margin: 0 }}>
-                  Password <span className="req">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={generateRandomPassword}
-                  className="btn btn-ghost btn-xs text-primary"
-                  style={{ fontSize: 11, padding: '1px 6px', height: 'auto' }}
-                >
-                  <Sparkles style={{ width: 11, height: 11 }} /> Generate
-                </button>
-              </div>
-              <div className="input-icon-wrap">
-                <Key style={{ width: 16, height: 16 }} />
-                <input
-                  type="password"
-                  placeholder="Leave blank for automatic invite"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input font-mono"
-                  style={{ paddingLeft: 38 }}
-                  autoComplete="new-password"
-                  data-lpignore="true"
-                />
-              </div>
-              <span className="helper">Leave blank to dispatch setup email with one-time link</span>
-            </div>
-
-            {/* Primary Role */}
-            <div className="field">
-              <label>
-                Primary Role <span className="req">*</span>
-              </label>
-              <select
-                value={primaryRole}
-                onChange={(e) => {
-                  const newRole = e.target.value as Role
-                  setPrimaryRole(newRole)
-                  setAdditionalRoles((prev) => prev.filter((r) => r !== newRole))
-                  generateEmployeeCode()
-                }}
-                className="select"
-              >
-                {CANONICAL_STAFF_ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_BADGE[r]?.label || r}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Campus Branch */}
-            <div className="field">
-              <label>
-                Campus Branch <span className="req">*</span>
-              </label>
-              <div className="input-icon-wrap">
-                <Building style={{ width: 16, height: 16 }} />
-                <select
-                  required
-                  value={branchId}
-                  onChange={(e) => setBranchId(e.target.value)}
-                  className="select"
-                  style={{ paddingLeft: 38 }}
-                >
-                  <option value="">Select Campus Branch *</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} ({b.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Account Status */}
-            <div className="field">
-              <label>
-                Account Status <span className="req">*</span>
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as any)}
-                className="select"
-              >
-                <option value="ACTIVE">Active (Immediate operational access)</option>
-                <option value="PENDING">Pending (Awaiting invitation verification)</option>
-                <option value="INACTIVE">Inactive (Disabled temporarily)</option>
-                <option value="SUSPENDED">Suspended (Access locked)</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Additional Roles Multi-Select Chips */}
-          <div style={{ marginTop: 14 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
-              Additional Assigned Roles (Multi-Role Support)
-            </label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {CANONICAL_STAFF_ROLES.filter((r) => r !== primaryRole).map((r) => {
-                const isSelected = additionalRoles.includes(r)
-                return (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => toggleAdditionalRole(r)}
-                    className={`btn btn-xs ${isSelected ? 'btn-primary' : 'btn-outline'}`}
-                    style={{ fontSize: 11.5, padding: '4px 10px', borderRadius: 'var(--radius-full)' }}
-                  >
-                    {isSelected && <Check style={{ width: 12, height: 12, marginRight: 4 }} />}
-                    {ROLE_BADGE[r]?.label || r}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* ── SECTION 3: STAFF INFORMATION ── */}
-        <div
-          style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-xl)',
-            padding: '16px 18px',
-            boxShadow: 'var(--shadow-soft)',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              paddingBottom: 10,
-              borderBottom: '1px solid var(--border-subtle)',
-              marginBottom: 14,
-            }}
+          <button
+            type="button"
+            onClick={() => validateStep1() && validateStep2() && setStep(3)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-colors ${
+              step === 3
+                ? 'bg-white dark:bg-gray-800 text-purple-700 dark:text-purple-300 font-bold shadow-xs'
+                : 'text-gray-400'
+            }`}
           >
-            <div
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: 6,
-                background: 'var(--primary-light)',
-                color: 'var(--primary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 12,
-                fontWeight: 700,
-              }}
-            >
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] ${
+              step === 3
+                ? 'bg-purple-600 text-white font-bold'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
+            }`}>
               3
-            </div>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Staff & Employment Details
             </span>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
-            {/* Employee Code */}
-            <div className="field">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                <label style={{ margin: 0 }}>
-                  Employee Code <span className="req">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => generateEmployeeCode()}
-                  className="btn btn-ghost btn-xs text-primary"
-                  style={{ fontSize: 11, padding: '1px 6px', height: 'auto' }}
-                >
-                  <RefreshCw style={{ width: 11, height: 11 }} /> Regenerate
-                </button>
-              </div>
-              <input
-                type="text"
-                required
-                placeholder="e.g. EMP-2041"
-                value={employeeCode}
-                onChange={(e) => setEmployeeCode(e.target.value.toUpperCase())}
-                className="input font-mono"
-              />
-              <span className="helper">Workforce identifier (distinct from login username)</span>
-            </div>
-
-            {/* Designation */}
-            <div className="field">
-              <label>
-                Job Designation <span className="req">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Senior Montessori Educator"
-                value={designation}
-                onChange={(e) => setDesignation(e.target.value)}
-                className="input"
-              />
-              <span className="helper">Official job title (independent of RBAC role)</span>
-            </div>
-
-            {/* Department */}
-            <div className="field">
-              <label>Department</label>
-              <select
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                className="select"
-              >
-                <option value="Academics">Academics</option>
-                <option value="Operations">Operations</option>
-                <option value="Finance">Finance</option>
-                <option value="Human Resources">Human Resources</option>
-                <option value="Transport">Transport</option>
-                <option value="Administration">Administration</option>
-              </select>
-            </div>
-
-            {/* Qualifications */}
-            <div className="field">
-              <label>Qualifications</label>
-              <input
-                type="text"
-                placeholder="e.g. B.Ed, Early Childhood Diploma"
-                value={qualification}
-                onChange={(e) => setQualification(e.target.value)}
-                className="input"
-              />
-            </div>
-
-            {/* Employment Type */}
-            <div className="field">
-              <label>Employment Type</label>
-              <select
-                value={employmentType}
-                onChange={(e) => setEmploymentType(e.target.value)}
-                className="select"
-              >
-                <option value="FULL_TIME">Full Time / Permanent</option>
-                <option value="PROBATION">Probationary</option>
-                <option value="CONTRACT">Contractual</option>
-                <option value="PART_TIME">Part Time</option>
-                <option value="REGULAR">Regular (Legacy)</option>
-              </select>
-            </div>
-
-            {/* Joining Date */}
-            <div className="field">
-              <label>Joining Date</label>
-              <div className="input-icon-wrap">
-                <Calendar style={{ width: 16, height: 16 }} />
-                <input
-                  type="date"
-                  value={joiningDate}
-                  onChange={(e) => setJoiningDate(e.target.value)}
-                  className="input"
-                  style={{ paddingLeft: 38 }}
-                />
-              </div>
-            </div>
-          </div>
+            <span>3. Access & Login</span>
+          </button>
         </div>
 
-        {/* ── SECTION 4: TEACHING ASSIGNMENT (CONDITIONAL FOR TEACHERS) ── */}
-        {isTeacher && (
-          <div
-            style={{
-              background: 'var(--preone-primary-soft)',
-              border: '1px solid color-mix(in srgb, var(--primary) 25%, transparent)',
-              borderRadius: 'var(--radius-xl)',
-              padding: '16px 18px',
-              boxShadow: 'var(--shadow-soft)',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                paddingBottom: 10,
-                borderBottom: '1px solid color-mix(in srgb, var(--primary) 20%, transparent)',
-                marginBottom: 14,
-              }}
-            >
-              <div
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 6,
-                  background: 'var(--primary)',
-                  color: '#FFFFFF',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 12,
-                  fontWeight: 700,
-                }}
-              >
-                4
-              </div>
-              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Teaching Assignment
-              </span>
-            </div>
+        <form
+          id="add-staff-form"
+          onSubmit={handleSubmit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && step < 3) {
+              e.preventDefault()
+              handleNext()
+            }
+          }}
+          autoComplete="off"
+        >
+          {/* ──────────────── STEP 1: BASIC INFORMATION ──────────────── */}
+          {step === 1 && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/40 space-y-4">
+                <div className="text-xs font-semibold text-gray-900 dark:text-white uppercase tracking-wider">
+                  Personal Details
+                </div>
 
-            <div className="field">
-              <label style={{ color: 'var(--primary)', fontWeight: 700 }}>
-                Assigned Primary Classroom <span className="req">*</span>
-              </label>
-              <div className="input-icon-wrap">
-                <DoorOpen style={{ width: 16, height: 16 }} />
-                <select
-                  required
-                  value={classroomId}
-                  onChange={(e) => setClassroomId(e.target.value)}
-                  className="select"
-                  style={{ paddingLeft: 38, background: 'var(--bg-card)' }}
-                >
-                  <option value="">Select Classroom / Section *</option>
-                  {availableClassrooms.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} {c.code ? `(${c.code})` : ''} {c.programType ? `— ${c.programType}` : ''}
-                    </option>
-                  ))}
-                </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Full Name */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Full Name <span className="text-red-500">*</span>
+                    </label>
+                    <div className="mt-1">
+                      <Input
+                        leadingIcon={<User className="w-4 h-4" />}
+                        type="text"
+                        required
+                        placeholder="e.g. Priya Sharma"
+                        value={fullName}
+                        onChange={(e) => handleFullNameChange(e.target.value)}
+                        className="text-xs"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  {/* Work Email */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Work Email <span className="text-red-500">*</span>
+                    </label>
+                    <div className="mt-1">
+                      <Input
+                        leadingIcon={<Mail className="w-4 h-4" />}
+                        type="email"
+                        required
+                        placeholder="e.g. priya@preschool.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Mobile Phone */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Mobile Phone
+                    </label>
+                    <div className="mt-1">
+                      <Input
+                        leadingIcon={<Phone className="w-4 h-4" />}
+                        type="tel"
+                        placeholder="+91 98765 43210"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Duplicate User Advisory Banner */}
+                  {duplicateHint && (
+                    <div className="sm:col-span-2 flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>{duplicateHint}</span>
+                    </div>
+                  )}
+
+                  {/* Staff Profile Photo Upload */}
+                  <UserPhotoUpload
+                    value={avatarUrl}
+                    onChange={setAvatarUrl}
+                    name={fullName}
+                    label="Staff Profile Photo"
+                    hint="Upload photo from device (JPG, PNG, WebP up to 5MB). Stored securely."
+                  />
+
+                  {/* Date of Birth */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Date of Birth
+                    </label>
+                    <div className="mt-1">
+                      <Input
+                        leadingIcon={<Calendar className="w-4 h-4" />}
+                        type="date"
+                        value={dateOfBirth}
+                        onChange={(e) => setDateOfBirth(e.target.value)}
+                        className="text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Gender */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Gender
+                    </label>
+                    <select
+                      value={gender}
+                      onChange={(e) => setGender(e.target.value as any)}
+                      className="select w-full text-xs mt-1"
+                    >
+                      <option value="">Select Gender</option>
+                      <option value="FEMALE">Female</option>
+                      <option value="MALE">Male</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                  </div>
+
+                  {/* Marital Status */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Marital Status
+                    </label>
+                    <select
+                      value={maritalStatus}
+                      onChange={(e) => setMaritalStatus(e.target.value)}
+                      className="select w-full text-xs mt-1"
+                    >
+                      <option value="">Select Status</option>
+                      {MARITAL_STATUSES.map((ms) => (
+                        <option key={ms} value={ms}>{ms}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Blood Group */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Blood Group
+                    </label>
+                    <select
+                      value={bloodGroup}
+                      onChange={(e) => setBloodGroup(e.target.value)}
+                      className="select w-full text-xs mt-1"
+                    >
+                      <option value="">Select Blood Group</option>
+                      {BLOOD_GROUPS.map((bg) => (
+                        <option key={bg} value={bg}>{bg}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Preferred Language / Locale */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Preferred Language
+                    </label>
+                    <select
+                      value={locale}
+                      onChange={(e) => setLocale(e.target.value)}
+                      className="select w-full text-xs mt-1"
+                    >
+                      {LOCALES.map((l) => (
+                        <option key={l.value} value={l.value}>{l.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Emergency Contact Name */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Emergency Contact Person
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Next of kin name"
+                      value={emergencyContactName}
+                      onChange={(e) => setEmergencyContactName(e.target.value)}
+                      className="input w-full text-xs mt-1"
+                    />
+                  </div>
+
+                  {/* Emergency Contact Phone */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Emergency Contact Phone
+                    </label>
+                    <input
+                      type="tel"
+                      placeholder="+91 98765 00000"
+                      value={emergencyContactPhone}
+                      onChange={(e) => setEmergencyContactPhone(e.target.value)}
+                      className="input w-full text-xs mt-1"
+                    />
+                  </div>
+
+                  {/* Current Address */}
+                  <div className="field sm:col-span-2">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Current Residential Address
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Street, locality, city and postal pin code"
+                      value={currentAddress}
+                      onChange={(e) => setCurrentAddress(e.target.value)}
+                      className="input w-full text-xs mt-1"
+                    />
+                  </div>
+                </div>
               </div>
-              <p style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 6, lineHeight: 1.35 }}>
-                Binds the teacher to the classroom for attendance taking, daily activity timelines, and learning reports.
-              </p>
             </div>
-          </div>
-        )}
-      </form>
+          )}
+
+          {/* ──────────────── STEP 2: WORK & ASSIGNMENT ──────────────── */}
+          {step === 2 && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/40 space-y-4">
+                <div className="text-xs font-semibold text-gray-900 dark:text-white uppercase tracking-wider">
+                  Role &amp; Campus Position
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Primary Role */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Primary Role <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={primaryRole}
+                      onChange={(e) => setPrimaryRole(e.target.value as Role)}
+                      className="select w-full text-xs mt-1"
+                    >
+                      {CANONICAL_STAFF_ROLES.map((r) => (
+                        <option key={r} value={r}>
+                          {ROLE_BADGE[r]?.label || r}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Campus Branch */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Primary Campus Branch <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative mt-1">
+                      <Building className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <select
+                        required
+                        value={branchId}
+                        onChange={(e) => {
+                          const newB = e.target.value
+                          setBranchId(newB)
+                          setClassroomId('')
+                          if (newB && !assignedBranchIds.includes(newB)) {
+                            setAssignedBranchIds((prev) => [...prev, newB])
+                          }
+                        }}
+                        className="select w-full text-xs pl-9"
+                      >
+                        {branches.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name} ({b.code})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Multi-Branch Campus Assignment (Doc 2.2 P2 Audit) */}
+                {branches.length > 1 && (
+                  <div className="pt-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                        Additional Assigned Branches
+                      </label>
+                      <span className="text-[10px] text-muted-foreground">
+                        Staff can access multiple campus locations
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 p-2 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/20">
+                      {branches.map((b) => {
+                        const isPrimary = branchId === b.id
+                        const isAssigned = isPrimary || assignedBranchIds.includes(b.id)
+                        return (
+                          <button
+                            key={b.id}
+                            type="button"
+                            onClick={() => {
+                              if (isPrimary) return
+                              setAssignedBranchIds((prev) =>
+                                prev.includes(b.id) ? prev.filter((id) => id !== b.id) : [...prev, b.id]
+                              )
+                            }}
+                            className={`btn btn-xs ${isPrimary ? 'btn-primary pointer-events-none' : isAssigned ? 'btn-secondary' : 'btn-outline'} text-[11px]`}
+                          >
+                            {isAssigned && <CheckCircle2 className="w-3 h-3 mr-1" />}
+                            {b.name} ({b.code}){isPrimary && ' — Primary'}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                  {/* Employee Code */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Employee Code <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex gap-2 mt-1">
+                      <input
+                        type="text"
+                        required
+                        placeholder="EMP-2026-001"
+                        value={employeeCode}
+                        onChange={(e) => setEmployeeCode(e.target.value)}
+                        className="input flex-1 text-xs font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={generateEmployeeCode}
+                        className="btn btn-secondary text-xs px-2.5 py-1"
+                        title="Regenerate code"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Job Designation */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Job Designation <span className="text-red-500">*</span>
+                    </label>
+                    <div className="mt-1">
+                      <Input
+                        leadingIcon={<Award className="w-4 h-4" />}
+                        type="text"
+                        required
+                        placeholder="e.g. Lead Teacher / Accounts Officer"
+                        value={designation}
+                        onChange={(e) => setDesignation(e.target.value)}
+                        className="text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Department */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Department
+                    </label>
+                    <select
+                      value={department}
+                      onChange={(e) => setDepartment(e.target.value)}
+                      className="select w-full text-xs mt-1"
+                    >
+                      <option value="Academics">Academics &amp; Early Years</option>
+                      <option value="Administration">Administration</option>
+                      <option value="Accounts">Accounts &amp; Finance</option>
+                      <option value="Operations">Operations &amp; Support</option>
+                      <option value="Transport">Transport &amp; Logistics</option>
+                    </select>
+                  </div>
+
+                  {/* Employment Type */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Employment Type
+                    </label>
+                    <select
+                      value={employmentType}
+                      onChange={(e) => setEmploymentType(e.target.value)}
+                      className="select w-full text-xs mt-1"
+                    >
+                      <option value="FULL_TIME">Full Time</option>
+                      <option value="PART_TIME">Part Time</option>
+                      <option value="CONTRACT">Contract</option>
+                      <option value="PROBATION">Probation</option>
+                    </select>
+                  </div>
+
+                  {/* Reporting Manager */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Reporting Manager
+                    </label>
+                    <select
+                      value={reportingManagerId}
+                      onChange={(e) => setReportingManagerId(e.target.value)}
+                      className="select w-full text-xs mt-1"
+                    >
+                      <option value="">None (Top-level / Self-managed)</option>
+                      {availableManagers.map((mgr) => (
+                        <option key={mgr.id} value={mgr.id}>
+                          {mgr.name} ({mgr.designation || mgr.role || 'Staff'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Joining Date */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Joining Date
+                    </label>
+                    <div className="mt-1">
+                      <Input
+                        leadingIcon={<Calendar className="w-4 h-4" />}
+                        type="date"
+                        value={joiningDate}
+                        onChange={(e) => setJoiningDate(e.target.value)}
+                        className="text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Qualification */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Qualification
+                    </label>
+                    <div className="mt-1">
+                      <Input
+                        leadingIcon={<GraduationCap className="w-4 h-4" />}
+                        type="text"
+                        placeholder="e.g. B.Ed, ECCEd, NTT"
+                        value={qualification}
+                        onChange={(e) => setQualification(e.target.value)}
+                        className="text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* PAN Number */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      PAN Number (Tax ID)
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={10}
+                      placeholder="ABCDE1234F"
+                      value={panNumber}
+                      onChange={(e) => setPanNumber(e.target.value.toUpperCase())}
+                      className="input w-full text-xs mt-1 uppercase font-mono"
+                    />
+                  </div>
+
+                  {/* Aadhaar Number */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Aadhaar Number (12 Digits)
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={12}
+                      placeholder="123456789012"
+                      value={aadhaarNumber}
+                      onChange={(e) => setAadhaarNumber(e.target.value.replace(/\D/g, ''))}
+                      className="input w-full text-xs mt-1 font-mono"
+                    />
+                  </div>
+
+                  {/* UAN & ESI */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      UAN (PF Universal Account)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="100000000000"
+                      value={uanNumber}
+                      onChange={(e) => setUanNumber(e.target.value)}
+                      className="input w-full text-xs mt-1 font-mono"
+                    />
+                  </div>
+
+                  {/* Notice Period (Days) */}
+                  <div className="field">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Notice Period (Days)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={365}
+                      placeholder="30"
+                      value={noticePeriodDays}
+                      onChange={(e) => setNoticePeriodDays(e.target.value)}
+                      className="input w-full text-xs mt-1 font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* Optional Secondary Roles */}
+                <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
+                  <span className="text-[11px] font-medium text-gray-500">
+                    Additional Secondary Roles (Optional)
+                  </span>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {CANONICAL_STAFF_ROLES.filter((r) => r !== primaryRole).map((r) => {
+                      const selected = additionalRoles.includes(r)
+                      return (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => toggleAdditionalRole(r)}
+                          className={`text-xs px-2.5 py-1 rounded-md border transition-colors ${
+                            selected
+                              ? 'bg-purple-100 dark:bg-purple-950/60 border-purple-300 text-purple-700 dark:text-purple-300 font-semibold'
+                              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
+                          }`}
+                        >
+                          {selected ? `✓ ${ROLE_BADGE[r]?.label || r}` : `+ ${ROLE_BADGE[r]?.label || r}`}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* ── TEACHING ASSIGNMENT: RENDERED STRICTLY ONLY FOR TEACHERS ── */}
+              {isTeacher && (
+                <div className="p-4 rounded-xl border border-purple-200 dark:border-purple-900/50 bg-purple-50/50 dark:bg-purple-950/20 space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-purple-800 dark:text-purple-300">
+                    <DoorOpen className="w-4 h-4" />
+                    <span>Teaching Assignment (Classroom)</span>
+                  </div>
+
+                  <div className="field">
+                    <label className="text-xs font-medium text-purple-900 dark:text-purple-200">
+                      Assigned Primary Classroom
+                    </label>
+                    <div className="relative mt-1">
+                      <select
+                        value={classroomId}
+                        onChange={(e) => setClassroomId(e.target.value)}
+                        className="select w-full text-xs bg-white dark:bg-gray-900"
+                      >
+                        <option value="">Select Classroom / Section (Optional)</option>
+                        {availableClassrooms.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} {c.code ? `(${c.code})` : ''} {c.programType ? `— ${c.programType}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="text-[11px] text-purple-700 dark:text-purple-300 mt-1.5 leading-relaxed">
+                      Assigning a classroom allows the teacher to take daily attendance, post learning observations, and manage classroom activity logs.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ──────────────── STEP 3: ACCOUNT & ACCESS ──────────────── */}
+          {step === 3 && (
+            <div className="space-y-4">
+              {/* Credential Setup Mode Selector */}
+              <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/40 space-y-3">
+                <div className="text-xs font-semibold text-gray-900 dark:text-white uppercase tracking-wider">
+                  Credential Setup Method <span className="text-red-500">*</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCredentialSetupMode('MANUAL')}
+                    className={`p-3 rounded-lg border text-left transition-all ${
+                      credentialSetupMode === 'MANUAL'
+                        ? 'border-purple-600 bg-purple-50/60 dark:bg-purple-950/30 ring-1 ring-purple-600'
+                        : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 bg-white dark:bg-gray-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className={`p-1.5 rounded-md ${credentialSetupMode === 'MANUAL' ? 'bg-purple-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}>
+                        <Key className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-gray-900 dark:text-white">
+                          Set Credentials Manually
+                        </div>
+                        <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                          Owner defines username &amp; password now
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCredentialSetupMode('INVITE')}
+                    className={`p-3 rounded-lg border text-left transition-all ${
+                      credentialSetupMode === 'INVITE'
+                        ? 'border-purple-600 bg-purple-50/60 dark:bg-purple-950/30 ring-1 ring-purple-600'
+                        : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 bg-white dark:bg-gray-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className={`p-1.5 rounded-md ${credentialSetupMode === 'INVITE' ? 'bg-purple-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}>
+                        <Mail className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-gray-900 dark:text-white">
+                          Send Email Invitation
+                        </div>
+                        <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                          Staff creates password via link (Pending)
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Path A: Manual Credential Setup */}
+              {credentialSetupMode === 'MANUAL' && (
+                <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/40 space-y-4">
+                  <div className="text-xs font-semibold text-gray-900 dark:text-white uppercase tracking-wider">
+                    Login Credentials &amp; Access
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Username */}
+                    <div className="field sm:col-span-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                          Login Username <span className="text-red-500">*</span>
+                        </label>
+                        {usernameChecking && (
+                          <span className="text-[11px] text-gray-500 flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 border border-purple-600 border-t-transparent rounded-full animate-spin" />
+                            Checking availability...
+                          </span>
+                        )}
+                        {!usernameChecking && usernameAvailable === true && (
+                          <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5" />
+                            Available
+                          </span>
+                        )}
+                        {!usernameChecking && usernameAvailable === false && (
+                          <span className="text-[11px] text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            {usernameError || 'Not available'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-2 mt-1">
+                        <div className="flex-1">
+                          <Input
+                            leadingIcon={<span className="text-xs font-mono text-gray-400">@</span>}
+                            type="text"
+                            required
+                            placeholder="priya.sharma"
+                            value={username}
+                            onChange={(e) => {
+                              setUsername(e.target.value)
+                              setIsUsernameCustom(true)
+                            }}
+                            className={`text-xs font-mono ${
+                              usernameAvailable === false ? 'border-red-500 focus-visible:ring-red-500' : ''
+                            }`}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsUsernameCustom(false)
+                            handleFullNameChange(fullName)
+                          }}
+                          className="btn btn-secondary text-xs px-2.5 py-1"
+                          title="Generate from staff name"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                        Used to sign in across web &amp; mobile apps. Letters, numbers, dots, hyphens, underscores.
+                      </p>
+                    </div>
+
+                    {/* Initial Password */}
+                    <div className="field">
+                      <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                        Password <span className="text-red-500">*</span>
+                      </label>
+                      <div className="flex gap-2 mt-1">
+                        <div className="flex-1">
+                          <Input
+                            leadingIcon={<Key className="w-4 h-4" />}
+                            type={showPassword ? 'text' : 'password'}
+                            required
+                            placeholder="Min. 8 characters"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="text-xs font-mono"
+                            trailingAction={
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
+                                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                              >
+                                {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            }
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={generateRandomPassword}
+                          className="btn btn-secondary text-xs px-2.5 py-1"
+                          title="Generate secure password"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Confirm Password */}
+                    <div className="field">
+                      <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                        Confirm Password <span className="text-red-500">*</span>
+                      </label>
+                      <div className="mt-1">
+                        <Input
+                          leadingIcon={<Key className="w-4 h-4" />}
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          required
+                          placeholder="Re-type password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          className={`text-xs font-mono ${
+                            confirmPassword && password !== confirmPassword ? 'border-red-500' : ''
+                          }`}
+                          trailingAction={
+                            <button
+                              type="button"
+                              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
+                              aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                            >
+                              {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                          }
+                        />
+                      </div>
+                      {confirmPassword && password !== confirmPassword && (
+                        <span className="text-[11px] text-red-500 flex items-center gap-1 mt-1">
+                          <AlertCircle className="w-3 h-3" /> Passwords do not match
+                        </span>
+                      )}
+                      {confirmPassword && password === confirmPassword && (
+                        <span className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-1">
+                          <Check className="w-3 h-3" /> Passwords match
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Account Status */}
+                    <div className="field sm:col-span-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                      <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                        Initial Account Status
+                      </label>
+                      <div className="flex items-center gap-4 mt-1.5">
+                        <label className="flex items-center gap-2 text-xs cursor-pointer">
+                          <input
+                            type="radio"
+                            name="status"
+                            checked={status === 'ACTIVE'}
+                            onChange={() => setStatus('ACTIVE')}
+                          />
+                          <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                            Active (Immediate Sign In)
+                          </span>
+                        </label>
+                        <label className="flex items-center gap-2 text-xs cursor-pointer">
+                          <input
+                            type="radio"
+                            name="status"
+                            checked={status === 'PENDING'}
+                            onChange={() => setStatus('PENDING')}
+                          />
+                          <span className="text-amber-700 dark:text-amber-400">
+                            Pending (Manual Activation Later)
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Path B: Invitation Flow */}
+              {credentialSetupMode === 'INVITE' && (
+                <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/40 dark:bg-blue-950/20 space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-blue-900 dark:text-blue-300">
+                    <Mail className="w-4 h-4" />
+                    <span>Staff Invitation &amp; Deferred Setup</span>
+                  </div>
+                  <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+                    An onboarding invitation will be queued for <strong>{email || 'the provided work email'}</strong>. The staff member will be prompted to set their own password upon first access.
+                  </p>
+                  <div className="p-3 bg-white dark:bg-gray-900 rounded-lg border border-blue-100 dark:border-blue-900/40 text-xs space-y-1">
+                    <div className="font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5 text-blue-600" />
+                      Security Policy Enforced:
+                    </div>
+                    <p className="text-[11px] text-gray-600 dark:text-gray-400">
+                      The account is created with <strong>PENDING</strong> status. Login is strictly blocked until the invitation is accepted and credentials are validly saved.
+                    </p>
+                  </div>
+
+                  <div className="field pt-2">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Suggested Username (Optional)
+                    </label>
+                    <div className="flex gap-2 mt-1">
+                      <div className="flex-1">
+                        <Input
+                          leadingIcon={<span className="text-xs font-mono text-gray-400">@</span>}
+                          type="text"
+                          placeholder="priya.sharma"
+                          value={username}
+                          onChange={(e) => {
+                            setUsername(e.target.value)
+                            setIsUsernameCustom(true)
+                          }}
+                          className="text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Summary Card */}
+              <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/60 space-y-2">
+                <div className="text-xs font-bold text-gray-900 dark:text-white">
+                  Summary Review
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-1">
+                  <div>
+                    <span className="text-[11px] text-gray-400 block">Name</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">{fullName || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-gray-400 block">Role</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">{ROLE_BADGE[primaryRole]?.label || primaryRole}</span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-gray-400 block">Branch</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">{selectedBranchObj?.name || 'All Campuses'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-gray-400 block">Employee Code</span>
+                    <span className="font-mono font-semibold text-purple-700 dark:text-purple-300">{employeeCode || '—'}</span>
+                  </div>
+                  {isTeacher && selectedClassroomObj && (
+                    <div className="col-span-2">
+                      <span className="text-[11px] text-gray-400 block">Assigned Classroom</span>
+                      <span className="font-semibold text-purple-700 dark:text-purple-300">{selectedClassroomObj.name}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </form>
+      </div>
     </Modal>
   )
 }

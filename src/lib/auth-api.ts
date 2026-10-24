@@ -6,6 +6,7 @@ import { Errors, forbidden, notFound, bad } from './api'
 import { AuditService } from './audit/audit-service'
 import { db } from './db'
 import { UserRole } from '@prisma/client'
+import { RbacEngine } from './auth/rbac-engine'
 
 /**
  * Guard for API route handlers — returns session or returns an HTTP Error Response.
@@ -18,8 +19,46 @@ export async function requireApi(
   const session = await getSession(req)
   if (!session) return Errors.unauthorized()
 
+  if (session.tenantId) {
+    const tenantExists = await db.tenant.findUnique({ where: { id: session.tenantId }, select: { id: true } })
+    if (!tenantExists) {
+      return Errors.unauthorized('Invalid or expired session. Please log in again.')
+    }
+  }
+
+  // Enforce mandatory password change (Phase 2) — non-parent roles only
+  const isParentRole =
+    session.role === 'PARENT' ||
+    session.role === 'GUARDIAN' ||
+    session.roles?.includes('PARENT') ||
+    session.roles?.includes('GUARDIAN')
+
+  if (!isParentRole && session.mustChangePassword) {
+    const path = req.nextUrl?.pathname || ''
+    const allowedPaths = ['/api/v1/auth/password', '/api/v1/auth/logout', '/api/v1/auth/me']
+    if (!allowedPaths.some((p) => path.startsWith(p))) {
+      return Errors.business(
+        'PASSWORD_CHANGE_REQUIRED',
+        'Mandatory password change required before accessing other features.',
+        403
+      )
+    }
+  }
+
   const effectiveRoles = session.roles && session.roles.length > 0 ? session.roles : [session.role]
-  if (permission && !can(effectiveRoles, permission)) {
+  let hasPermission = !permission || can(effectiveRoles, permission)
+  if (!hasPermission && permission && session.tenantId) {
+    const dynamicPerms = await RbacEngine.resolveEffectivePermissions({
+      userId: session.uid,
+      tenantId: session.tenantId,
+      roles: effectiveRoles,
+    })
+    hasPermission =
+      dynamicPerms.includes(permission) ||
+      (dynamicPerms.includes('*') && !permission.startsWith('platform:'))
+  }
+
+  if (!hasPermission) {
     // Record security event for unauthorized attempt
     await AuditService.recordSecurityEvent({
       action: 'AUTHORIZATION_FAILED',
@@ -124,9 +163,8 @@ export async function requireCanManageUser(
       OR: [{ userId: targetUserId }, { id: targetUserId }],
     },
     include: {
-      user: {
-        include: { staffProfile: true },
-      },
+      staffProfile: true,
+      user: true,
     },
   })
 

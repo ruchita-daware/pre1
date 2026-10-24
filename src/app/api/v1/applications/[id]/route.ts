@@ -18,8 +18,16 @@ async function _GET(
 
   const { id } = await params
   const sp = req.nextUrl.searchParams
-  const branchId = sp.get('branchId') || session.branchId
-  const academicYearId = sp.get('academicYearId')
+  const rawBranchId = sp.get('branchId')
+  const branchId =
+    rawBranchId && rawBranchId !== '__ALL_BRANCHES__' && rawBranchId.toLowerCase() !== 'all'
+      ? rawBranchId
+      : (session.branchId || '')
+  const rawAcademicYearId = sp.get('academicYearId')
+  const academicYearId =
+    rawAcademicYearId && rawAcademicYearId !== '__ALL_SESSIONS__' && rawAcademicYearId.toLowerCase() !== 'all'
+      ? rawAcademicYearId
+      : ''
 
   try {
     const reviewData = await AdmissionService.reviewApplication(
@@ -35,7 +43,10 @@ async function _GET(
 
     return ok(reviewData)
   } catch (e: any) {
-    return Errors.notFound(e.message || 'Application')
+    if (e.message && e.message.toLowerCase().includes('not found')) {
+      return Errors.notFound(e.message)
+    }
+    return Errors.business('ADMISSION_REVIEW_FAILED', e.message || 'Failed to review application')
   }
 }
 
@@ -59,40 +70,57 @@ async function _PATCH(
     })
     if (!app) return Errors.notFound('Application')
 
-    if (app.status === 'ENROLLED') {
+    if (app.status === 'ENROLLED' || app.status === 'ADMITTED') {
       return Errors.conflict('Cannot modify an already enrolled application')
     }
 
-    const {
-      childFirstName,
-      childLastName,
-      childDob,
-      childGender,
-      parentName,
-      parentPhone,
-      parentEmail,
-      previousSchool,
-      notes,
-    } = body
-
-    const updated = await db.admissionApplication.update({
-      where: { id },
-      data: {
-        ...(childFirstName ? { childFirstName } : {}),
-        ...(childLastName !== undefined ? { childLastName } : {}),
-        ...(childDob ? { childDob: new Date(childDob) } : {}),
-        ...(childGender ? { childGender } : {}),
-        ...(parentName ? { parentName } : {}),
-        ...(parentPhone ? { parentPhone } : {}),
-        ...(parentEmail !== undefined ? { parentEmail } : {}),
-        ...(previousSchool !== undefined ? { previousSchool } : {}),
-        ...(notes !== undefined ? { notes } : {}),
+    const updated = await AdmissionService.updateApplication(
+      {
+        tenantId: session.tenantId,
+        branchId: session.branchId || app.branchId,
+        academicYearId: app.academicSessionId,
+        actorId: session.uid,
+        actorName: session.name,
+        actorRole: session.role,
       },
-    })
+      id,
+      body
+    )
 
-    return ok(updated)
+    let enrollmentResult: any = null
+    const shouldAutoConfirm = !body.isDraft && (body.status === 'SUBMITTED' || body.status === 'ENROLLED' || body.confirmAdmission === true)
+    if (shouldAutoConfirm) {
+      try {
+        enrollmentResult = await AdmissionService.completeEnrollment(
+          {
+            tenantId: session.tenantId,
+            branchId: session.branchId || app.branchId,
+            academicYearId: app.academicSessionId,
+            actorId: session.uid,
+            actorName: session.name,
+            actorRole: session.role,
+          },
+          id,
+          {
+            classroomId: body.classroomId || undefined,
+            skipDocCheck: true,
+          }
+        )
+      } catch (enrollErr) {
+        console.error('Auto-enroll on application update error:', enrollErr)
+      }
+    }
+
+    const finalApp = enrollmentResult
+      ? await db.admissionApplication.findUnique({ where: { id } })
+      : updated
+
+    return ok(finalApp)
   } catch (e: any) {
-    return Errors.system(e)
+    if (e.message && e.message.toLowerCase().includes('not found')) {
+      return Errors.notFound(e.message)
+    }
+    return Errors.business('APPLICATION_UPDATE_FAILED', e.message || 'Failed to update application', 422)
   }
 }
 
