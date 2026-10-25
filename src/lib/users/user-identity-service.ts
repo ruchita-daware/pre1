@@ -1,8 +1,9 @@
+import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { UserRole, UserStatus } from '@prisma/client'
-import { UsernameService, UsernameType } from './username-service'
+import { UsernameService, UsernameType, normalizeUsername } from './username-service'
 
 export interface BaseIdentityOptions {
   fullName: string
@@ -13,6 +14,8 @@ export interface BaseIdentityOptions {
   status?: UserStatus
   usernameType: UsernameType
   avatarUrl?: string | null
+  locale?: string
+  mustChangePassword?: boolean
 }
 
 export interface TenantMembershipOptions {
@@ -21,6 +24,7 @@ export interface TenantMembershipOptions {
   role: UserRole
   roles: UserRole[]
   branchId?: string | null
+  branchIds?: string[]
   status: UserStatus
 }
 
@@ -71,19 +75,9 @@ export class UserIdentityService {
         where: { username: opts.username.trim().toLowerCase() },
       })
     }
-    if (!user && phoneNorm) {
-      user = await tx.user.findFirst({
-        where: { phone: phoneNorm },
-      })
-    }
-    if (!user && opts.username?.trim()) {
-      user = await tx.user.findUnique({
-        where: { username: opts.username.trim().toLowerCase() },
-      })
-    }
 
     // Determine unique username
-    let username = opts.username?.trim().toLowerCase()
+    let username = opts.username ? normalizeUsername(opts.username) : undefined
     if (user && user.username) {
       username = user.username
     } else if (!username) {
@@ -103,9 +97,21 @@ export class UserIdentityService {
       }
     }
 
-    // Determine password hash
-    const rawPassword = opts.password || `PreOne@${Math.random().toString(36).slice(-8)}`
+    // Determine password hash using CSPRNG when generated
+    const isParentRole = opts.usernameType === 'PARENT' || opts.usernameType === 'GUARDIAN'
+    const isGeneratedPassword = !opts.password || opts.password.trim().length < 8
+    let rawPassword = opts.password ? opts.password.trim() : ''
+    if (isGeneratedPassword) {
+      const entropy = typeof crypto?.randomBytes === 'function'
+        ? crypto.randomBytes(6).toString('hex')
+        : 'S3cure' + Date.now().toString(36)
+      rawPassword = `PreOne@${entropy}`
+    }
     const passwordHash = await this.hashPassword(rawPassword)
+
+    const effectiveMustChangePassword = opts.mustChangePassword !== undefined
+      ? (isParentRole ? false : opts.mustChangePassword)
+      : (isParentRole ? false : isGeneratedPassword)
 
     if (!user) {
       user = await tx.user.create({
@@ -116,23 +122,31 @@ export class UserIdentityService {
           fullName: opts.fullName.trim(),
           avatarUrl: opts.avatarUrl?.trim() || null,
           passwordHash,
+          mustChangePassword: effectiveMustChangePassword,
           status: initialStatus,
+          ...(opts.locale ? { locale: opts.locale } : {}),
         },
       })
       return { user, isNewUser: true }
     } else {
       // Update phone if previously unset
+      const needsNameUpdate = Boolean(opts.fullName?.trim()) && user.fullName !== opts.fullName.trim()
       const needsPhoneUpdate = !user.phone && phoneNorm
       const needsUsernameUpdate = !user.username && username
       const needsAvatarUpdate = !user.avatarUrl && opts.avatarUrl?.trim()
+      const needsLocaleUpdate = Boolean(opts.locale) && user.locale !== opts.locale
+      const needsPasswordFlagClear = isParentRole && user.mustChangePassword
 
-      if (needsPhoneUpdate || needsUsernameUpdate || needsAvatarUpdate) {
+      if (needsNameUpdate || needsPhoneUpdate || needsUsernameUpdate || needsAvatarUpdate || needsLocaleUpdate || needsPasswordFlagClear) {
         user = await tx.user.update({
           where: { id: user.id },
           data: {
+            ...(needsNameUpdate ? { fullName: opts.fullName.trim() } : {}),
             ...(needsPhoneUpdate ? { phone: phoneNorm } : {}),
             ...(needsUsernameUpdate ? { username } : {}),
             ...(needsAvatarUpdate ? { avatarUrl: opts.avatarUrl!.trim() } : {}),
+            ...(needsLocaleUpdate ? { locale: opts.locale } : {}),
+            ...(needsPasswordFlagClear ? { mustChangePassword: false } : {}),
           },
         })
       }
@@ -142,7 +156,7 @@ export class UserIdentityService {
   }
 
   /**
-   * Creates or activates a TenantUser membership record.
+   * Creates or activates a TenantUser membership record and syncs multi-branch assignments.
    */
   static async createOrUpdateMembership(
     tx: Prisma.TransactionClient,
@@ -156,10 +170,11 @@ export class UserIdentityService {
       },
     })
 
+    let membership: any
     if (existingMembership) {
       // Merge roles if membership exists
       const mergedRoles = [...new Set([...existingMembership.roles, ...opts.roles])]
-      return tx.tenantUser.update({
+      membership = await tx.tenantUser.update({
         where: { id: existingMembership.id },
         data: {
           role: opts.role,
@@ -168,17 +183,83 @@ export class UserIdentityService {
           ...(opts.branchId !== undefined ? { branchId: opts.branchId } : {}),
         },
       })
+    } else {
+      membership = await tx.tenantUser.create({
+        data: {
+          tenantId: opts.tenantId,
+          userId: opts.userId,
+          role: opts.role,
+          roles: opts.roles,
+          branchId: opts.branchId || null,
+          status: opts.status,
+        },
+      })
     }
 
-    return tx.tenantUser.create({
-      data: {
+    if (opts.branchIds !== undefined || opts.branchId !== undefined) {
+      await UserIdentityService.syncTenantUserBranches(tx, {
         tenantId: opts.tenantId,
-        userId: opts.userId,
-        role: opts.role,
-        roles: opts.roles,
-        branchId: opts.branchId || null,
-        status: opts.status,
+        tenantUserId: membership.id,
+        primaryBranchId: membership.branchId,
+        branchIds: opts.branchIds !== undefined ? opts.branchIds : (membership.branchId ? [membership.branchId] : []),
+      })
+    }
+
+    return membership
+  }
+
+  /**
+   * Synchronizes multi-branch assignments in TenantUserBranch junction table (Doc 2.2 P2 Audit)
+   */
+  static async syncTenantUserBranches(
+    tx: Prisma.TransactionClient,
+    params: {
+      tenantId: string
+      tenantUserId: string
+      primaryBranchId?: string | null
+      branchIds?: string[]
+    }
+  ): Promise<void> {
+    const { tenantId, tenantUserId, primaryBranchId, branchIds } = params
+
+    const distinctBranches = new Set<string>()
+    if (primaryBranchId) distinctBranches.add(primaryBranchId)
+    if (Array.isArray(branchIds)) {
+      for (const id of branchIds) {
+        if (id && typeof id === 'string' && id.trim()) {
+          distinctBranches.add(id.trim())
+        }
+      }
+    }
+
+    // Remove obsolete junction records
+    await (tx as any).tenantUserBranch.deleteMany({
+      where: {
+        tenantUserId,
+        branchId: { notIn: Array.from(distinctBranches) },
       },
     })
+
+    // Upsert current branches
+    for (const bId of distinctBranches) {
+      const isPrimary = Boolean(primaryBranchId && bId === primaryBranchId)
+      await (tx as any).tenantUserBranch.upsert({
+        where: {
+          tenantUserId_branchId: {
+            tenantUserId,
+            branchId: bId,
+          },
+        },
+        create: {
+          tenantId,
+          tenantUserId,
+          branchId: bId,
+          isPrimary,
+        },
+        update: {
+          isPrimary,
+        },
+      })
+    }
   }
 }

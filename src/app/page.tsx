@@ -39,9 +39,33 @@ export default function LoginPage() {
     password?: string
     otp?: string
   }>({})
+  const [touched, setTouched] = useState<{
+    schoolCode?: boolean
+    identifier?: boolean
+    password?: boolean
+  }>({})
   const [capsLockActive, setCapsLockActive] = useState<boolean>(false)
   const [showForgotModal, setShowForgotModal] = useState(false)
   const [useUsername, setUseUsername] = useState(false)
+  const [branding, setBranding] = useState<{ logoUrl: string | null; schoolName?: string; primaryColor?: string } | null>(null)
+  const [greeting, setGreeting] = useState<string | null>(null)
+
+  // Compute time-aware greeting safely on client mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const hour = new Date().getHours()
+        if (hour >= 5 && hour < 12) {
+          setGreeting('Good morning ☀')
+        } else if (hour >= 12 && hour < 17) {
+          setGreeting('Good afternoon ☀')
+        } else {
+          setGreeting('Good evening 🌙')
+        }
+      } catch {}
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [])
 
   // OTP specific state
   const [otp, setOtp] = useState<string[]>(['', '', '', ''])
@@ -49,14 +73,45 @@ export default function LoginPage() {
   const [canResendOtp, setCanResendOtp] = useState<boolean>(false)
   const [resendSuccess, setResendSuccess] = useState<boolean>(false)
 
+  // MFA Step-Up specific state (Doc 1.2)
+  const [mfaToken, setMfaToken] = useState<string | null>(null)
+  const [mfaDestination, setMfaDestination] = useState<string | null>(null)
+  const [mfaRole, setMfaRole] = useState<string | null>(null)
+
   const identifierInputRef = useRef<HTMLInputElement>(null)
+
+  // Fetch school branding for login surface
+  useEffect(() => {
+    const queryCode = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('code') || '' : ''
+    const codeToFetch = queryCode || schoolCode
+    if (queryCode && !schoolCode) {
+      setTimeout(() => setSchoolCode(queryCode), 0)
+    }
+    fetch(`/api/v1/auth/branding?code=${encodeURIComponent(codeToFetch)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j?.success && j.data) {
+          setBranding(j.data)
+        }
+      })
+      .catch(() => {})
+  }, [schoolCode])
 
   // Auto redirect if already logged in
   useEffect(() => {
     fetch('/api/v1/me')
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
-        if (j?.success) router.replace('/app/dashboard')
+        if (j?.success) {
+          const role = j.data?.role || j.data?.user?.role
+          if (role === 'PLATFORM_ADMIN') {
+            router.replace('/onboard')
+          } else {
+            router.replace('/app/dashboard')
+          }
+        } else {
+          document.cookie = 'preone_session=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;'
+        }
       })
       .catch(() => {})
   }, [router])
@@ -68,17 +123,56 @@ export default function LoginPage() {
       const timer = setTimeout(() => setOtpCountdown((c) => c - 1), 1000)
       return () => clearTimeout(timer)
     } else {
-      setCanResendOtp(true)
+      const timer = setTimeout(() => setCanResendOtp(true), 0)
+      return () => clearTimeout(timer)
     }
   }, [authMode, otpCountdown])
 
+  const validateField = (fieldName: 'schoolCode' | 'identifier' | 'password', val?: string) => {
+    const value = val !== undefined ? val : (fieldName === 'schoolCode' ? schoolCode : fieldName === 'identifier' ? identifier : password)
+    let err: string | undefined
+
+    if (fieldName === 'schoolCode') {
+      if (!value.trim()) {
+        err = 'School code is required.'
+      }
+    } else if (fieldName === 'identifier') {
+      const trimmed = value.trim()
+      if (!trimmed) {
+        err = useUsername ? 'Username is required.' : 'Email or username is required.'
+      } else if (!useUsername && trimmed.includes('@')) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (!emailRegex.test(trimmed)) {
+          err = 'Please enter a valid email address.'
+        }
+      }
+    } else if (fieldName === 'password') {
+      if (!value) {
+        err = 'Password is required.'
+      }
+    }
+
+    setFieldErrors((prev) => ({
+      ...prev,
+      [fieldName]: err,
+    }))
+    return !err
+  }
+
   const validateLoginForm = () => {
+    setTouched({ schoolCode: true, identifier: true, password: true })
     const errors: { schoolCode?: string; identifier?: string; password?: string } = {}
     if (!schoolCode.trim()) {
       errors.schoolCode = 'School code is required.'
     }
-    if (!identifier.trim()) {
+    const trimmedIdent = identifier.trim()
+    if (!trimmedIdent) {
       errors.identifier = useUsername ? 'Username is required.' : 'Email or username is required.'
+    } else if (!useUsername && trimmedIdent.includes('@')) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(trimmedIdent)) {
+        errors.identifier = 'Please enter a valid email address.'
+      }
     }
     if (!password) {
       errors.password = 'Password is required.'
@@ -115,7 +209,26 @@ export default function LoginPage() {
         return
       }
 
-      router.push('/app/dashboard')
+      // Privileged role Step-Up MFA Challenge (Doc 1.2: OWNER & ACCOUNTS)
+      if (json.data?.requiresMfa) {
+        setMfaToken(json.data.mfaToken)
+        setMfaDestination(json.data.destination || identifier.trim())
+        setMfaRole(json.data.role || 'Privileged Role')
+        setAuthMode('otp')
+        setOtp(['', '', '', ''])
+        setOtpCountdown(45)
+        setCanResendOtp(false)
+        setGeneralError(null)
+        setFieldErrors({})
+        setLoading(false)
+        return
+      }
+
+      if (json.data?.user?.role === 'PLATFORM_ADMIN') {
+        router.push('/onboard')
+      } else {
+        router.push('/app/dashboard')
+      }
       router.refresh()
     } catch {
       setGeneralError('Network connectivity error. Please try again.')
@@ -123,58 +236,115 @@ export default function LoginPage() {
     }
   }
 
-  const handleOtpVerify = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault()
-    const code = otp.join('')
+  const handleOtpVerify = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault()
+    let code = otp.join('')
+    if (code.length < 4 && typeof document !== 'undefined') {
+      const inputs = document.querySelectorAll<HTMLInputElement>('.auth-otp-group input')
+      if (inputs.length >= 4) {
+        const domCode = Array.from(inputs).map((inp) => inp.value).join('')
+        if (domCode.length === 4) {
+          code = domCode
+          setOtp(domCode.split(''))
+        }
+      }
+    }
+
     if (code.length < 4) {
-      setFieldErrors({ otp: 'Please enter all 4 digits of your verification code.' })
+      const msg = 'Please enter all 4 digits of your verification code.'
+      setFieldErrors({ otp: msg })
+      setGeneralError(msg)
       return
     }
 
     setLoading(true)
     setGeneralError(null)
+    setFieldErrors({})
 
-    // Demo/Development OTP verification: '0000' and '1234' supported
-    if (code === '0000' || code === '1234') {
-      try {
-        const loginId = identifier.trim() || 'owner@sunshine.demo'
-        const loginPw = password || 'Preone@123'
-        const res = await fetch('/api/v1/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            identifier: loginId,
-            password: loginPw,
-            schoolCode: schoolCode.trim() || undefined,
-          }),
-        })
-        const json = await res.json()
-        if (json.success) {
-          router.push('/app/dashboard')
-          router.refresh()
-          return
-        }
-      } catch {}
-      router.push('/app/dashboard')
+    try {
+      const res = await (mfaToken
+        ? fetch('/api/v1/auth/mfa/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mfaToken, code }),
+          })
+        : fetch('/api/v1/auth/otp/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              identifier: identifier.trim() || undefined,
+              code,
+              schoolCode: schoolCode.trim() || undefined,
+            }),
+          }))
+
+      const json = await res.json()
+      if (!json.success) {
+        const errorMsg =
+          json.error?.message || 'Invalid verification code. Please check and try again.'
+        setFieldErrors({ otp: errorMsg })
+        setGeneralError(errorMsg)
+        setLoading(false)
+        return
+      }
+
+      if (json.data?.user?.role === 'PLATFORM_ADMIN') {
+        router.push('/onboard')
+      } else {
+        router.push('/app/dashboard')
+      }
       router.refresh()
-      return
+    } catch {
+      const errorMsg = 'Network connectivity error. Please check your connection and try again.'
+      setGeneralError(errorMsg)
+      setFieldErrors({ otp: errorMsg })
+      setLoading(false)
     }
-
-    setFieldErrors({ otp: 'Invalid verification code. Please check and try again.' })
-    setLoading(false)
   }
 
-  const handleResendOtp = () => {
-    if (!canResendOtp) return
-    setOtpCountdown(45)
-    setCanResendOtp(false)
-    setResendSuccess(true)
-    setOtp(['', '', '', ''])
-    setTimeout(() => setResendSuccess(false), 3000)
+  const handleResendOtp = async () => {
+    if (!canResendOtp || loading) return
+    setLoading(true)
+    setGeneralError(null)
+    setFieldErrors({})
+
+    try {
+      const res = await (mfaToken
+        ? fetch('/api/v1/auth/mfa/resend', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mfaToken }),
+          })
+        : fetch('/api/v1/auth/otp/resend', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              identifier: identifier.trim() || undefined,
+              schoolCode: schoolCode.trim() || undefined,
+            }),
+          }))
+
+      const json = await res.json()
+      if (!json.success) {
+        setGeneralError(json.error?.message || 'Failed to resend code. Please try again.')
+        setLoading(false)
+        return
+      }
+
+      setOtpCountdown(45)
+      setCanResendOtp(false)
+      setResendSuccess(true)
+      setOtp(['', '', '', ''])
+      setTimeout(() => setResendSuccess(false), 3000)
+    } catch {
+      setGeneralError('Network error while resending verification code.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const checkCapsLock = (e: React.KeyboardEvent) => {
-    if (e.getModifierState) {
+    if (typeof e.getModifierState === 'function') {
       setCapsLockActive(e.getModifierState('CapsLock'))
     }
   }
@@ -188,7 +358,11 @@ export default function LoginPage() {
           <AuthCard>
             
             {/* Hero Brand Anchor — Unboxed with breathing room */}
-            <AuthBrand tagline="Nurturing Little Futures" />
+            <AuthBrand
+              tagline="Nurturing Little Futures"
+              logoUrl={branding?.logoUrl}
+              schoolName={branding?.schoolName}
+            />
 
             {/* ══════════════════════════════════════════════════════════
                 MODE 1: LOGIN VIEW
@@ -196,6 +370,7 @@ export default function LoginPage() {
             {authMode === 'login' && (
               <>
                 <AuthHeader
+                  greeting={greeting}
                   title="Welcome Back"
                   description="Sign in to your school workspace"
                 />
@@ -235,21 +410,35 @@ export default function LoginPage() {
                         type="text"
                         value={schoolCode}
                         onChange={(e) => {
-                          setSchoolCode(e.target.value)
+                          const val = e.target.value
+                          setSchoolCode(val)
                           if (fieldErrors.schoolCode) {
-                            setFieldErrors((prev) => ({ ...prev, schoolCode: undefined }))
+                            if (val.trim()) {
+                              setFieldErrors((prev) => ({ ...prev, schoolCode: undefined }))
+                            }
                           }
+                        }}
+                        onBlur={() => {
+                          setTouched((prev) => ({ ...prev, schoolCode: true }))
+                          validateField('schoolCode', schoolCode)
                         }}
                         placeholder="e.g. sunshine"
                         autoComplete="organization"
                         leadingIcon={<Building2 className="w-4 h-4" />}
                         hasError={!!fieldErrors.schoolCode}
+                        aria-invalid={!!fieldErrors.schoolCode}
+                        aria-describedby={fieldErrors.schoolCode ? 'login-school-code-error' : undefined}
                         trailingAction={
                           schoolCode ? (
                             <AuthIconButton
                               icon={<X className="w-3.5 h-3.5" />}
                               ariaLabel="Clear school code"
-                              onClick={() => setSchoolCode('')}
+                              onClick={() => {
+                                setSchoolCode('')
+                                if (touched.schoolCode) {
+                                  setFieldErrors((prev) => ({ ...prev, schoolCode: 'School code is required.' }))
+                                }
+                              }}
                             />
                           ) : null
                         }
@@ -266,8 +455,11 @@ export default function LoginPage() {
                           onClick={() => {
                             const nextMode = !useUsername
                             setUseUsername(nextMode)
-                            if (fieldErrors.identifier) {
-                              setFieldErrors((prev) => ({ ...prev, identifier: undefined }))
+                            setFieldErrors((prev) => ({ ...prev, identifier: undefined }))
+                            if (identifier.trim() && touched.identifier) {
+                              setTimeout(() => {
+                                validateField('identifier', identifier)
+                              }, 0)
                             }
                           }}
                         >
@@ -281,15 +473,24 @@ export default function LoginPage() {
                         type="text"
                         value={identifier}
                         onChange={(e) => {
-                          setIdentifier(e.target.value)
+                          const val = e.target.value
+                          setIdentifier(val)
                           if (fieldErrors.identifier) {
-                            setFieldErrors((prev) => ({ ...prev, identifier: undefined }))
+                            if (val.trim()) {
+                              setFieldErrors((prev) => ({ ...prev, identifier: undefined }))
+                            }
                           }
+                        }}
+                        onBlur={() => {
+                          setTouched((prev) => ({ ...prev, identifier: true }))
+                          validateField('identifier', identifier)
                         }}
                         placeholder={useUsername ? 'e.g. meera.iyer' : 'e.g. name@school.com or username'}
                         autoComplete="username"
                         leadingIcon={isEmail ? <Mail className="w-4 h-4" /> : <User className="w-4 h-4" />}
                         hasError={!!fieldErrors.identifier}
+                        aria-invalid={!!fieldErrors.identifier}
+                        aria-describedby={fieldErrors.identifier ? 'login-identifier-error' : undefined}
                         trailingAction={
                           identifier ? (
                             <AuthIconButton
@@ -298,6 +499,12 @@ export default function LoginPage() {
                               onClick={() => {
                                 setIdentifier('')
                                 identifierInputRef.current?.focus()
+                                if (touched.identifier) {
+                                  setFieldErrors((prev) => ({
+                                    ...prev,
+                                    identifier: useUsername ? 'Username is required.' : 'Email or username is required.',
+                                  }))
+                                }
                               }}
                             />
                           ) : null
@@ -320,24 +527,43 @@ export default function LoginPage() {
                         id="login-password"
                         value={password}
                         onChange={(e) => {
-                          setPassword(e.target.value)
-                          if (fieldErrors.password) {
+                          const val = e.target.value
+                          setPassword(val)
+                          if (fieldErrors.password && val) {
                             setFieldErrors((prev) => ({ ...prev, password: undefined }))
                           }
+                        }}
+                        onBlur={() => {
+                          setTouched((prev) => ({ ...prev, password: true }))
+                          setCapsLockActive(false)
+                          validateField('password', password)
                         }}
                         onKeyDown={checkCapsLock}
                         onKeyUp={checkCapsLock}
                         placeholder="••••••••••••"
                         autoComplete="current-password"
                         hasError={!!fieldErrors.password}
+                        aria-invalid={!!fieldErrors.password}
+                        aria-describedby={
+                          fieldErrors.password
+                            ? 'login-password-error'
+                            : capsLockActive
+                            ? 'login-password-caps'
+                            : undefined
+                        }
                       />
                     </AuthField>
 
                     {/* CapsLock Warning */}
                     {capsLockActive && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400 font-medium animate-in fade-in duration-150">
-                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                        <span>Caps Lock is ON</span>
+                      <div
+                        id="login-password-caps"
+                        role="status"
+                        aria-live="polite"
+                        className="flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400 font-medium animate-in fade-in duration-150 select-none"
+                      >
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                        <span>Caps Lock is on</span>
                       </div>
                     )}
 
@@ -349,10 +575,25 @@ export default function LoginPage() {
                       secondaryAction={
                         <div className="pt-1">
                           <AuthLink
-                            onClick={() => {
+                            onClick={async () => {
                               setAuthMode('otp')
+                              setMfaToken(null)
+                              setMfaDestination(null)
+                              setMfaRole(null)
                               setGeneralError(null)
                               setFieldErrors({})
+                              if (identifier.trim()) {
+                                try {
+                                  await fetch('/api/v1/auth/otp/send', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      identifier: identifier.trim(),
+                                      schoolCode: schoolCode.trim() || undefined,
+                                    }),
+                                  })
+                                } catch {}
+                              }
                             }}
                             className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-purple-600 dark:text-slate-400 dark:hover:text-purple-400 font-medium no-underline hover:no-underline"
                           >
@@ -376,8 +617,14 @@ export default function LoginPage() {
             {authMode === 'otp' && (
               <>
                 <AuthHeader
-                  title="Verify Your Login"
-                  description="Enter the 4-digit verification code sent to your registered contact."
+                  title={mfaToken ? "Two-Factor Authentication" : "Verify Your Login"}
+                  description={
+                    mfaToken
+                      ? `Step-up verification required for ${mfaRole || 'Privileged'} account. Enter the 4-digit code sent to ${mfaDestination || 'your registered contact'}.`
+                      : identifier.trim()
+                        ? `Enter the 4-digit verification code sent to ${identifier.trim()}.`
+                        : 'Enter the 4-digit verification code sent to your registered contact.'
+                  }
                 />
 
                 <AuthContent>
@@ -434,6 +681,7 @@ export default function LoginPage() {
                       primaryText="Verify OTP"
                       loadingText="Verifying code..."
                       loading={loading}
+                      onClick={(e) => handleOtpVerify(e)}
                       secondaryAction={
                         <div className="space-y-3 pt-1">
                           <div className="text-xs text-slate-500 dark:text-slate-400">
@@ -454,6 +702,9 @@ export default function LoginPage() {
                             <AuthLink
                               onClick={() => {
                                 setAuthMode('login')
+                                setMfaToken(null)
+                                setMfaDestination(null)
+                                setMfaRole(null)
                                 setGeneralError(null)
                                 setFieldErrors({})
                               }}

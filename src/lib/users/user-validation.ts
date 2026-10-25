@@ -1,4 +1,22 @@
 import { UserRole, Relationship, UserStatus, EmploymentType, Gender, BloodGroup, ProgramType } from '@prisma/client'
+import { MIN_PASSWORD_LENGTH, PASSWORD_POLICY } from '@/lib/auth'
+
+export { MIN_PASSWORD_LENGTH, PASSWORD_POLICY } from '@/lib/auth'
+export {
+  validatePan,
+  validateAadhaar,
+  validateUan,
+  validateEsi,
+  validateStatutoryInputs,
+  validateVerhoeff,
+  generateVerhoeff,
+} from './statutory-validation'
+import {
+  validatePan,
+  validateAadhaar,
+  validateUan,
+  validateEsi,
+} from './statutory-validation'
 
 export interface StaffCreateInput {
   avatarUrl?: string | null
@@ -12,10 +30,11 @@ export interface StaffCreateInput {
   primaryRole?: UserRole
   additionalRoles?: UserRole[]
   branchId?: string | null
+  branchIds?: string[]
   employeeCode?: string
-  designation?: string
-  department?: string
-  qualification?: string
+  designation?: string | null
+  department?: string | null
+  qualification?: string | null
   employmentType?: EmploymentType
   joiningDate?: string | Date | null
   dateOfBirth?: string | Date | null
@@ -23,6 +42,20 @@ export interface StaffCreateInput {
   reportingManagerId?: string | null
   classroomId?: string
   status?: UserStatus
+  emergencyContactName?: string | null
+  emergencyContactPhone?: string | null
+  maritalStatus?: string | null
+  bloodGroup?: BloodGroup | null
+  currentAddress?: string | null
+  permanentAddress?: string | null
+  panNumber?: string | null
+  aadhaarNumber?: string | null
+  uanNumber?: string | null
+  esiNumber?: string | null
+  probationEndDate?: string | Date | null
+  confirmationDate?: string | Date | null
+  noticePeriodDays?: number | null
+  locale?: string
 }
 
 export interface FamilyCreateInput {
@@ -36,6 +69,8 @@ export interface FamilyCreateInput {
   password?: string
   status?: UserStatus
   relationship: Relationship
+  occupation?: string | null
+  locale?: string
   isPrimaryContact?: boolean
   childMode: 'CREATE' | 'EXISTING'
   existingChild?: {
@@ -59,6 +94,8 @@ export interface FamilyCreateInput {
     branchId?: string
     classroomId?: string
     seatNumber?: string
+    photoUrl?: string
+    address?: string
     academicSessionId?: string
   }
   permissions: {
@@ -67,13 +104,159 @@ export interface FamilyCreateInput {
     receivesCommunication?: boolean
     isFeePayer?: boolean
   }
+  confirmDuplicate?: boolean
+}
+
+/**
+ * Normalizes input from both canonical fields and unified creation aliases:
+ * parentGuardian* and student*
+ */
+export function normalizeFamilyCreateInput(body: any): FamilyCreateInput {
+  const fullName = (body.fullName || body.parentName || body.parentGuardianFullName || '').trim()
+  const email = (body.email || body.parentEmail || body.parentGuardianEmail || '').trim().toLowerCase()
+  const phone = (body.phone || body.parentPhone || body.parentGuardianPhone || '').trim()
+  const avatarUrl = body.avatarUrl || body.parentPhoto || body.parentGuardianPhoto || null
+  const rawRole = (body.role || body.parentGuardianRole || 'PARENT').toUpperCase()
+  const role: 'PARENT' | 'GUARDIAN' = rawRole === 'GUARDIAN' ? 'GUARDIAN' : 'PARENT'
+  const gender = body.gender || body.parentGender || body.parentGuardianGender || null
+  const username = body.username || body.parentUsername || body.parentGuardianUsername || undefined
+  const password = body.password || undefined
+  const relationship = (body.relationship || body.relationToChild || (role === 'PARENT' ? 'FATHER' : 'GUARDIAN')) as Relationship
+  const isPrimaryContact =
+    body.isPrimary !== undefined
+      ? Boolean(body.isPrimary)
+      : body.isPrimaryContact !== undefined
+      ? Boolean(body.isPrimaryContact)
+      : true
+
+  const rawChildMode = typeof body.childMode === 'string' ? body.childMode.toUpperCase().trim() : undefined
+  const hasNewChildSignals =
+    rawChildMode === 'CREATE' ||
+    rawChildMode === 'NEW' ||
+    Boolean(body.newChild) ||
+    Boolean(body.studentFullName) ||
+    Boolean(body.studentDateOfBirth) ||
+    Boolean(body.childFirstName) ||
+    Boolean(body.childDob)
+
+  const childMode: 'CREATE' | 'EXISTING' =
+    rawChildMode === 'EXISTING'
+      ? 'EXISTING'
+      : rawChildMode === 'CREATE' || rawChildMode === 'NEW'
+      ? 'CREATE'
+      : hasNewChildSignals
+      ? 'CREATE'
+      : 'EXISTING'
+
+  let newChild = body.newChild
+  if (childMode === 'CREATE') {
+    const studentFullName = (body.studentFullName || '').trim()
+    const names = studentFullName ? studentFullName.split(' ') : []
+    const firstName = (body.childFirstName || body.firstName || newChild?.firstName || (names.length > 0 ? names[0] : '')).trim()
+    const lastName = (
+      body.childLastName ||
+      body.lastName ||
+      newChild?.lastName ||
+      (names.length > 1 ? names.slice(1).join(' ') : undefined)
+    )?.trim() || undefined
+    const dob = body.childDob || body.childDOB || body.studentDateOfBirth || body.dob || newChild?.dob || ''
+    const studentGender = (newChild?.gender || body.childGender || body.studentGender || body.gender || 'MALE') as Gender
+    const bloodGroup = (newChild?.bloodGroup || body.childBloodGroup || body.studentBloodGroup || body.bloodGroup || undefined) as BloodGroup | undefined
+    const branchId = newChild?.branchId || body.childBranchId || body.studentBranch || body.branchId || undefined
+    const classroomId = newChild?.classroomId || body.childClassroomId || body.studentClass || body.classroomId || undefined
+    const seatNumber = newChild?.seatNumber || body.childSeatNumber || body.studentSeatNumber || body.seatNumber || undefined
+    const admissionNo = newChild?.admissionNo || body.childAdmissionNo || body.admissionNo || undefined
+    const programType = newChild?.programType || body.programType || undefined
+    const photoUrl = newChild?.photoUrl || body.childPhotoUrl || body.studentPhoto || body.photoUrl || undefined
+    const childUsername = newChild?.username || body.studentUsername || body.username || undefined
+
+    newChild = {
+      firstName,
+      lastName,
+      dob,
+      gender: studentGender,
+      bloodGroup,
+      branchId,
+      classroomId,
+      seatNumber,
+      admissionNo,
+      programType,
+      photoUrl,
+      username: childUsername,
+    }
+  }
+
+  const existingChild =
+    body.existingChild ||
+    (body.studentId || body.studentAdmissionNo || body.existingStudentId
+      ? {
+          studentId: body.studentId || body.existingStudentId,
+          admissionNo: body.studentAdmissionNo,
+        }
+      : undefined)
+
+  const permissions = {
+    canPickup: body.canPickup !== false && body.permissions?.canPickup !== false,
+    pickupPin: body.pickupPin?.trim() || body.permissions?.pickupPin?.trim() || null,
+    receivesCommunication:
+      body.receivesComm !== false &&
+      body.receivesCommunication !== false &&
+      body.permissions?.receivesCommunication !== false,
+    isFeePayer:
+      body.isFeePayer !== undefined
+        ? Boolean(body.isFeePayer)
+        : body.permissions?.isFeePayer !== undefined
+        ? Boolean(body.permissions.isFeePayer)
+        : role === 'PARENT',
+  }
+
+  return {
+    avatarUrl,
+    role,
+    fullName,
+    email,
+    phone,
+    gender,
+    username,
+    password,
+    status: body.status || 'ACTIVE',
+    relationship,
+    occupation: body.occupation?.trim() || null,
+    locale: body.locale || 'en-IN',
+    isPrimaryContact,
+    childMode,
+    existingChild,
+    additionalChildren: body.additionalChildren,
+    newChild,
+    permissions,
+    confirmDuplicate: body.confirmDuplicate,
+  }
+}
+
+export function validateFullName(name?: string | null): { valid: boolean; error?: string } {
+  const trimmed = (name || '').trim()
+  if (!trimmed) {
+    return { valid: false, error: 'Full name is required' }
+  }
+  if (trimmed.length < 2) {
+    return { valid: false, error: 'Full name must be at least 2 characters' }
+  }
+  if (/^\d+$/.test(trimmed)) {
+    return { valid: false, error: 'Full name cannot be purely numeric digits' }
+  }
+  const letterCount = (trimmed.match(/[\p{L}]/gu) || []).length
+  if (letterCount < 2) {
+    return { valid: false, error: 'Full name must contain at least 2 alphabetic letters' }
+  }
+  return { valid: true }
 }
 
 export function validateStaffInput(input: StaffCreateInput): { valid: boolean; errors: string[] } {
   const errors: string[] = []
 
-  if (!input.fullName || !input.fullName.trim()) {
-    errors.push('Full name is required')
+  const nameRes = validateFullName(input.fullName)
+  if (!nameRes.valid) {
+    errors.push(nameRes.error!)
   }
 
   if (input.email && input.email.trim()) {
@@ -96,7 +279,8 @@ export function validateStaffInput(input: StaffCreateInput): { valid: boolean; e
       : input.role
       ? [input.role]
       : []
-  if (assignedRoles.length === 0) {
+  // At least one role is required when creating a new user without identification context
+  if (assignedRoles.length === 0 && !input.email && !input.username && !input.phone) {
     errors.push('At least one staff role must be specified')
   }
 
@@ -111,9 +295,29 @@ export function validateStaffInput(input: StaffCreateInput): { valid: boolean; e
   }
 
   if (input.password !== undefined && input.password !== null && input.password !== '') {
-    if (input.password.length < 6) {
-      errors.push('Password must be at least 6 characters')
+    if (input.password.length < MIN_PASSWORD_LENGTH) {
+      errors.push(PASSWORD_POLICY.errorMessage)
     }
+  }
+
+  if (input.panNumber !== undefined && input.panNumber !== null && input.panNumber !== '') {
+    const res = validatePan(input.panNumber)
+    if (!res.valid) errors.push(res.error!)
+  }
+
+  if (input.aadhaarNumber !== undefined && input.aadhaarNumber !== null && input.aadhaarNumber !== '') {
+    const res = validateAadhaar(input.aadhaarNumber)
+    if (!res.valid) errors.push(res.error!)
+  }
+
+  if (input.uanNumber !== undefined && input.uanNumber !== null && input.uanNumber !== '') {
+    const res = validateUan(input.uanNumber)
+    if (!res.valid) errors.push(res.error!)
+  }
+
+  if (input.esiNumber !== undefined && input.esiNumber !== null && input.esiNumber !== '') {
+    const res = validateEsi(input.esiNumber)
+    if (!res.valid) errors.push(res.error!)
   }
 
   return { valid: errors.length === 0, errors }
@@ -126,8 +330,9 @@ export function validateFamilyInput(input: FamilyCreateInput): { valid: boolean;
     errors.push('Role must be either PARENT or GUARDIAN')
   }
 
-  if (!input.fullName || !input.fullName.trim()) {
-    errors.push('Full name is required')
+  const nameRes = validateFullName(input.fullName)
+  if (!nameRes.valid) {
+    errors.push(nameRes.error!)
   }
 
   if (input.email && input.email.trim()) {
@@ -141,8 +346,8 @@ export function validateFamilyInput(input: FamilyCreateInput): { valid: boolean;
   }
 
   if (input.password !== undefined && input.password !== null && input.password !== '') {
-    if (input.password.length < 6) {
-      errors.push('Password must be at least 6 characters')
+    if (input.password.length < MIN_PASSWORD_LENGTH) {
+      errors.push(PASSWORD_POLICY.errorMessage)
     }
   }
 
@@ -157,6 +362,11 @@ export function validateFamilyInput(input: FamilyCreateInput): { valid: boolean;
   } else if (input.childMode === 'CREATE') {
     if (!input.newChild?.firstName || !input.newChild.firstName.trim()) {
       errors.push('Child first name is required')
+    } else {
+      const childNameRes = validateFullName(input.newChild.firstName)
+      if (!childNameRes.valid) {
+        errors.push(`Child first name: ${childNameRes.error}`)
+      }
     }
     if (!input.newChild?.dob) {
       errors.push('Child date of birth is required')
@@ -177,3 +387,45 @@ export function validateFamilyInput(input: FamilyCreateInput): { valid: boolean;
 
   return { valid: errors.length === 0, errors }
 }
+
+export function normalizeBloodGroup(val?: any): BloodGroup | null {
+  if (!val) return null
+  const str = String(val).trim().toUpperCase().replace(/\s+/g, '_')
+  const map: Record<string, BloodGroup> = {
+    'A+': BloodGroup.A_POSITIVE,
+    'A-': BloodGroup.A_NEGATIVE,
+    'B+': BloodGroup.B_POSITIVE,
+    'B-': BloodGroup.B_NEGATIVE,
+    'AB+': BloodGroup.AB_POSITIVE,
+    'AB-': BloodGroup.AB_NEGATIVE,
+    'O+': BloodGroup.O_POSITIVE,
+    'O-': BloodGroup.O_NEGATIVE,
+    'A_POSITIVE': BloodGroup.A_POSITIVE,
+    'A_NEGATIVE': BloodGroup.A_NEGATIVE,
+    'B_POSITIVE': BloodGroup.B_POSITIVE,
+    'B_NEGATIVE': BloodGroup.B_NEGATIVE,
+    'AB_POSITIVE': BloodGroup.AB_POSITIVE,
+    'AB_NEGATIVE': BloodGroup.AB_NEGATIVE,
+    'O_POSITIVE': BloodGroup.O_POSITIVE,
+    'O_NEGATIVE': BloodGroup.O_NEGATIVE,
+    'UNKNOWN': BloodGroup.UNKNOWN,
+  }
+  return map[str] || null
+}
+
+export function formatBloodGroup(val?: any): string | null {
+  if (!val) return null
+  const map: Record<string, string> = {
+    A_POSITIVE: 'A+',
+    A_NEGATIVE: 'A-',
+    B_POSITIVE: 'B+',
+    B_NEGATIVE: 'B-',
+    AB_POSITIVE: 'AB+',
+    AB_NEGATIVE: 'AB-',
+    O_POSITIVE: 'O+',
+    O_NEGATIVE: 'O-',
+    UNKNOWN: 'UNKNOWN',
+  }
+  return map[val] || val
+}
+

@@ -4,10 +4,11 @@ import { db } from '@/lib/db'
 import { ok, Errors } from '@/lib/api'
 import { requireApi, isResponse } from '@/lib/auth-api'
 import { AdmissionService } from '@/lib/admissions/admission-service'
+import { resolveAuthorizedBranchScope, ALL_BRANCHES_ID } from '@/lib/admissions/branch-context'
 
 /**
  * GET /api/v1/leads — Enquiries list
- * Required Scopes: tenantId (from session), branchId, academicYearId
+ * Supports: Single branch (branchId=<id>) OR All Branches (branchId=__ALL_BRANCHES__ or omitted for multi-branch users)
  * Filters: status, interestedProgram, source, search
  */
 async function _GET(req: NextRequest) {
@@ -17,31 +18,79 @@ async function _GET(req: NextRequest) {
 
   try {
     const sp = req.nextUrl.searchParams
-    const branchId = sp.get('branchId') || session.branchId
+    const requestedBranchId = sp.get('branchId')
     const academicYearId = sp.get('academicYearId') || sp.get('academicSessionId')
     const status = sp.get('status')
     const program = sp.get('program') || sp.get('interestedProgram')
     const source = sp.get('source')
     const search = sp.get('q')?.trim()
 
-    const scope = await AdmissionService.verifyScope(session.tenantId, branchId, academicYearId)
+    // Server-side authoritative branch scoping
+    const branchScope = await resolveAuthorizedBranchScope(session, requestedBranchId)
+    if (branchScope.mode === 'NO_BRANCH_ACCESS') {
+      return Errors.forbidden('No authorized branch access for active user')
+    }
+
+    const view = sp.get('view') // 'active' | 'all'
+
+    // Authoritative Lifecycle Stage Filter:
+    // Stage 1 (Enquiries): 'ACTIVE', 'ENQUIRIES', or default active view only returns un-contacted, un-converted Stage 1 enquiries.
+    // Stage 2 (Follow-ups): 'FOLLOW_UPS', 'FOLLOW_UP', or specific statuses like 'CONTACTED', 'QUALIFIED', 'NURTURE'.
+    // 'ALL': returns all leads regardless of status (excluding soft-deleted).
+    const isStage1Active = status === 'ACTIVE' || status === 'ENQUIRIES' || (!status && view === 'active') || !status
 
     const where: any = {
-      tenantId: scope.tenantId,
+      tenantId: branchScope.tenantId,
       deletedAt: null,
-      branchId: scope.branchId,
-      ...(status ? { status } : {}),
       ...(program ? { interestedProgram: program } : {}),
       ...(source ? { source } : {}),
     }
 
-    if (search) {
+    if (isStage1Active) {
+      where.status = 'NEW'
+      where.convertedApplicationId = null
+      where.applications = { none: { deletedAt: null } }
+    } else if (status === 'FOLLOW_UPS' || status === 'FOLLOW_UP') {
+      where.status = { in: ['CONTACTED', 'QUALIFIED', 'NURTURE', 'APPLICATION_STARTED'] }
+      where.convertedApplicationId = null
+      where.applications = { none: { deletedAt: null } }
+    } else if (status === 'ALL') {
+      // Return all leads without restricting status
+    } else if (status) {
+      where.status = status
+      if (status === 'NEW') {
+        where.convertedApplicationId = null
+        where.applications = { none: { deletedAt: null } }
+      }
+    }
+
+    if (branchScope.mode === 'SINGLE_BRANCH') {
+      where.branchId = branchScope.selectedBranchId
+    } else {
+      // ALL_BRANCHES mode: query records within authorized branch IDs or null branch leads
       where.OR = [
+        { branchId: { in: branchScope.authorizedBranchIds } },
+        { branchId: null },
+      ]
+    }
+
+    if (search) {
+      const searchConditions = [
         { leadNumber: { contains: search, mode: 'insensitive' } },
         { childName: { contains: search, mode: 'insensitive' } },
         { parentName: { contains: search, mode: 'insensitive' } },
         { phone: { contains: search } },
       ]
+
+      if (where.OR) {
+        where.AND = [
+          { OR: where.OR },
+          { OR: searchConditions },
+        ]
+        delete where.OR
+      } else {
+        where.OR = searchConditions
+      }
     }
 
     const leads = await db.lead.findMany({
@@ -49,15 +98,28 @@ async function _GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    return ok(leads, {
-      total: leads.length,
+    // Attach originating branch metadata for table & detail views
+    const branchMap = new Map(branchScope.branches.map((b) => [b.id, b]))
+    const enrichedLeads = leads.map((l) => {
+      const b = l.branchId ? branchMap.get(l.branchId) : null
+      return {
+        ...l,
+        branchName: b ? b.name : (branchScope.branches.length === 1 ? branchScope.branches[0].name : 'Main Campus'),
+        branchCode: b?.code,
+      }
+    })
+
+    return ok(enrichedLeads, {
+      total: enrichedLeads.length,
       scope: {
-        tenantId: scope.tenantId,
-        branchId: scope.branchId,
-        academicYearId: scope.academicYearId,
+        tenantId: branchScope.tenantId,
+        mode: branchScope.mode,
+        selectedBranchId: branchScope.selectedBranchId,
+        authorizedBranchIds: branchScope.authorizedBranchIds,
+        academicYearId,
       },
     })
-  } catch (e) {
+  } catch (e: any) {
     return Errors.system(e)
   }
 }
@@ -84,12 +146,70 @@ async function _POST(req: NextRequest) {
       branchId,
       academicYearId,
       assignedToId,
+      childGender,
+      previousSchool,
+      relationship,
+      parentPhotoUrl,
+      enquiryDate,
+      overrideDuplicate,
     } = body
+
+    // Validate that branchId is provided and authorized
+    const targetBranchId = branchId || session.branchId
+    if (!targetBranchId || targetBranchId === ALL_BRANCHES_ID || targetBranchId === 'all') {
+      return Errors.validation('Target branch is required to register an enquiry. Please select a specific campus.')
+    }
+
+    const branchScope = await resolveAuthorizedBranchScope(session, targetBranchId)
+    if (!branchScope.authorizedBranchIds.includes(targetBranchId)) {
+      return Errors.forbidden('Selected target branch is not in your authorized scope')
+    }
+
+    // Program mapping validation against target branch if program is provided
+    let validatedProgramType: ProgramType | null = null
+    if (interestedProgram) {
+      const validPrograms: ProgramType[] = ['PLAYGROUP', 'NURSERY', 'LKG', 'UKG', 'DAYCARE']
+      const normalizedProgram = String(interestedProgram).toUpperCase()
+      const orConditions: any[] = [
+        { id: interestedProgram },
+        { code: normalizedProgram },
+        { name: { equals: interestedProgram, mode: 'insensitive' } },
+      ]
+      if (validPrograms.includes(normalizedProgram as ProgramType)) {
+        orConditions.push({ programType: normalizedProgram as ProgramType })
+      }
+
+      const prog = await db.program.findFirst({
+        where: {
+          tenantId: session.tenantId,
+          deletedAt: null,
+          isActive: true,
+          OR: orConditions,
+        },
+        include: {
+          branchMappings: {
+            where: { branchId: targetBranchId, deletedAt: null, isActive: true },
+          },
+        },
+      })
+      if (prog) {
+        if (prog.branchMappings.length === 0) {
+          // If branch mappings exist for this program, ensure target branch is mapped
+          const totalMappings = await db.programBranch.count({
+            where: { programId: prog.id, tenantId: session.tenantId, deletedAt: null, isActive: true },
+          })
+          if (totalMappings > 0) {
+            return Errors.validation(`Program ${prog.name} is not offered at the selected branch campus`)
+          }
+        }
+        validatedProgramType = prog.programType
+      }
+    }
 
     const result = await AdmissionService.createEnquiry(
       {
         tenantId: session.tenantId,
-        branchId: branchId || session.branchId,
+        branchId: targetBranchId,
         academicYearId,
         actorId: session.uid,
         actorName: session.name,
@@ -101,15 +221,30 @@ async function _POST(req: NextRequest) {
         email,
         childName,
         childDob,
-        interestedProgram,
+        interestedProgram: validatedProgramType || interestedProgram,
         source,
         notes,
         assignedToId,
+        childGender,
+        previousSchool,
+        relationship,
+        parentPhotoUrl,
+        enquiryDate,
+        overrideDuplicate,
       }
     )
 
     if (result.isDuplicate) {
-      return ok(result.enquiry, { warning: result.message, isDuplicate: true }, 200)
+      return ok(
+        {
+          ...(result.enquiry ? (result.enquiry as any) : {}),
+          isDuplicate: true,
+          message: result.message,
+          enquiry: result.enquiry,
+        },
+        { warning: result.message, isDuplicate: true },
+        200
+      )
     }
 
     return ok(result.enquiry, undefined, 201)
@@ -120,3 +255,4 @@ async function _POST(req: NextRequest) {
 
 export const GET = withApi(_GET)
 export const POST = withApi(_POST)
+

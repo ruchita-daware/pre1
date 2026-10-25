@@ -1,54 +1,90 @@
 import { withApi } from '@/lib/with-api'
 import { NextRequest } from 'next/server'
-import { ok, Errors, bad } from '@/lib/api'
+import { ok, Errors } from '@/lib/api'
 import { requireApi, isResponse } from '@/lib/auth-api'
 import { TransportService } from '@/lib/transport/transport-service'
-import { TransportAssignmentStatus } from '@prisma/client'
+
+import { TransportSecurityService } from '@/lib/transport/transport-security'
 
 /**
- * GET /api/v1/transport/assignments â€” List student transport assignments
- * POST /api/v1/transport/assignments â€” Assign a student to route & stops
+ * GET /api/v1/transport/assignments — List student transport assignments with role scoping
  */
 async function _GET(req: NextRequest) {
   const session = await requireApi(req, 'transport:read')
   if (isResponse(session)) return session
-  if (!session.tenantId) return Errors.forbidden('Tenant context required')
+  if (!session.tenantId) return Errors.forbidden('No tenant context')
 
   try {
-    const sp = req.nextUrl.searchParams
-    const routeId = sp.get('routeId') || undefined
-    const studentId = sp.get('studentId') || undefined
-    const status = (sp.get('status') as TransportAssignmentStatus) || undefined
-    const branchId = sp.get('branchId') || undefined
+    const { searchParams } = new URL(req.url)
+    let routeId = searchParams.get('routeId') || undefined
+    let studentId = searchParams.get('studentId') || undefined
+    const status = searchParams.get('status') || undefined
 
-    const assignments = await TransportService.listAssignments(
-      {
-        tenantId: session.tenantId,
-        branchId: session.branchId,
-        actorId: session.uid,
-        actorName: session.name,
-        actorRole: session.role,
-      },
-      { routeId, studentId, status, branchId }
-    )
-    return ok(assignments)
+    const context = {
+      tenantId: session.tenantId,
+      branchId: session.branchId || undefined,
+      actorId: session.uid,
+      actorName: session.name,
+      actorRole: session.role,
+    }
+
+    const scope = await TransportSecurityService.getRoleScopingFilter(context)
+
+    if (scope.isParent) {
+      if (studentId) {
+        if (!scope.allowedStudentIds?.includes(studentId)) {
+          return Errors.forbidden('Unauthorized access to unlinked student transport data')
+        }
+      } else if (scope.allowedStudentIds && scope.allowedStudentIds.length === 0) {
+        return ok([])
+      }
+    }
+
+    if (scope.isDriver) {
+      if (routeId) {
+        if (!scope.allowedRouteIds?.includes(routeId)) {
+          return Errors.forbidden('Unauthorized access to unassigned transport route')
+        }
+      } else if (scope.allowedRouteIds && scope.allowedRouteIds.length === 0) {
+        return ok([])
+      }
+    }
+
+    const assignments = await TransportService.listAssignments(context, {
+      routeId,
+      studentId,
+      status: status as any,
+    })
+
+    // Extra filtering for parent role if multiple linked students exist
+    const filtered = scope.isParent && scope.allowedStudentIds !== null
+      ? assignments.filter((a: any) => scope.allowedStudentIds?.includes(a.studentId))
+      : scope.isDriver && scope.allowedRouteIds !== null
+      ? assignments.filter((a: any) => scope.allowedRouteIds?.includes(a.routeId))
+      : assignments
+
+    return ok(filtered)
   } catch (e: any) {
     return Errors.system(e)
   }
 }
 
+/**
+ * POST /api/v1/transport/assignments — Assign student to transport route
+ */
 async function _POST(req: NextRequest) {
-  const session = await requireApi(req, 'transport:assign')
+  const session = await requireApi(req, 'transport:write')
   if (isResponse(session)) return session
-  if (!session.tenantId) return Errors.forbidden('Tenant context required')
+  if (!session.tenantId) return Errors.forbidden('No tenant context')
 
   try {
-    const body = await req.json()
+    const body = await req.json().catch(() => ({}))
     const {
       studentId,
       routeId,
       pickupStopId,
       dropStopId,
+      transportType,
       tripType,
       startDate,
       endDate,
@@ -56,14 +92,18 @@ async function _POST(req: NextRequest) {
       generateFeeInvoice,
     } = body
 
-    if (!studentId || !routeId || !pickupStopId || !dropStopId) {
-      return bad('studentId, routeId, pickupStopId, and dropStopId are required')
+    if (!studentId || !routeId) {
+      return Errors.validation('studentId and routeId are required')
     }
 
-    const assignment = await TransportService.assignStudent(
+    const rawTripType = tripType || transportType
+    const normalizedTripType =
+      rawTripType === 'ROUND_TRIP' || !rawTripType ? 'TWO_WAY' : rawTripType
+
+    const assignment = await TransportService.assignStudentToRoute(
       {
         tenantId: session.tenantId,
-        branchId: session.branchId,
+        branchId: session.branchId || undefined,
         actorId: session.uid,
         actorName: session.name,
         actorRole: session.role,
@@ -73,16 +113,23 @@ async function _POST(req: NextRequest) {
         routeId,
         pickupStopId,
         dropStopId,
-        tripType,
-        startDate,
-        endDate,
-        monthlyFeeCents: monthlyFeeCents ? Number(monthlyFeeCents) : 0,
+        tripType: normalizedTripType as any,
+        startDate: startDate ? new Date(startDate) : undefined,
+        endDate: endDate ? new Date(endDate) : undefined,
+        monthlyFeeCents: typeof monthlyFeeCents === 'number' ? monthlyFeeCents : undefined,
         generateFeeInvoice: Boolean(generateFeeInvoice),
       }
     )
-    return ok(assignment, undefined, 201)
+
+    return ok({ assignment }, undefined, 201)
   } catch (e: any) {
-    return bad(e.message)
+    if (e.message?.includes('already has an active')) {
+      return Errors.conflict(e.message)
+    }
+    if (e.message && !e.code) {
+      return Errors.badRequest(e.message)
+    }
+    return Errors.system(e)
   }
 }
 

@@ -28,7 +28,7 @@ export const GET = withApi(async (req: NextRequest) => {
     where: { id: classroomId, tenantId: session.tenantId },
     include: {
       primaryTeacher: { select: { id: true, fullName: true, email: true } },
-      academicSession: { select: { id: true, name: true, code: true } },
+      academicSession: { select: { id: true, name: true } },
     },
   })
   if (!classroom) {
@@ -74,7 +74,7 @@ export const GET = withApi(async (req: NextRequest) => {
   const markerIds = Array.from(new Set(records.map((r) => r.markedById).filter(Boolean))) as string[]
   const markers = markerIds.length
     ? await db.user.findMany({
-        where: { id: { in: markerIds }, tenantId: session.tenantId },
+        where: { id: { in: markerIds }, memberships: { some: { tenantId: session.tenantId } } },
         select: { id: true, fullName: true },
       })
     : []
@@ -161,7 +161,6 @@ export const GET = withApi(async (req: NextRequest) => {
         ? {
             id: classroom.academicSession.id,
             name: classroom.academicSession.name,
-            code: classroom.academicSession.code,
           }
         : null,
     },

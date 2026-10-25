@@ -1,6 +1,6 @@
 /**
  * PreOne seed — demo tenant "Sunshine Kids Preschool"
- * Users for all 8 roles, 3 classrooms, 24 students, attendance (7 days),
+ * Users for staff roles + platform admin (no seed family users), 3 classrooms, 24 students, attendance (7 days),
  * fee plans, invoices, payments+receipts, announcements, observations, timeline, leads, applications.
  * Password for ALL demo users: Preone@123
  */
@@ -62,10 +62,67 @@ async function main() {
   }
 
   const hash = await bcrypt.hash(PASSWORD, 10)
+  const preoneAdminPassword = process.env.PREONE_ADMIN_PASSWORD || 'Preone@2311'
+  const hashPreoneAdmin = await bcrypt.hash(preoneAdminPassword, 10)
 
   // ── Platform admin (no tenant) ──
   await db.user.create({
     data: { email: 'platform@preone.in', username: 'platform.admin', fullName: 'PreOne Platform Admin', passwordHash: hash, status: 'ACTIVE' },
+  })
+
+  // ── PREONE School Tenant ──
+  const tenantPreone = await db.tenant.create({
+    data: {
+      name: 'PreOne Preschool Academy',
+      code: 'PREONE',
+      type: 'SCHOOL',
+      status: 'ACTIVE',
+      subscriptionPlan: 'PRO',
+      maxBranches: 5,
+      maxStudents: 500,
+      onboardingStep: 5,
+      onboardedAt: new Date(),
+    },
+  })
+
+  const branchPreone = await db.branch.create({
+    data: {
+      tenantId: tenantPreone.id,
+      name: 'PreOne Main Campus',
+      code: 'MAIN',
+      isMain: true,
+    },
+  })
+
+  const userPreone = await db.user.create({
+    data: {
+      email: 'admin@preone.com',
+      username: 'admin',
+      fullName: 'PreOne Administrator',
+      passwordHash: hashPreoneAdmin,
+      status: 'ACTIVE',
+    },
+  })
+
+  await db.tenantUser.create({
+    data: {
+      tenantId: tenantPreone.id,
+      userId: userPreone.id,
+      role: 'OWNER',
+      roles: ['OWNER', 'PRINCIPAL'],
+      branchId: branchPreone.id,
+      status: 'ACTIVE',
+    },
+  })
+
+  await db.staffProfile.create({
+    data: {
+      tenantId: tenantPreone.id,
+      userId: userPreone.id,
+      employeeCode: 'EMP-001',
+      designation: 'School Director',
+      branchId: branchPreone.id,
+    },
   })
 
   // ── Tenant ──
@@ -194,7 +251,13 @@ async function main() {
     plans[p.programType] = { admission: 500000, tuition: p.tuition, activity: 250000 }
   }
 
-  // ── Students + guardians ──
+  // ── Students + guardians (Strictly opt-in via ALLOW_DEMO_SEED) ──
+  type Seeded = { id: string; firstName: string; classroom: string; guardianPhone: string }
+  const students: Seeded[] = []
+
+  if (process.env.ALLOW_DEMO_SEED !== 'true') {
+    console.log('ℹ️ Skipping dummy student and parent account seeding (production-safe default).')
+  } else {
   const firstNames = [
     'Aarav', 'Anaya', 'Vivaan', 'Diya', 'Aditya', 'Myra', 'Kabir', 'Ishita', 'Reyansh', 'Anika',
     'Arjun', 'Kiara', 'Vihaan', 'Sara', 'Ayaan', 'Zara', 'Dhruv', 'Meher', 'Rudra', 'Aisha',
@@ -202,9 +265,6 @@ async function main() {
   ]
   const lastNames = ['Sharma', 'Patel', 'Reddy', 'Nair', 'Gupta', 'Singh', 'Khan', 'Rao', 'Iyer', 'Mehta']
   const guardiansFirst = ['Priya', 'Rahul', 'Sneha', 'Amit', 'Kavita', 'Rohan', 'Neha', 'Sanjay', 'Pooja', 'Arvind']
-
-  type Seeded = { id: string; firstName: string; classroom: string; guardianPhone: string }
-  const students: Seeded[] = []
 
   for (let i = 0; i < 24; i++) {
     const roomCode = i < 8 ? 'PLA-A' : i < 16 ? 'NUR-A' : 'LKG-A'
@@ -245,32 +305,6 @@ async function main() {
     })
 
     students.push({ id: s.id, firstName, classroom: roomCode, guardianPhone })
-  }
-
-  // Parent portal user linked to 2 children via a single guardian record
-  const parentUser = await db.user.create({
-    data: {
-      email: 'parent@sunshine.demo',
-      username: sanitizeUsernameSlug('Priya Sharma'),
-      fullName: 'Priya Sharma',
-      passwordHash: hash,
-      status: 'ACTIVE',
-    },
-  })
-  await db.tenantUser.create({
-    data: { tenantId: tenant.id, userId: parentUser.id, role: 'PARENT' },
-  })
-  const parentGuardian = await db.guardian.create({
-    data: {
-      tenantId: tenant.id, fullName: 'Priya Sharma', relationship: 'MOTHER',
-      phone: '+919811111111', email: 'priya.sharma@example.in',
-      isPrimaryContact: true, userId: parentUser.id,
-    },
-  })
-  for (const s of students.slice(0, 2)) {
-    await db.studentGuardian.create({
-      data: { studentId: s.id, guardianId: parentGuardian.id, isPrimary: true, canPickup: true, isFeePayer: true },
-    })
   }
 
   // ── Attendance: last 7 weekdays ──
@@ -371,6 +405,7 @@ async function main() {
         status: paid >= inv.totalCents ? 'PAID' : 'PARTIALLY_PAID',
       },
     })
+  }
   }
 
   // ── Leads (pipeline) ──
@@ -522,7 +557,7 @@ async function main() {
 
   console.log('✅ Seed complete:')
   console.log('   · Tenant: Sunshine Kids Preschool (SUNSHINE)')
-  console.log('   · Users: 7 staff + 1 parent + 1 platform admin — password: Preone@123')
+  console.log('   · Users: 7 staff + 1 platform admin (no seed family users) — password: Preone@123')
   console.log(`   · ${students.length} students, ${attCount} attendance records`)
   console.log('   · 24 invoices (12 paid / 6 partial / 3 overdue), payments + receipts')
   console.log('   · 8 leads, 4 applications, 3 announcements, observations + timeline')

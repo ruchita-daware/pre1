@@ -121,7 +121,13 @@ export class FamilyUserService {
       }
 
       // Branch check if actor is branch scoped
-      if (ctx.actorBranchId && targetStudent.branchId !== ctx.actorBranchId && ctx.actorRole !== 'OWNER' && ctx.actorRole !== 'PLATFORM_ADMIN') {
+      if (
+        ctx.actorBranchId &&
+        targetStudent.branchId !== ctx.actorBranchId &&
+        ctx.actorRole !== 'OWNER' &&
+        ctx.actorRole !== 'PLATFORM_ADMIN' &&
+        ctx.actorRole !== 'PRINCIPAL'
+      ) {
         throw new Error('Unauthorized: Selected student belongs to another campus branch')
       }
 
@@ -163,6 +169,7 @@ export class FamilyUserService {
           password: input.password,
           status: initialStatus,
           usernameType: assignedRole,
+          locale: input.locale,
         })
 
         // Step 2: Create TenantUser membership
@@ -196,13 +203,16 @@ export class FamilyUserService {
             programType: childData.programType,
             classroomId: childData.classroomId,
             branchId: childData.branchId,
+            seatNumber: childData.seatNumber,
+            photoUrl: childData.photoUrl,
+            username: childUsername,
             guardianName: input.fullName.trim(),
             guardianPhone: input.phone.trim(),
             guardianEmail: input.email.trim(),
             guardianRelationship: mappedRel,
             canPickup: perms.canPickup,
             isFeePayer: perms.isFeePayer,
-            confirmDuplicate: true,
+            confirmDuplicate: input.confirmDuplicate ?? false,
           },
           tx
         )
@@ -229,20 +239,36 @@ export class FamilyUserService {
           })
         }
 
-        const createdGuardian =
+        let createdGuardian =
           studentLink?.guardian ||
           (await tx.guardian.findFirst({
             where: { tenantId: ctx.tenantId, phone: input.phone.trim() },
           }))
 
-        if (createdGuardian) {
-          await tx.guardian.update({
+        const existingUserGuardian = await tx.guardian.findUnique({
+          where: { userId: user.id },
+        })
+
+        if (existingUserGuardian && createdGuardian && existingUserGuardian.id !== createdGuardian.id) {
+          if (studentLink) {
+            await tx.studentGuardian.update({
+              where: { id: studentLink.id },
+              data: { guardianId: existingUserGuardian.id },
+            })
+          }
+          await tx.guardian.delete({ where: { id: createdGuardian.id } }).catch(() => {})
+          createdGuardian = existingUserGuardian
+        } else if (existingUserGuardian) {
+          createdGuardian = existingUserGuardian
+        } else if (createdGuardian) {
+          createdGuardian = await tx.guardian.update({
             where: { id: createdGuardian.id },
             data: {
               userId: user.id,
               relationship: mappedRel,
               pickupPin: perms.pickupPin || createdGuardian.pickupPin || null,
               isPrimaryContact: Boolean(input.isPrimaryContact),
+              ...(input.occupation !== undefined ? { occupation: input.occupation?.trim() || null } : {}),
             },
           })
         }
@@ -317,6 +343,7 @@ export class FamilyUserService {
           password: input.password,
           status: initialStatus,
           usernameType: assignedRole,
+          locale: input.locale,
         })
 
         // Step 2: Create or update TenantUser membership
@@ -331,7 +358,7 @@ export class FamilyUserService {
 
         // Step 3: Resolve or create Guardian record
         let guardian = await tx.guardian.findFirst({
-          where: { userId: user.id, tenantId: ctx.tenantId },
+          where: { userId: user.id },
         })
 
         // If not found by userId, check by phone + name to respect shared household phone numbers
@@ -363,6 +390,7 @@ export class FamilyUserService {
               relationship: mappedRel,
               pickupPin: perms.pickupPin,
               isPrimaryContact: Boolean(input.isPrimaryContact),
+              occupation: input.occupation?.trim() || null,
             },
           })
         } else {
@@ -373,6 +401,7 @@ export class FamilyUserService {
               relationship: mappedRel,
               pickupPin: perms.pickupPin || guardian.pickupPin,
               isPrimaryContact: input.isPrimaryContact !== undefined ? Boolean(input.isPrimaryContact) : guardian.isPrimaryContact,
+              ...(input.occupation !== undefined ? { occupation: input.occupation?.trim() || null } : {}),
             },
           })
         }
