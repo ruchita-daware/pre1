@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState, useRef } from 'react'
 import {
   Building2,
   Sliders,
@@ -25,10 +25,12 @@ import {
   Users,
   CreditCard,
   RefreshCw,
+  ChevronDown,
 } from 'lucide-react'
 import { PageHead, StatusBadge } from '@/components/preone/ui'
 import { Modal } from '@/components/preone/Modal'
 import { useToast } from '@/components/preone/Toast'
+import { ThemeGlowSettings } from '@/components/shell/ThemeGlowSettings'
 
 interface SchoolProfile {
   id: string
@@ -113,6 +115,9 @@ export default function SettingsControlCenter() {
 
   // Load All Effective Settings
   const loadData = useCallback(async () => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('mustChangePassword') === 'true') {
+      return
+    }
     setLoading(true)
     try {
       const [settingsRes, healthRes, permRes, tmplRes, prefRes, logsRes] = await Promise.all([
@@ -154,10 +159,38 @@ export default function SettingsControlCenter() {
   }, [toast])
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('mustChangePassword') === 'true') {
+        window.location.href = '/app/change-password'
+        return
+      }
+      const tabParam = params.get('tab')
+      if (tabParam) setActiveTab(tabParam)
+      if (params.get('changePassword') === 'true') {
+        setActiveTab('security')
+        setPasswordModalOpen(true)
+      }
+    }
     loadData()
   }, [loadData])
 
   // Tab change with unsaved protection
+  const tabRailRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (tabRailRef.current) {
+      const activeBtn = tabRailRef.current.querySelector<HTMLElement>(`[data-tab-id="${activeTab}"]`)
+      if (activeBtn) {
+        activeBtn.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+          inline: 'center',
+        })
+      }
+    }
+  }, [activeTab])
+
   const handleTabChange = (newTab: string) => {
     if (dirty) {
       if (!confirm('You have unsaved changes. Are you sure you want to discard them?')) {
@@ -237,6 +270,10 @@ export default function SettingsControlCenter() {
         toast.success('Password updated successfully')
         setPasswordModalOpen(false)
         setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+        const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+        if (params?.get('mustChangePassword') === 'true') {
+          window.location.href = '/app/home'
+        }
       } else {
         toast.error('Password change failed', res.error?.message || 'Verification failed')
       }
@@ -262,6 +299,32 @@ export default function SettingsControlCenter() {
         } else {
           toast.error('Failed to revoke sessions', res.error?.message)
         }
+      }
+    } catch (e: any) {
+      toast.error('Error', e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Test MFA Dispatch (Doc 1.2)
+  const handleTestMfaDispatch = async () => {
+    setBusy(true)
+    try {
+      const meRes = await fetch('/api/v1/me').then((r) => r.json())
+      if (meRes.success && meRes.data.email) {
+        const res = await fetch('/api/v1/auth/otp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: meRes.data.email }),
+        }).then((r) => r.json())
+        if (res.success) {
+          toast.success('MFA Verification Dispatched', `Test verification code successfully sent to ${res.data?.destination || meRes.data.email}`)
+        } else {
+          toast.error('MFA Dispatch Failed', res.error?.message || 'Failed to dispatch test verification code')
+        }
+      } else {
+        toast.error('Unable to verify contact', 'No active user email resolved')
       }
     } catch (e: any) {
       toast.error('Error', e.message)
@@ -344,8 +407,12 @@ export default function SettingsControlCenter() {
   }
 
   return (
-    <div className="page-container space-y-6" style={{ paddingBottom: 60 }}>
+    <div className="w-full min-w-0 max-w-[1460px] mx-auto page-container space-y-6" style={{ paddingBottom: 60 }}>
       <PageHead
+        breadcrumbs={[
+          { label: 'Home', href: '/app' },
+          { label: 'Settings' },
+        ]}
         title="Settings & Administration"
         sub="Unified configuration control center for preschool operations, policies, integrations, and RBAC"
         actions={
@@ -359,9 +426,74 @@ export default function SettingsControlCenter() {
         }
       />
 
-      {/* 12-Panel Navigation Tabs */}
-      <div className="segmented-scroll" style={{ overflowX: 'auto', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ display: 'inline-flex', gap: 6, paddingBottom: 8 }}>
+      {/* Mobile Settings Section Switcher (< md: 320px - 767px) — Select Dropdown Picker */}
+      <div className="md:hidden w-full min-w-0">
+        <label htmlFor="settings-section-select" className="sr-only">
+          Settings Section
+        </label>
+        <div className="relative">
+          <div className="w-full h-11 px-3.5 pr-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-900 dark:text-slate-100 shadow-xs flex items-center gap-2 pointer-events-none">
+            <span className="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 shrink-0">
+              Section:
+            </span>
+            <span className="truncate text-sm font-bold text-slate-900 dark:text-white">
+              {[
+                { id: 'profile', label: 'School Profile' },
+                { id: 'organization', label: 'Organization' },
+                { id: 'operations', label: 'Operating Schedule' },
+                { id: 'admissions', label: 'Admissions Policy' },
+                { id: 'academics', label: 'Academics & EYFS' },
+                { id: 'students', label: 'Student Lifecycle' },
+                { id: 'finance', label: 'Finance & Invoicing' },
+                { id: 'templates', label: 'Document Templates' },
+                { id: 'notifications', label: 'Communications & Alerts' },
+                { id: 'security', label: 'Security & Access' },
+                { id: 'rbac', label: 'Role Permissions' },
+                { id: 'health', label: 'Integration Health' },
+                { id: 'preferences', label: 'My Preferences & Glow' },
+              ].find((t) => t.id === activeTab)?.label || 'School Profile'}
+            </span>
+          </div>
+          <select
+            id="settings-section-select"
+            value={activeTab}
+            onChange={(e) => handleTabChange(e.target.value)}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer text-base"
+            aria-label="Select Settings Section"
+          >
+            {[
+              { id: 'profile', label: '1. School Profile & Localization' },
+              { id: 'organization', label: '2. Organization Structure' },
+              { id: 'operations', label: '3. Operating Schedule & Hours' },
+              { id: 'admissions', label: '4. Admissions Policy & Capacity' },
+              { id: 'academics', label: '5. Academics, Curriculum & EYFS' },
+              { id: 'students', label: '6. Student & Parent Lifecycle' },
+              { id: 'finance', label: '7. Finance, Invoicing & Fees' },
+              { id: 'templates', label: '8. Document Templates' },
+              { id: 'notifications', label: '9. Communications & Alert Logs' },
+              { id: 'security', label: '10. Security & Authentication' },
+              { id: 'rbac', label: '11. Role Permissions & RBAC Matrix' },
+              { id: 'health', label: '12. Integration Health & Diagnostics' },
+              { id: 'preferences', label: '13. My User Preferences & Glow' },
+            ].map((s) => (
+              <option key={s.id} value={s.id}>
+                Section: {s.label}
+              </option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-slate-400">
+            <ChevronDown size={16} />
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop & Tablet Navigation Tabs (≥ md) */}
+      <div
+        ref={tabRailRef}
+        className="hidden md:block segmented-scroll overflow-x-auto touch-pan-x rail-edge-fade scrollbar-none w-full min-w-0 max-w-full"
+        style={{ whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)' }}
+      >
+        <div style={{ display: 'inline-flex', gap: 6, paddingBottom: 8, minWidth: 'min-content' }}>
           {[
             { id: 'profile', label: 'School Profile', icon: Building2 },
             { id: 'organization', label: 'Organization', icon: Layers },
@@ -382,6 +514,7 @@ export default function SettingsControlCenter() {
             return (
               <button
                 key={t.id}
+                data-tab-id={t.id}
                 onClick={() => handleTabChange(t.id)}
                 className={`btn ${active ? 'btn-primary' : 'btn-ghost'}`}
                 style={{ fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}
@@ -1177,6 +1310,23 @@ export default function SettingsControlCenter() {
                 Sign Out All Devices
               </button>
             </div>
+
+            <div className="panel" style={{ border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
+                <h4 style={{ fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <ShieldCheck size={15} /> Multi-Factor Authentication (MFA)
+                </h4>
+                <span className="badge" style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#059669', fontSize: 11, fontWeight: 600 }}>
+                  Enforced: OWNER &amp; ACCOUNTS
+                </span>
+              </div>
+              <p className="txt-muted" style={{ fontSize: 12, margin: '8px 0 16px' }}>
+                Privileged step-up verification via OTP is enforced on school leadership (OWNER) and financial operations (ACCOUNTS) to protect institutional governance and fee billing.
+              </p>
+              <button className="btn btn-secondary" onClick={handleTestMfaDispatch} disabled={busy}>
+                Test MFA Delivery Channel
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1283,7 +1433,18 @@ export default function SettingsControlCenter() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
             <div className="form-group">
               <label>Theme Mode</label>
-              <select className="input" value={themePref} onChange={(e) => setThemePref(e.target.value)}>
+              <select
+                className="input"
+                value={themePref}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setThemePref(val)
+                  if (typeof document !== 'undefined') {
+                    if (val === 'DARK') document.documentElement.setAttribute('data-theme', 'dark')
+                    else if (val === 'LIGHT') document.documentElement.setAttribute('data-theme', 'light')
+                  }
+                }}
+              >
                 <option value="LIGHT">Light Theme</option>
                 <option value="DARK">Dark Theme</option>
                 <option value="SYSTEM">Follow System Preference</option>
@@ -1296,6 +1457,11 @@ export default function SettingsControlCenter() {
                 <option value="COMPACT">Compact (Higher Data Density)</option>
               </select>
             </div>
+          </div>
+
+          {/* DEDICATED PREONE SHELL GLOW & PALETTE ACCENTS */}
+          <div className="pt-6 border-t border-[var(--border-subtle)]">
+            <ThemeGlowSettings />
           </div>
         </div>
       )}

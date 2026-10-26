@@ -9,6 +9,7 @@ import {
 import { Modal } from '@/components/preone/Modal'
 import { SecurityShieldIllustration } from '@/components/preone'
 import { DEFAULT_ROLES_MATRIX, RoleMatrixItem } from './types'
+import { useI18n } from '@/lib/i18n'
 
 interface RolesDirectoryModalProps {
   open: boolean
@@ -512,6 +513,7 @@ export function RolesDirectoryModal({
   const RoleIcon = activeConfig?.icon || Shield
 
   // Workforce count & Family count
+  const { t } = useI18n()
   const workforceCount = rolesMatrix.filter((r) => ROLE_CONFIGS[r.role]?.category === 'WORKFORCE').length
   const familyCount = rolesMatrix.filter((r) => ROLE_CONFIGS[r.role]?.category === 'FAMILY').length
 
@@ -519,8 +521,8 @@ export function RolesDirectoryModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Roles Directory & Permissions Matrix"
-      subtitle="Canonical 9 RBAC roles defined in PreOne Enterprise Preschool OS"
+      title={t('users.rolesDirectoryTitle')}
+      subtitle={t('users.rolesDirectorySub')}
       icon={<ShieldCheck className="w-5 h-5 text-purple-600" />}
       iconClass="ic-purple"
       maxWidth="min(1040px, 100vw - 32px)"
@@ -531,12 +533,12 @@ export function RolesDirectoryModal({
           <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
             <Lock className="w-3.5 h-3.5 text-purple-600 shrink-0" />
             <span className="hidden sm:inline">
-              PreOne RBAC security policies are enforced on every server API mutation and page route.
+              {t('users.securityNotice')}
             </span>
-            <span className="sm:hidden">Enforced server-side via RBAC.</span>
+            <span className="sm:hidden">{t('users.securityNotice')}</span>
           </div>
           <button type="button" className="btn btn-secondary text-xs px-4 py-1.5 font-medium" onClick={onClose}>
-            Close Directory
+            {t('users.closeDirectory')}
           </button>
         </div>
       }
@@ -553,7 +555,7 @@ export function RolesDirectoryModal({
               onClick={() => setActiveCategory('ALL')}
               className={`flex items-center gap-1.5 ${activeCategory === 'ALL' ? 'on' : ''}`}
             >
-              <span>All Roles</span>
+              <span>{t('users.allRolesCategory')}</span>
               <span className="text-[10px] opacity-75 font-semibold">({rolesMatrix.length})</span>
             </button>
             <button
@@ -563,7 +565,7 @@ export function RolesDirectoryModal({
               onClick={() => setActiveCategory('WORKFORCE')}
               className={`flex items-center gap-1.5 ${activeCategory === 'WORKFORCE' ? 'on' : ''}`}
             >
-              <span>Preschool Staff</span>
+              <span>{t('users.workforceCategory')}</span>
               <span className="text-[10px] opacity-75 font-semibold">({workforceCount})</span>
             </button>
             <button
@@ -573,7 +575,7 @@ export function RolesDirectoryModal({
               onClick={() => setActiveCategory('FAMILY')}
               className={`flex items-center gap-1.5 ${activeCategory === 'FAMILY' ? 'on' : ''}`}
             >
-              <span>Family & Caregivers</span>
+              <span>{t('users.familyCategory')}</span>
               <span className="text-[10px] opacity-75 font-semibold">({familyCount})</span>
             </button>
           </div>
@@ -724,7 +726,7 @@ export function RolesDirectoryModal({
                   {/* Category */}
                   <div className="role-kpi-card">
                     <div className="role-kpi-label">
-                      <Users style={{ width: 13, height: 13, color: '#0284C7' }} /> Account Category
+                      <Users style={{ width: 13, height: 13, color: 'var(--info)' }} /> Account Category
                     </div>
                     <div className="role-kpi-val">{activeConfig.categoryLabel}</div>
                   </div>
@@ -732,7 +734,7 @@ export function RolesDirectoryModal({
                   {/* Boundary */}
                   <div className="role-kpi-card">
                     <div className="role-kpi-label">
-                      <Layers style={{ width: 13, height: 13, color: '#16A34A' }} /> Data Boundary
+                      <Layers style={{ width: 13, height: 13, color: 'var(--success)' }} /> Data Boundary
                     </div>
                     <div className="role-kpi-val">{activeConfig.boundary}</div>
                   </div>
@@ -740,7 +742,7 @@ export function RolesDirectoryModal({
                   {/* Governance */}
                   <div className="role-kpi-card">
                     <div className="role-kpi-label">
-                      <Shield style={{ width: 13, height: 13, color: '#D97706' }} /> Role Tier
+                      <Shield style={{ width: 13, height: 13, color: 'var(--warning)' }} /> Role Tier
                     </div>
                     <div className="role-kpi-val">{activeConfig.tierLabel}</div>
                   </div>
@@ -803,7 +805,7 @@ export function RolesDirectoryModal({
                         return (
                           <div key={p} className="role-perm-card">
                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minWidth: 0 }}>
-                              <CheckCircle2 style={{ width: 14, height: 14, color: '#16A34A', flexShrink: 0, marginTop: 2 }} />
+                              <CheckCircle2 style={{ width: 14, height: 14, color: 'var(--success)', flexShrink: 0, marginTop: 2 }} />
                               <div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                   <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-primary)' }}>

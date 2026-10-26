@@ -1,7 +1,14 @@
-﻿import { db } from './db'
+import { db } from './db'
 import { audit } from './audit'
 
-export type JobType = 'BULK_INVOICE' | 'BULK_RECEIPT' | 'PAYMENT_EXPORT' | 'DATA_EXPORT'
+export type JobType =
+  | 'BULK_INVOICE'
+  | 'BULK_RECEIPT'
+  | 'PAYMENT_EXPORT'
+  | 'DATA_EXPORT'
+  | 'CSV_IMPORT'
+  | 'USER_IMPORT_STAFF'
+  | 'USER_IMPORT_FAMILY'
 
 export interface EnqueueJobOptions {
   tenantId: string
@@ -56,7 +63,7 @@ export async function listJobs(tenantId: string, limit = 20) {
   })
 }
 
-async function processJob(jobId: string) {
+export async function processJob(jobId: string) {
   const job = await db.backgroundJob.findUnique({
     where: { id: jobId },
   })
@@ -186,8 +193,8 @@ async function processJob(jobId: string) {
         const exportData = payments.map((p) => ({
           paymentNumber: p.paymentNumber,
           date: p.paymentDate.toISOString().slice(0, 10),
-          student: `${p.student.firstName} ${p.student.lastName || ''}`.trim(),
-          admissionNo: p.student.admissionNo,
+          student: p.student ? `${p.student.firstName} ${p.student.lastName || ''}`.trim() : 'N/A',
+          admissionNo: p.student?.admissionNo || 'N/A',
           amountRupees: (p.amountCents / 100).toFixed(2),
           method: p.method,
           status: p.status,
@@ -195,6 +202,48 @@ async function processJob(jobId: string) {
         }))
 
         result = { rowCount: exportData.length, records: exportData }
+        break
+      }
+
+      case 'CSV_IMPORT':
+      case 'USER_IMPORT_STAFF':
+      case 'USER_IMPORT_FAMILY': {
+        const payload = (job.payload as any) || {}
+        const { templateType = 'STAFF', rows = [], options = {}, actor = {} } = payload
+        const { UserCsvEngine } = await import('@/lib/users/csv-engine')
+
+        const onProgress = async (progressPct: number, processed: number, total: number) => {
+          await db.backgroundJob.update({
+            where: { id: jobId },
+            data: {
+              progress: Math.min(99, progressPct),
+              result: {
+                progressPct,
+                processed,
+                total,
+              },
+            },
+          })
+        }
+
+        const ctx = {
+          tenantId: job.tenantId,
+          actorId: actor.id || job.createdById,
+          actorName: actor.name || 'Background Worker',
+          actorRole: actor.role || 'ADMIN',
+        }
+
+        if (templateType === 'FAMILY' || job.jobType === 'USER_IMPORT_FAMILY') {
+          result = await UserCsvEngine.executeFamilyImport(ctx, rows, {
+            ...options,
+            onProgress,
+          })
+        } else {
+          result = await UserCsvEngine.executeStaffImport(ctx, rows, {
+            ...options,
+            onProgress,
+          })
+        }
         break
       }
 

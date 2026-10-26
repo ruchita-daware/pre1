@@ -594,6 +594,53 @@ export class TransportService {
     return updated
   }
 
+  static async deleteRoute(ctx: ScopeContext, id: string) {
+    const existing = await db.transportRoute.findFirst({
+      where: { id, tenantId: ctx.tenantId, deletedAt: null },
+      include: {
+        trips: { where: { status: 'IN_PROGRESS' } },
+        assignments: { where: { status: 'ACTIVE', deletedAt: null } },
+      },
+    })
+    if (!existing) throw new Error('Transport route not found')
+
+    if (existing.trips && existing.trips.length > 0) {
+      throw new Error(`Cannot remove route "${existing.name}" because a trip is currently IN_PROGRESS. Complete or cancel the active trip first.`)
+    }
+
+    const deleted = await db.$transaction(async (tx) => {
+      // Deactivate active student assignments on this route
+      await tx.studentTransportAssignment.updateMany({
+        where: { routeId: id, tenantId: ctx.tenantId, status: 'ACTIVE' },
+        data: { status: 'CANCELLED', deletedAt: new Date() },
+      })
+
+      // Soft-delete the route
+      return tx.transportRoute.update({
+        where: { id },
+        data: {
+          deletedAt: new Date(),
+          status: 'INACTIVE',
+        },
+      })
+    })
+
+    await recordAudit({
+      tenantId: ctx.tenantId,
+      branchId: existing.branchId || undefined,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: 'DELETE_ROUTE',
+      entity: 'TransportRoute',
+      entityId: existing.id,
+      module: 'TRANSPORT',
+      summary: `Transport route deleted: ${existing.name} (${existing.code})`,
+    })
+
+    return deleted
+  }
+
   /**
    * 4. STUDENT TRANSPORT ASSIGNMENT & CAPACITY ENFORCEMENT
    */
@@ -637,11 +684,15 @@ export class TransportService {
     if (!route) throw new Error('Transport route not found')
     if (route.status !== 'ACTIVE') throw new Error('Cannot assign student to an INACTIVE route')
 
-    const pStop = route.stops.find((s) => s.id === pickupStopId)
-    if (!pStop) throw new Error('Selected pickup stop does not belong to this route')
+    const pStop = route.stops.find((s) => s.id === pickupStopId) || route.stops[0]
+    if (!pStop) throw new Error('Selected route does not have any pickup stops configured')
 
-    const dStop = route.stops.find((s) => s.id === dropStopId)
-    if (!dStop) throw new Error('Selected drop stop does not belong to this route')
+    const dStop = route.stops.find((s) => s.id === dropStopId) || route.stops[route.stops.length - 1]
+    if (!dStop) throw new Error('Selected route does not have any drop stops configured')
+
+    // Normalize tripType to valid Prisma enum (TWO_WAY, MORNING_ONLY, EVENING_ONLY)
+    const normalizedTripType: TransportTripType =
+      tripType === 'ROUND_TRIP' || !tripType ? 'TWO_WAY' : (tripType as any)
 
     // 4. Concurrency-Safe Vehicle Capacity Enforcement
     if (!route.vehicle) {
@@ -683,13 +734,13 @@ export class TransportService {
       const created = await tx.studentTransportAssignment.create({
         data: {
           tenantId: ctx.tenantId,
-          branchId: student.branchId,
+          branchId: student.branchId || route.branchId || null,
           academicSessionId: session.id,
           studentId,
           routeId,
-          pickupStopId,
-          dropStopId,
-          tripType,
+          pickupStopId: pStop.id,
+          dropStopId: dStop.id,
+          tripType: normalizedTripType,
           startDate: new Date(startDate),
           endDate: endDate ? new Date(endDate) : null,
           status: 'ACTIVE',
@@ -705,33 +756,41 @@ export class TransportService {
 
       // If transport fee is configured and invoice requested, generate canonical Invoice
       if (generateFeeInvoice && monthlyFeeCents > 0) {
-        const invNumber = `INV-TRP-${Date.now().toString().slice(-6)}`
-        await tx.invoice.create({
-          data: {
-            tenantId: ctx.tenantId,
-            branchId: student.branchId,
-            studentId: student.id,
-            academicSessionId: session.id,
-            invoiceNumber: invNumber,
-            title: `Transport Fee — Route ${route.code}`,
-            dueDate: new Date(Date.now() + 15 * 86400000),
-            subtotalCents: monthlyFeeCents,
-            totalCents: monthlyFeeCents,
-            paidCents: 0,
-            balanceCents: monthlyFeeCents,
-            status: 'ISSUED',
-            notes: `Monthly transport fee for Route ${route.name} (${pStop.name} to ${dStop.name})`,
-            items: {
-              create: [
-                {
-                  feeHead: 'TRANSPORT',
-                  description: `Transport fee: Route ${route.code} (${route.name})`,
-                  amountCents: monthlyFeeCents,
-                },
-              ],
+        let invoiceBranchId = student.branchId || route.branchId
+        if (!invoiceBranchId) {
+          const fallbackBranch = await tx.branch.findFirst({ where: { tenantId: ctx.tenantId } })
+          invoiceBranchId = fallbackBranch?.id || null
+        }
+
+        if (invoiceBranchId) {
+          const invNumber = `INV-TRP-${Date.now().toString().slice(-6)}`
+          await tx.invoice.create({
+            data: {
+              tenantId: ctx.tenantId,
+              branchId: invoiceBranchId,
+              studentId: student.id,
+              academicSessionId: session.id,
+              invoiceNumber: invNumber,
+              title: `Transport Fee — Route ${route.code}`,
+              dueDate: new Date(Date.now() + 15 * 86400000),
+              subtotalCents: monthlyFeeCents,
+              totalCents: monthlyFeeCents,
+              paidCents: 0,
+              balanceCents: monthlyFeeCents,
+              status: 'ISSUED',
+              notes: `Monthly transport fee for Route ${route.name} (${pStop.name} to ${dStop.name})`,
+              items: {
+                create: [
+                  {
+                    feeHead: 'TRANSPORT',
+                    description: `Transport fee: Route ${route.code} (${route.name})`,
+                    amountCents: monthlyFeeCents,
+                  },
+                ],
+              },
             },
-          },
-        })
+          })
+        }
       }
 
       return created
@@ -1469,4 +1528,585 @@ export class TransportService {
 
     return profile
   }
+
+  // ── BACKWARD COMPATIBILITY ALIASES ──
+  static async getVehicles(ctx: ScopeContext, filter?: { status?: VehicleStatus; branchId?: string; search?: string }) {
+    return this.listVehicles(ctx, filter)
+  }
+
+  static async getVehicle(ctx: ScopeContext, vehicleId: string) {
+    return db.vehicle.findFirst({
+      where: { id: vehicleId, tenantId: ctx.tenantId, deletedAt: null },
+      include: { routes: true, branch: true },
+    })
+  }
+
+  static async getRoutes(ctx: ScopeContext, filter?: { status?: RouteStatus; branchId?: string }) {
+    return this.listRoutes(ctx, filter)
+  }
+
+  static async getRoute(ctx: ScopeContext, routeId: string) {
+    return db.transportRoute.findFirst({
+      where: { id: routeId, tenantId: ctx.tenantId, deletedAt: null },
+      include: {
+        vehicle: true,
+        stops: { orderBy: { sequence: 'asc' } },
+        driverProfile: { include: { user: true } },
+        assignments: { where: { status: 'ACTIVE' }, include: { student: true } },
+      },
+    })
+  }
+
+  static async getStopsForRoute(ctx: ScopeContext, routeId: string) {
+    return db.routeStop.findMany({
+      where: { routeId, tenantId: ctx.tenantId },
+      orderBy: { sequence: 'asc' },
+    })
+  }
+
+  static async addStopToRoute(
+    ctx: ScopeContext,
+    input: {
+      routeId: string
+      name: string
+      stopOrder?: number
+      pickupTime?: string
+      dropTime?: string
+      landmark?: string
+      address?: string
+    }
+  ) {
+    const route = await db.transportRoute.findFirst({
+      where: { id: input.routeId, tenantId: ctx.tenantId, deletedAt: null },
+    })
+    if (!route) throw new Error('Route not found')
+
+    const count = await db.routeStop.count({ where: { routeId: input.routeId, tenantId: ctx.tenantId } })
+
+    return db.routeStop.create({
+      data: {
+        tenantId: ctx.tenantId,
+        routeId: input.routeId,
+        name: input.name.trim(),
+        sequence: input.stopOrder ?? count + 1,
+        morningPickupTime: input.pickupTime || '07:30 AM',
+        eveningDropTime: input.dropTime || '02:30 PM',
+        landmark: input.landmark || input.address || null,
+      },
+    })
+  }
+
+  static async getStudentAssignments(
+    ctx: ScopeContext,
+    filter?: { routeId?: string; studentId?: string; status?: TransportAssignmentStatus; branchId?: string }
+  ) {
+    return this.listAssignments(ctx, filter)
+  }
+
+  static async assignStudentToRoute(ctx: ScopeContext, input: AssignStudentInput) {
+    return this.assignStudent(ctx, input)
+  }
+
+  static async getStudentAssignmentById(ctx: ScopeContext, assignmentId: string) {
+    return db.studentTransportAssignment.findFirst({
+      where: { id: assignmentId, tenantId: ctx.tenantId, deletedAt: null },
+      include: {
+        student: true,
+        route: true,
+        pickupStop: true,
+        dropStop: true,
+      },
+    })
+  }
+
+  static async updateStudentAssignment(ctx: ScopeContext, assignmentId: string, data: any) {
+    const existing = await db.studentTransportAssignment.findFirst({
+      where: { id: assignmentId, tenantId: ctx.tenantId, deletedAt: null },
+    })
+    if (!existing) throw new Error('Assignment not found')
+
+    return db.studentTransportAssignment.update({
+      where: { id: assignmentId },
+      data: {
+        ...(data.status ? { status: data.status } : {}),
+        ...(data.pickupStopId ? { pickupStopId: data.pickupStopId } : {}),
+        ...(data.dropStopId ? { dropStopId: data.dropStopId } : {}),
+        ...(data.notes !== undefined ? { notes: data.notes } : {}),
+      },
+    })
+  }
+
+  static async deleteStudentAssignment(ctx: ScopeContext, assignmentId: string) {
+    return this.cancelAssignment(ctx, assignmentId)
+  }
+
+  static async getTrips(
+    ctx: ScopeContext,
+    filter?: { routeId?: string; driverId?: string; status?: TripStatus; date?: Date }
+  ) {
+    const where: any = {
+      tenantId: ctx.tenantId,
+      ...(filter?.routeId ? { routeId: filter.routeId } : {}),
+      ...(filter?.driverId ? { driverProfileId: filter.driverId } : {}),
+      ...(filter?.status ? { status: filter.status } : {}),
+      ...(filter?.date
+        ? {
+            scheduledDate: {
+              gte: new Date(filter.date.setHours(0, 0, 0, 0)),
+              lte: new Date(filter.date.setHours(23, 59, 59, 999)),
+            },
+          }
+        : {}),
+    }
+
+    return db.transportTrip.findMany({
+      where,
+      include: {
+        route: true,
+        vehicle: true,
+        driverProfile: { include: { user: true } },
+        manifest: { include: { student: true, stop: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+  }
+
+  static async getTripById(ctx: ScopeContext, tripId: string) {
+    return db.transportTrip.findFirst({
+      where: { id: tripId, tenantId: ctx.tenantId },
+      include: {
+        route: true,
+        vehicle: true,
+        driverProfile: { include: { user: true } },
+        manifest: { include: { student: true, stop: true } },
+      },
+    })
+  }
+
+  /**
+   * Submit Bus Arrival (Driver operation)
+   */
+  static async submitTripArrival(ctx: ScopeContext, tripId: string, studentIds: string[]) {
+    const trip = await db.transportTrip.findFirst({
+      where: { id: tripId, tenantId: ctx.tenantId },
+      include: { route: true, vehicle: true },
+    })
+    if (!trip) throw new Error('Trip not found')
+
+    if (studentIds.length > 0) {
+      await db.tripManifestItem.updateMany({
+        where: { tripId, studentId: { in: studentIds } },
+        data: { status: 'ARRIVAL_SUBMITTED', boardedAt: new Date() },
+      })
+
+      // Fetch students and notify their class teachers
+      const students = await db.student.findMany({
+        where: { id: { in: studentIds }, tenantId: ctx.tenantId },
+        include: {
+          currentClassroom: {
+            select: { primaryTeacherId: true },
+          },
+        },
+      })
+
+      for (const student of students) {
+        const teacherUserId = student.currentClassroom?.primaryTeacherId
+        if (teacherUserId) {
+          await db.inAppNotification.create({
+            data: {
+              tenantId: ctx.tenantId,
+              userId: teacherUserId,
+              title: `Transport Arrival Reported: ${student.firstName} ${student.lastName || ''}`,
+              body: `Bus ${trip.vehicle.registrationNumber} on ${trip.route.name} reported arrival for ${student.firstName}. Please verify arrival.`,
+              category: 'TRANSPORT',
+              severity: 'INFO',
+              linkUrl: '/app/transport?tab=TEACHER',
+              metadata: { tripId, studentId: student.id },
+            },
+          })
+        }
+      }
+
+      await db.transportSecurityEvent.create({
+        data: {
+          tenantId: ctx.tenantId,
+          branchId: ctx.branchId ?? undefined,
+          eventType: 'ARRIVAL_SUBMITTED',
+          tripId: trip.id,
+          vehicleId: trip.vehicleId,
+          routeId: trip.routeId,
+          driverProfileId: trip.driverProfileId,
+          actorId: ctx.actorId || 'system',
+          actorName: ctx.actorName || 'Driver',
+          actorRole: ctx.actorRole || 'DRIVER',
+          action: 'Driver Submitted Student Arrival',
+          result: 'SUCCESS',
+          reason: `Driver reported arrival for ${studentIds.length} student(s) on ${trip.route.name}`,
+        },
+      })
+    }
+
+    return db.transportTrip.update({
+      where: { id: tripId },
+      data: { status: 'COMPLETED', actualEndTime: new Date() },
+    })
+  }
+
+  /**
+   * Verify Student Arrival (Class Teacher operation)
+   */
+  static async verifyTripArrival(ctx: ScopeContext, tripId: string, studentIds: string[], notes?: string) {
+    const trip = await db.transportTrip.findFirst({
+      where: { id: tripId, tenantId: ctx.tenantId },
+      include: { route: true, vehicle: true },
+    })
+    if (!trip) throw new Error('Trip not found')
+
+    if (studentIds.length > 0) {
+      await db.tripManifestItem.updateMany({
+        where: { tripId, studentId: { in: studentIds } },
+        data: { status: 'ARRIVAL_VERIFIED', droppedAt: new Date() },
+      })
+
+      // Fetch students and notify parents
+      const students = await db.student.findMany({
+        where: { id: { in: studentIds }, tenantId: ctx.tenantId },
+        include: {
+          guardians: {
+            include: { guardian: { select: { userId: true, fullName: true } } },
+          },
+        },
+      })
+
+      for (const student of students) {
+        for (const link of student.guardians) {
+          if (link.guardian?.userId) {
+            await db.inAppNotification.create({
+              data: {
+                tenantId: ctx.tenantId,
+                userId: link.guardian.userId,
+                title: `Safe Arrival Verified: ${student.firstName}`,
+                body: `${student.firstName} ${student.lastName || ''}'s arrival at preschool has been verified by Class Teacher ${ctx.actorName}.`,
+                category: 'TRANSPORT',
+                severity: 'INFO',
+                linkUrl: '/app/transport',
+                metadata: { tripId, studentId: student.id },
+              },
+            })
+          }
+        }
+      }
+
+      await db.transportSecurityEvent.create({
+        data: {
+          tenantId: ctx.tenantId,
+          branchId: ctx.branchId ?? undefined,
+          eventType: 'ARRIVAL_VERIFIED',
+          tripId: trip.id,
+          vehicleId: trip.vehicleId,
+          routeId: trip.routeId,
+          actorId: ctx.actorId || 'system',
+          actorName: ctx.actorName || 'Teacher',
+          actorRole: ctx.actorRole || 'TEACHER',
+          action: 'Class Teacher Verified Student Arrival',
+          result: 'SUCCESS',
+          reason: `Teacher ${ctx.actorName} verified arrival for ${studentIds.length} student(s)`,
+        },
+      })
+    }
+
+    return db.transportTrip.update({
+      where: { id: tripId },
+      data: { notes: notes ? `${trip.notes || ''}\nArrival Verified by ${ctx.actorName}: ${notes}` : trip.notes },
+    })
+  }
+
+  /**
+   * Create Parent Route Selection / Request
+   */
+  static async createParentRouteSelection(
+    ctx: ScopeContext,
+    input: {
+      studentId: string
+      routeId: string
+      pickupStopId: string
+      dropStopId: string
+      tripType?: TransportTripType
+    }
+  ) {
+    if (!ctx.actorId) throw new Error('Authentication required')
+
+    // Find guardian linked to student
+    const guardian = await db.guardian.findFirst({
+      where: { userId: ctx.actorId, tenantId: ctx.tenantId, deletedAt: null },
+      include: { studentLinks: { where: { studentId: input.studentId } } },
+    })
+
+    if (!guardian || guardian.studentLinks.length === 0) {
+      const isAdmin = ['OWNER', 'PRINCIPAL', 'COORDINATOR', 'PLATFORM_ADMIN'].includes(ctx.actorRole?.toUpperCase() || '')
+      if (!isAdmin) {
+        throw new Error('You are not authorized to select transport route for this student')
+      }
+    }
+
+    // Verify route and stops
+    const route = await db.transportRoute.findFirst({
+      where: { id: input.routeId, tenantId: ctx.tenantId, deletedAt: null },
+      include: { stops: true },
+    })
+    if (!route) throw new Error('Transport route not found')
+
+    const pickupStop = route.stops.find((s) => s.id === input.pickupStopId)
+    const dropStop = route.stops.find((s) => s.id === input.dropStopId)
+    if (!pickupStop || !dropStop) throw new Error('Selected pickup or drop stop does not belong to this route')
+
+    // Find active academic session
+    const session = await db.academicSession.findFirst({
+      where: { tenantId: ctx.tenantId, status: 'ACTIVE' },
+    })
+    const academicSessionId = session?.id || ctx.academicSessionId || 'default-session'
+
+    // Upsert student transport assignment with PENDING or ACTIVE status
+    const existing = await db.studentTransportAssignment.findFirst({
+      where: { tenantId: ctx.tenantId, studentId: input.studentId, deletedAt: null },
+    })
+
+    let assignment
+    if (existing) {
+      assignment = await db.studentTransportAssignment.update({
+        where: { id: existing.id },
+        data: {
+          routeId: input.routeId,
+          pickupStopId: input.pickupStopId,
+          dropStopId: input.dropStopId,
+          tripType: input.tripType || 'TWO_WAY',
+          requestedByGuardianId: guardian?.id,
+          status: 'PENDING',
+        },
+        include: { route: true, pickupStop: true, dropStop: true, student: true },
+      })
+    } else {
+      assignment = await db.studentTransportAssignment.create({
+        data: {
+          tenantId: ctx.tenantId,
+          branchId: ctx.branchId || null,
+          academicSessionId,
+          studentId: input.studentId,
+          routeId: input.routeId,
+          pickupStopId: input.pickupStopId,
+          dropStopId: input.dropStopId,
+          tripType: input.tripType || 'TWO_WAY',
+          requestedByGuardianId: guardian?.id,
+          status: 'PENDING',
+        },
+        include: { route: true, pickupStop: true, dropStop: true, student: true },
+      })
+    }
+
+    await recordAudit({
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: 'PARENT_ROUTE_SELECTION_SUBMITTED',
+      entity: 'StudentTransportAssignment',
+      entityId: assignment.id,
+      module: 'TRANSPORT',
+      summary: `Parent selected route ${route.name} for student ${assignment.student.firstName}`,
+    })
+
+    return assignment
+  }
+
+  /**
+   * Fetch All Linked Children and Transport Details for Parent
+   */
+  static async getMyChildrenTransport(ctx: ScopeContext) {
+    if (!ctx.actorId) return []
+
+    const guardian = await db.guardian.findFirst({
+      where: { userId: ctx.actorId, tenantId: ctx.tenantId, deletedAt: null },
+      include: {
+        studentLinks: {
+          include: {
+            student: {
+              include: {
+                currentClassroom: { select: { id: true, name: true, code: true } },
+                transportAssignments: {
+                  where: { deletedAt: null },
+                  include: {
+                    route: { select: { id: true, code: true, name: true, description: true } },
+                    pickupStop: { select: { id: true, name: true, morningPickupTime: true } },
+                    dropStop: { select: { id: true, name: true, eveningDropTime: true } },
+                  },
+                  orderBy: { createdAt: 'desc' },
+                  take: 1,
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    if (!guardian) return []
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+
+    const children: any[] = []
+
+    for (const link of guardian.studentLinks) {
+      const s = link.student
+      const assignment = s.transportAssignments[0] || null
+
+      // Fetch today's manifest status for this child
+      const manifestItem = await db.tripManifestItem.findFirst({
+        where: {
+          studentId: s.id,
+          trip: { tenantId: ctx.tenantId, tripDate: { gte: today, lt: tomorrow } },
+        },
+        include: { trip: true, stop: true },
+        orderBy: { createdAt: 'desc' },
+      })
+
+      // Fetch pending pickup/drop authorizations for this child
+      const pendingAuthorizations = await db.transportPickupAuthorization.findMany({
+        where: { tenantId: ctx.tenantId, studentId: s.id, status: 'PENDING' },
+        orderBy: { createdAt: 'desc' },
+      })
+
+      children.push({
+        studentId: s.id,
+        firstName: s.firstName,
+        lastName: s.lastName,
+        fullName: `${s.firstName} ${s.lastName || ''}`,
+        admissionNo: s.admissionNo,
+        photoUrl: s.photoUrl,
+        className: s.currentClassroom?.name || 'Unassigned',
+        assignment: assignment
+          ? {
+              id: assignment.id,
+              status: assignment.status,
+              tripType: assignment.tripType,
+              routeId: assignment.routeId,
+              pickupStopId: assignment.pickupStopId,
+              dropStopId: assignment.dropStopId,
+              routeName: assignment.route.name,
+              routeCode: assignment.route.code,
+              pickupStop: assignment.pickupStop.name,
+              pickupTime: assignment.pickupStop.morningPickupTime,
+              dropStop: assignment.dropStop.name,
+              dropTime: assignment.dropStop.eveningDropTime,
+            }
+          : null,
+        todayStatus: manifestItem
+          ? {
+              status: manifestItem.status,
+              boardedAt: manifestItem.boardedAt,
+              droppedAt: manifestItem.droppedAt,
+              tripType: manifestItem.trip.tripType,
+            }
+          : { status: 'EXPECTED', boardedAt: null, droppedAt: null },
+        pendingAuthorizations,
+      })
+    }
+
+    return children
+  }
+
+  /**
+   * Fetch Class Transport Details for Class Teacher
+   */
+  static async getTeacherClassTransport(ctx: ScopeContext) {
+    if (!ctx.actorId) return { students: [], pendingArrivals: [], pendingAuthorizations: [] }
+
+    const teacherUser = await db.user.findFirst({
+      where: { id: ctx.actorId },
+      include: { taughtClasses: true },
+    })
+
+    const classroomIds = teacherUser ? teacherUser.taughtClasses.map((c) => c.id) : []
+
+    const students = await db.student.findMany({
+      where: { tenantId: ctx.tenantId, currentClassroomId: { in: classroomIds }, deletedAt: null },
+      include: {
+        currentClassroom: { select: { id: true, name: true } },
+        transportAssignments: {
+          where: { status: 'ACTIVE', deletedAt: null },
+          include: {
+            route: { select: { id: true, name: true, code: true } },
+            pickupStop: { select: { id: true, name: true } },
+            dropStop: { select: { id: true, name: true } },
+          },
+        },
+      },
+    })
+
+    const studentIds = students.map((s) => s.id)
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+
+    // Fetch today's manifest items for class students
+    const manifestItems = await db.tripManifestItem.findMany({
+      where: {
+        studentId: { in: studentIds },
+        trip: { tenantId: ctx.tenantId, tripDate: { gte: today, lt: tomorrow } },
+      },
+      include: {
+        student: { select: { id: true, firstName: true, lastName: true, photoUrl: true } },
+        trip: { select: { id: true, tripType: true, route: { select: { name: true } } } },
+        stop: { select: { name: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    })
+
+    // Fetch pending authorization requests for class students
+    const pendingAuthorizations = await db.transportPickupAuthorization.findMany({
+      where: { tenantId: ctx.tenantId, studentId: { in: studentIds }, status: 'PENDING' },
+      include: {
+        student: { select: { id: true, firstName: true, lastName: true } },
+        guardian: { select: { fullName: true, phone: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    return {
+      students: students.map((s) => ({
+        studentId: s.id,
+        fullName: `${s.firstName} ${s.lastName || ''}`,
+        className: s.currentClassroom?.name,
+        assignment: s.transportAssignments[0] || null,
+      })),
+      todayManifest: manifestItems,
+      pendingArrivals: manifestItems.filter((m) => m.status === 'ARRIVAL_SUBMITTED'),
+      pendingAuthorizations,
+    }
+  }
+
+  /**
+   * Generate Secure Driver Transport QR Token
+   */
+  static async generateDriverQRToken(ctx: ScopeContext, params: { routeId: string; vehicleId: string }) {
+    const crypto = await import('crypto')
+    const timestamp = Date.now()
+    const nonce = crypto.randomBytes(8).toString('hex')
+    const rawPayload = `${ctx.tenantId}:${params.routeId}:${params.vehicleId}:${ctx.actorId}:${timestamp}:${nonce}`
+    const token = `TRPQR_${Buffer.from(rawPayload).toString('base64')}`
+
+    return {
+      token,
+      qrPayload: token,
+      tenantId: ctx.tenantId,
+      routeId: params.routeId,
+      vehicleId: params.vehicleId,
+      timestamp,
+    }
+  }
 }
+

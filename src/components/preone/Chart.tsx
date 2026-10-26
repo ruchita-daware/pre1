@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useId } from 'react'
 
 export interface ChartDataPoint {
   label: string
@@ -33,6 +33,8 @@ export function LineChart({
   className = '',
 }: LineChartProps) {
   const [activeIdx, setActiveIdx] = useState<number | null>(null)
+  const rawId = useId()
+  const gradId = `grad-line-${rawId.replace(/[^a-zA-Z0-9_-]/g, '')}`
 
   if (!data || data.length === 0) {
     return (
@@ -68,8 +70,6 @@ export function LineChart({
   const pointsSecondary = hasSecondary
     ? data.map((d, i) => `${getX(i)},${getY(d.secondaryValue ?? 0)}`).join(' ')
     : ''
-
-  const gradId = `grad-line-${Math.random().toString(36).slice(2, 7)}`
 
   return (
     <div className={`chart-wrap ${className}`} style={{ width: '100%', position: 'relative' }}>
@@ -161,7 +161,7 @@ export function LineChart({
                   fill={isAct ? '#FFFFFF' : color}
                   stroke={color}
                   strokeWidth={isAct ? 3 : 2}
-                  style={{ transition: 'all 0.15s ease' }}
+                  style={{ transition: 'r 0.15s ease, fill 0.15s ease, stroke-width 0.15s ease' }}
                 />
               )}
               {/* Bottom label */}
@@ -607,8 +607,10 @@ export function AreaChart({
     ? `${lineSecondary} L ${getX(data.length - 1)},${padTop + chartH} L ${getX(0)},${padTop + chartH} Z`
     : ''
 
-  const grad1Id = `grad-area-1-${Math.random().toString(36).slice(2, 7)}`
-  const grad2Id = `grad-area-2-${Math.random().toString(36).slice(2, 7)}`
+  const areaId = useId()
+  const cleanAreaId = areaId.replace(/[^a-zA-Z0-9_-]/g, '')
+  const grad1Id = `grad-area-1-${cleanAreaId}`
+  const grad2Id = `grad-area-2-${cleanAreaId}`
 
   return (
     <div className={`chart-wrap ${className}`} style={{ width: '100%', position: 'relative' }}>
@@ -680,7 +682,7 @@ export function AreaChart({
                 fill={isAct ? '#FFFFFF' : color}
                 stroke={color}
                 strokeWidth={isAct ? 2.5 : 1.5}
-                style={{ transition: 'all 0.15s ease' }}
+                style={{ transition: 'r 0.15s ease, fill 0.15s ease, stroke-width 0.15s ease' }}
               />
               <text
                 x={cx}
@@ -804,7 +806,7 @@ export function FunnelChart({
                 opacity={isHov ? 1 : opacity}
                 stroke={isHov ? 'var(--foreground, #FFFFFF)' : 'none'}
                 strokeWidth={isHov ? 2 : 0}
-                style={{ transition: 'all 0.15s ease' }}
+                style={{ transition: 'opacity 0.15s ease, stroke-width 0.15s ease' }}
               />
               {/* Centered label */}
               <text
