@@ -385,7 +385,7 @@ export default function RolesSetupPage() {
   }, [])
 
   return (
-    <div style={{ padding: '24px 32px 100px 32px', maxWidth: 1400, margin: '0 auto' }}>
+    <div className="roles-page-container">
       {/* ── Breadcrumb & Page Head ── */}
       <Breadcrumbs
         items={[
@@ -394,9 +394,9 @@ export default function RolesSetupPage() {
         ]}
       />
 
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginTop: 12, marginBottom: 20 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div className="roles-header-cluster">
+        <div className="roles-header-text">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
               Roles & Permissions
             </h1>
@@ -407,7 +407,7 @@ export default function RolesSetupPage() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="roles-header-actions">
           <button
             type="button"
             className="btn btn-secondary"
@@ -416,7 +416,7 @@ export default function RolesSetupPage() {
             style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            Refresh
+            <span>Refresh</span>
           </button>
           <button
             type="button"
@@ -425,64 +425,64 @@ export default function RolesSetupPage() {
             style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
           >
             <Plus size={15} />
-            Create Custom Role
+            <span>Create Custom Role</span>
           </button>
         </div>
       </div>
 
       {/* ── Summary Cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 22 }}>
-        <div className="card" style={{ padding: '14px 18px', borderRadius: 10, background: 'var(--surface-card)' }}>
-          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
+      <div className="roles-summary-grid">
+        <div className="roles-summary-card">
+          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
             Total Staff in Scope
           </div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', marginTop: 4 }}>
+          <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0 2px' }}>
             {summary.total}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
             Across {selectedBranchId === 'ALL' ? 'all authorized branches' : 'selected branch'}
           </div>
         </div>
 
-        <div className="card" style={{ padding: '14px 18px', borderRadius: 10, background: 'var(--surface-card)' }}>
-          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
+        <div className="roles-summary-card">
+          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
             Active Staff
           </div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#10B981', marginTop: 4 }}>
+          <div style={{ fontSize: 26, fontWeight: 800, color: '#10B981', margin: '4px 0 2px' }}>
             {summary.active}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
             Provisioned with active login credentials
           </div>
         </div>
 
-        <div className="card" style={{ padding: '14px 18px', borderRadius: 10, background: 'var(--surface-card)' }}>
-          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
+        <div className="roles-summary-card">
+          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
             Multi-Branch Staff
           </div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#3B82F6', marginTop: 4 }}>
+          <div style={{ fontSize: 26, fontWeight: 800, color: '#3B82F6', margin: '4px 0 2px' }}>
             {summary.multiBranch}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
             Assigned to 2 or more campuses
           </div>
         </div>
 
-        <div className="card" style={{ padding: '14px 18px', borderRadius: 10, background: 'var(--surface-card)' }}>
-          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
+        <div className="roles-summary-card">
+          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
             Custom Role Overrides
           </div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#8B5CF6', marginTop: 4 }}>
+          <div style={{ fontSize: 26, fontWeight: 800, color: '#8B5CF6', margin: '4px 0 2px' }}>
             {summary.customRoleCount}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
             Carrying tailored module capability sets
           </div>
         </div>
       </div>
 
       {/* ── Navigation Tabs ── */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', gap: 8, marginBottom: 20 }}>
+      <div className="roles-tab-strip" role="tablist" aria-label="Roles & Permissions Sections">
         {[
           { key: 'staff', label: 'Staff Directory', icon: <Users size={15} /> },
           { key: 'roles', label: 'Roles & Templates', icon: <Shield size={15} /> },
@@ -495,52 +495,29 @@ export default function RolesSetupPage() {
             <button
               key={tab.key}
               type="button"
+              role="tab"
+              aria-selected={active}
               onClick={() => setActiveTab(tab.key as any)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 7,
-                padding: '10px 16px',
-                border: 'none',
-                background: 'transparent',
-                borderBottom: active ? '2px solid var(--primary)' : '2px solid transparent',
-                color: active ? 'var(--primary)' : 'var(--text-secondary)',
-                fontWeight: active ? 700 : 500,
-                fontSize: 13.5,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
+              className={`roles-tab-item ${active ? 'active' : ''}`}
             >
               {tab.icon}
-              {tab.label}
+              <span>{tab.label}</span>
             </button>
           )
         })}
       </div>
 
       {/* ── Branch Selector & Search Bar ── */}
-      <div
-        className="card"
-        style={{
-          padding: '14px 18px',
-          marginBottom: 20,
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          gap: 14,
-          borderRadius: 10,
-          background: 'var(--surface-card)',
-        }}
-      >
+      <div className="roles-toolbar">
         {/* Branch Scope */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Building2 size={16} style={{ color: 'var(--text-muted)' }} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Branch Scope:</span>
+        <div className="roles-toolbar-branch">
+          <Building2 size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>Branch Scope:</span>
           <select
             className="select"
             value={selectedBranchId}
             onChange={(e) => setSelectedBranchId(e.target.value)}
-            style={{ fontSize: 13, padding: '5px 12px', minWidth: 220 }}
+            style={{ fontSize: 13, padding: '6px 12px', minWidth: 200 }}
           >
             <option value="ALL">All Authorized Branches ({branches.length})</option>
             {branches.map((b) => (
@@ -554,7 +531,7 @@ export default function RolesSetupPage() {
         {/* Global Filter Bar for Staff tab */}
         {activeTab === 'staff' && (
           <>
-            <div style={{ flex: 1, minWidth: 220, position: 'relative' }}>
+            <div className="roles-toolbar-search">
               <Search
                 size={14}
                 style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}
@@ -569,12 +546,12 @@ export default function RolesSetupPage() {
               />
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div className="roles-toolbar-filters">
               <select
                 className="select"
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
-                style={{ fontSize: 12.5, padding: '5px 10px' }}
+                style={{ fontSize: 12.5, padding: '6px 10px' }}
               >
                 <option value="ALL">All Roles</option>
                 {assignableSystemRoles.map((r) => (
@@ -588,7 +565,7 @@ export default function RolesSetupPage() {
                 className="select"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                style={{ fontSize: 12.5, padding: '5px 10px' }}
+                style={{ fontSize: 12.5, padding: '6px 10px' }}
               >
                 <option value="ALL">All Statuses</option>
                 <option value="ACTIVE">Active</option>
@@ -605,170 +582,281 @@ export default function RolesSetupPage() {
       {/* TAB 1: STAFF DIRECTORY                                     */}
       {/* ────────────────────────────────────────────────────────── */}
       {activeTab === 'staff' && (
-        <div className="card" style={{ borderRadius: 10, overflow: 'hidden' }}>
-          <div className="dtable-scroll">
-            <table className="dtable">
-              <thead>
-                <tr>
-                  <th>Staff Member</th>
-                  <th>Primary Role</th>
-                  <th>Additional Roles</th>
-                  <th>Primary Branch</th>
-                  <th>Other Branches</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStaff.length === 0 ? (
+        <>
+          {/* Desktop / Tablet Table View (>= 768px) */}
+          <div className="card roles-table-desktop" style={{ borderRadius: 12, overflow: 'hidden' }}>
+            <div className="dtable-scroll">
+              <table className="dtable">
+                <thead>
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
-                      No staff members match the selected filters or branch scope.
-                    </td>
+                    <th>Staff Member</th>
+                    <th>Primary Role</th>
+                    <th>Additional Roles</th>
+                    <th>Primary Branch</th>
+                    <th>Other Branches</th>
+                    <th>Status</th>
+                    <th style={{ textAlign: 'right' }}>Actions</th>
                   </tr>
-                ) : (
-                  filteredStaff.map((staff) => {
-                    const primaryBranch = branches.find((b) => b.id === staff.branchId)
-                    const otherBranches = (staff.assignedBranches || []).filter((b) => b.id !== staff.branchId)
-                    const secondaries = (staff.roles || []).filter((r) => r !== staff.role)
+                </thead>
+                <tbody>
+                  {filteredStaff.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+                        No staff members match the selected filters or branch scope.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredStaff.map((staff) => {
+                      const primaryBranch = branches.find((b) => b.id === staff.branchId)
+                      const otherBranches = (staff.assignedBranches || []).filter((b) => b.id !== staff.branchId)
+                      const secondaries = (staff.roles || []).filter((r) => r !== staff.role)
 
-                    return (
-                      <tr key={staff.id}>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div
-                              style={{
-                                width: 34,
-                                height: 34,
-                                borderRadius: '50%',
-                                background: 'var(--primary-subtle, #ede9fe)',
-                                color: 'var(--primary)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: 700,
-                                fontSize: 13,
-                              }}
-                            >
-                              {staff.avatarUrl ? (
-                                <img
-                                  src={staff.avatarUrl}
-                                  alt={staff.fullName}
-                                  style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
-                                />
+                      return (
+                        <tr key={staff.id}>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div
+                                style={{
+                                  width: 34,
+                                  height: 34,
+                                  borderRadius: '50%',
+                                  background: 'var(--primary-subtle, #ede9fe)',
+                                  color: 'var(--primary)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontWeight: 700,
+                                  fontSize: 13,
+                                  overflow: 'hidden',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {staff.avatarUrl ? (
+                                  <img
+                                    src={staff.avatarUrl}
+                                    alt={staff.fullName}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  />
+                                ) : (
+                                  staff.fullName.charAt(0).toUpperCase()
+                                )}
+                              </div>
+                              <div>
+                                <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 13.5 }}>
+                                  {staff.fullName}
+                                </div>
+                                <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                                  {staff.staffProfile?.employeeCode ? `${staff.staffProfile.employeeCode} • ` : ''}
+                                  {staff.staffProfile?.designation || staff.email || 'No email registered'}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td>
+                            <span className="badge b-primary" style={{ fontWeight: 700 }}>
+                              {staff.role}
+                            </span>
+                          </td>
+
+                          <td>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                              {secondaries.length === 0 && (!staff.customRoles || staff.customRoles.length === 0) ? (
+                                <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>None</span>
                               ) : (
-                                staff.fullName.charAt(0).toUpperCase()
+                                <>
+                                  {secondaries.map((r) => (
+                                    <span key={r} className="badge b-neutral" style={{ fontSize: 10.5 }}>
+                                      {r}
+                                    </span>
+                                  ))}
+                                  {(staff.customRoles || []).map((cr) => (
+                                    <span key={cr.id} className="badge b-warning" style={{ fontSize: 10.5 }}>
+                                      {cr.name}
+                                    </span>
+                                  ))}
+                                </>
                               )}
                             </div>
-                            <div>
-                              <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 13.5 }}>
-                                {staff.fullName}
-                              </div>
-                              <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                                {staff.staffProfile?.employeeCode ? `${staff.staffProfile.employeeCode} • ` : ''}
-                                {staff.staffProfile?.designation || staff.email || 'No email registered'}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
+                          </td>
 
-                        <td>
+                          <td>
+                            {primaryBranch ? (
+                              <span style={{ fontSize: 12.5, fontWeight: 600 }}>{primaryBranch.name}</span>
+                            ) : (
+                              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Not Assigned</span>
+                            )}
+                          </td>
+
+                          <td>
+                            {otherBranches.length > 0 ? (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                {otherBranches.map((ob) => (
+                                  <span key={ob.id} className="badge b-neutral" style={{ fontSize: 10.5 }}>
+                                    {ob.name}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>—</span>
+                            )}
+                          </td>
+
+                          <td>
+                            <StatusBadge status={staff.status} />
+                          </td>
+
+                          <td style={{ textAlign: 'right' }}>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => {
+                                  setSelectedStaff(staff)
+                                  setViewDrawerOpen(true)
+                                }}
+                                title="View Access Details"
+                                style={{ padding: '5px 8px', fontSize: 12 }}
+                              >
+                                <Eye size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => handleOpenEditRoles(staff)}
+                                title="Edit Roles & Permissions"
+                                style={{ padding: '5px 8px', fontSize: 12 }}
+                              >
+                                <Edit3 size={13} />
+                                Roles
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => handleOpenTransfer(staff)}
+                                title="Branch Transfer / Assignment"
+                                style={{ padding: '5px 8px', fontSize: 12 }}
+                              >
+                                <ArrowRightLeft size={13} />
+                                Transfer
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Mobile Card View (< 768px) */}
+          <div className="roles-cards-mobile">
+            {filteredStaff.length === 0 ? (
+              <div className="card" style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)', borderRadius: 12 }}>
+                No staff members match the selected filters or branch scope.
+              </div>
+            ) : (
+              filteredStaff.map((staff) => {
+                const primaryBranch = branches.find((b) => b.id === staff.branchId)
+                const otherBranches = (staff.assignedBranches || []).filter((b) => b.id !== staff.branchId)
+                const secondaries = (staff.roles || []).filter((r) => r !== staff.role)
+
+                return (
+                  <div key={`card-${staff.id}`} className="roles-staff-card">
+                    <div className="roles-staff-card-header">
+                      <div className="roles-staff-card-profile">
+                        <div className="roles-staff-card-avatar">
+                          {staff.avatarUrl ? (
+                            <img
+                              src={staff.avatarUrl}
+                              alt={staff.fullName}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                          ) : (
+                            staff.fullName.charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <div className="roles-staff-card-info">
+                          <div className="roles-staff-card-name">{staff.fullName}</div>
+                          <div className="roles-staff-card-sub">
+                            {staff.staffProfile?.employeeCode ? `${staff.staffProfile.employeeCode} • ` : ''}
+                            {staff.staffProfile?.designation || staff.email || 'No email registered'}
+                          </div>
+                        </div>
+                      </div>
+                      <StatusBadge status={staff.status} />
+                    </div>
+
+                    <div className="roles-staff-card-meta">
+                      <div className="roles-staff-card-meta-row">
+                        <span style={{ color: 'var(--text-muted)' }}>Role:</span>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
                           <span className="badge b-primary" style={{ fontWeight: 700 }}>
                             {staff.role}
                           </span>
-                        </td>
+                          {secondaries.map((r) => (
+                            <span key={r} className="badge b-neutral" style={{ fontSize: 10.5 }}>
+                              {r}
+                            </span>
+                          ))}
+                          {(staff.customRoles || []).map((cr) => (
+                            <span key={cr.id} className="badge b-warning" style={{ fontSize: 10.5 }}>
+                              {cr.name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
 
-                        <td>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                            {secondaries.length === 0 && (!staff.customRoles || staff.customRoles.length === 0) ? (
-                              <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>None</span>
-                            ) : (
-                              <>
-                                {secondaries.map((r) => (
-                                  <span key={r} className="badge b-neutral" style={{ fontSize: 10.5 }}>
-                                    {r}
-                                  </span>
-                                ))}
-                                {(staff.customRoles || []).map((cr) => (
-                                  <span key={cr.id} className="badge b-warning" style={{ fontSize: 10.5 }}>
-                                    {cr.name}
-                                  </span>
-                                ))}
-                              </>
-                            )}
-                          </div>
-                        </td>
-
-                        <td>
-                          {primaryBranch ? (
-                            <span style={{ fontSize: 12.5, fontWeight: 600 }}>{primaryBranch.name}</span>
-                          ) : (
-                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Not Assigned</span>
+                      <div className="roles-staff-card-meta-row">
+                        <span style={{ color: 'var(--text-muted)' }}>Campus:</span>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                          <span style={{ fontWeight: 600 }}>{primaryBranch ? primaryBranch.name : 'Unassigned'}</span>
+                          {otherBranches.length > 0 && (
+                            <span className="badge b-neutral" style={{ fontSize: 10 }}>
+                              +{otherBranches.length} more
+                            </span>
                           )}
-                        </td>
+                        </div>
+                      </div>
+                    </div>
 
-                        <td>
-                          {otherBranches.length > 0 ? (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                              {otherBranches.map((ob) => (
-                                <span key={ob.id} className="badge b-neutral" style={{ fontSize: 10.5 }}>
-                                  {ob.name}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>—</span>
-                          )}
-                        </td>
-
-                        <td>
-                          <StatusBadge status={staff.status} />
-                        </td>
-
-                        <td style={{ textAlign: 'right' }}>
-                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              onClick={() => {
-                                setSelectedStaff(staff)
-                                setViewDrawerOpen(true)
-                              }}
-                              title="View Access Details"
-                              style={{ padding: '4px 8px', fontSize: 12 }}
-                            >
-                              <Eye size={13} />
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              onClick={() => handleOpenEditRoles(staff)}
-                              title="Edit Roles & Permissions"
-                              style={{ padding: '4px 8px', fontSize: 12 }}
-                            >
-                              <Edit3 size={13} />
-                              Roles
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              onClick={() => handleOpenTransfer(staff)}
-                              title="Branch Transfer / Assignment"
-                              style={{ padding: '4px 8px', fontSize: 12 }}
-                            >
-                              <ArrowRightLeft size={13} />
-                              Transfer
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
+                    <div className="roles-staff-card-actions">
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          setSelectedStaff(staff)
+                          setViewDrawerOpen(true)
+                        }}
+                        title="View Access Details"
+                      >
+                        <Eye size={13} style={{ marginRight: 4 }} /> View
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => handleOpenEditRoles(staff)}
+                        title="Edit Roles & Permissions"
+                      >
+                        <Edit3 size={13} style={{ marginRight: 4 }} /> Roles
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => handleOpenTransfer(staff)}
+                        title="Branch Transfer / Assignment"
+                      >
+                        <ArrowRightLeft size={13} style={{ marginRight: 4 }} /> Transfer
+                      </button>
+                    </div>
+                  </div>
+                )
+              })
+            )}
           </div>
-        </div>
+        </>
       )}
 
       {/* ────────────────────────────────────────────────────────── */}
@@ -783,7 +871,7 @@ export default function RolesSetupPage() {
               Standard system-managed roles with hard-coded security boundaries and built-in permission sets.
             </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: 14 }}>
               {assignableSystemRoles.map((role) => {
                 const meta = ROLE_META[role]
                 const staffWithRole = staffList.filter((s) => s.role === role || (s.roles || []).includes(role)).length
@@ -852,7 +940,7 @@ export default function RolesSetupPage() {
                 No custom roles defined yet. Create a custom role to grant tailored capabilities to coordinators or specialist staff.
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: 14 }}>
                 {customRoles.map((cr) => (
                   <div
                     key={cr.id}
@@ -922,7 +1010,7 @@ export default function RolesSetupPage() {
                   Module: {category} ({items.length} actions)
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10, padding: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 250px), 1fr))', gap: 10, padding: 14 }}>
                   {items.map((cap) => (
                     <div
                       key={cap.id}
@@ -965,7 +1053,7 @@ export default function RolesSetupPage() {
             </p>
           </div>
 
-          <div className="dtable-scroll">
+          <div className="dtable-scroll roles-table-desktop">
             <table className="dtable">
               <thead>
                 <tr>
@@ -1039,6 +1127,50 @@ export default function RolesSetupPage() {
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile Branch Allocation Card List (< 768px) */}
+          <div className="roles-cards-mobile" style={{ padding: '12px 14px' }}>
+            {filteredStaff.map((staff) => {
+              const primaryBranch = branches.find((b) => b.id === staff.branchId)
+              const otherBranches = (staff.assignedBranches || []).filter((b) => b.id !== staff.branchId)
+
+              return (
+                <div key={`branch-card-${staff.id}`} className="roles-staff-card">
+                  <div className="roles-staff-card-header">
+                    <div>
+                      <div className="roles-staff-card-name">{staff.fullName}</div>
+                      <div className="roles-staff-card-sub">{staff.staffProfile?.designation || staff.role}</div>
+                    </div>
+                    <span className="badge b-primary">{staff.role}</span>
+                  </div>
+
+                  <div className="roles-staff-card-meta">
+                    <div className="roles-staff-card-meta-row">
+                      <span style={{ color: 'var(--text-muted)' }}>Primary Campus:</span>
+                      <strong>{primaryBranch ? primaryBranch.name : 'Unassigned'}</strong>
+                    </div>
+                    <div className="roles-staff-card-meta-row">
+                      <span style={{ color: 'var(--text-muted)' }}>Other Branches:</span>
+                      <span>
+                        {otherBranches.length > 0 ? otherBranches.map((b) => b.name).join(', ') : 'None'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 4 }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => handleOpenTransfer(staff)}
+                      style={{ width: '100%', justifyContent: 'center', fontSize: 12 }}
+                    >
+                      <ArrowRightLeft size={13} style={{ marginRight: 6 }} /> Manage Allocation
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
@@ -1299,7 +1431,7 @@ export default function RolesSetupPage() {
           {/* Operation Type */}
           <div className="field">
             <label style={{ fontWeight: 700, fontSize: 13 }}>Assignment Operation</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
               <div
                 onClick={() => setTransferAction('TRANSFER_PRIMARY')}
                 style={{
@@ -1532,7 +1664,7 @@ export default function RolesSetupPage() {
           icon={<Eye size={20} />}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12 }}>
               <div style={{ padding: 10, borderRadius: 6, background: 'var(--surface-ground)' }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Primary Role</div>
                 <div style={{ fontWeight: 700, marginTop: 2 }}>{selectedStaff.role}</div>
