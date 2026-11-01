@@ -29,27 +29,49 @@ async function _POST(
     if (branchCheck) return branchCheck
 
     const body = await req.json()
-    const { nextAcademicSessionId, nextProgramId, nextClassroomId, reason } = body
+    const targetAcademicSessionId = body.targetAcademicSessionId || body.nextAcademicSessionId
+    const targetClassroomId = body.targetClassroomId || body.destinationClassroomId || body.nextClassroomId
+    const outcome = body.outcome || 'PROMOTED'
+    const notes = body.notes || body.reason
 
-    if (!nextAcademicSessionId || !nextProgramId || !nextClassroomId) {
-      return Errors.validation('nextAcademicSessionId, nextProgramId, and nextClassroomId are required')
+    if (!targetAcademicSessionId) {
+      return Errors.validation('Target academic session is required')
     }
 
-    const updated = await StudentService.promoteStudent(
-      {
-        tenantId: session.tenantId,
-        branchId: session.branchId,
-        actorId: session.uid,
-        actorName: session.name,
-        actorRole: session.role,
-      },
-      id,
-      {
-        targetAcademicSessionId: nextAcademicSessionId,
-        targetClassroomId: nextClassroomId,
-        notes: reason,
-      }
-    )
+    if (outcome !== 'GRADUATED' && !targetClassroomId) {
+      return Errors.validation('Target classroom section is required')
+    }
+
+    let updated: any
+    if (outcome === 'GRADUATED') {
+      const { PromotionService } = await import('@/lib/promotion/promotion-service')
+      updated = await PromotionService.graduateStudent(
+        {
+          id: session.uid,
+          name: session.name,
+          role: session.role,
+          tenantId: session.tenantId,
+        },
+        id,
+        { remarks: notes || 'Graduated preschool program' }
+      )
+    } else {
+      updated = await StudentService.promoteStudent(
+        {
+          tenantId: session.tenantId,
+          branchId: session.branchId,
+          actorId: session.uid,
+          actorName: session.name,
+          actorRole: session.role,
+        },
+        id,
+        {
+          targetAcademicSessionId,
+          targetClassroomId,
+          notes,
+        }
+      )
+    }
 
 
     return ok(updated)

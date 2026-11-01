@@ -5,8 +5,11 @@ import { requireApi, isResponse } from '@/lib/auth-api'
 import { FeeService } from '@/lib/fees/fee-service'
 
 async function _GET(req: NextRequest) {
-  const session = await requireApi(req, 'finance:read')
-  if (isResponse(session)) return session
+  let session = await requireApi(req, 'finance:read')
+  if (isResponse(session)) {
+    session = await requireApi(req, 'settings:read')
+    if (isResponse(session)) return session
+  }
   if (!session.tenantId) return Errors.forbidden('No tenant context')
 
   try {
@@ -18,8 +21,11 @@ async function _GET(req: NextRequest) {
 }
 
 async function _PUT(req: NextRequest) {
-  const session = await requireApi(req, 'settings:write')
-  if (isResponse(session)) return session
+  let session = await requireApi(req, 'settings:write')
+  if (isResponse(session)) {
+    session = await requireApi(req, 'finance:write')
+    if (isResponse(session)) return session
+  }
   if (!session.tenantId) return Errors.forbidden('No tenant context')
 
   try {
@@ -41,3 +47,4 @@ async function _PUT(req: NextRequest) {
 
 export const GET = withApi(_GET)
 export const PUT = withApi(_PUT)
+export const POST = withApi(_PUT)

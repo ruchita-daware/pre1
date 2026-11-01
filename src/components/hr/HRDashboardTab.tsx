@@ -64,7 +64,7 @@ export function HRDashboardTab({
   const absentCount = Math.max(0, metrics.totalStaff - (metrics.presentToday + metrics.onLeaveToday))
   const absentPct = Math.max(0, 100 - (presentPct + leavePct))
 
-  // KPI cards definition
+  // KPI cards definition tailored for preschool operations
   const kpis = [
     {
       label: 'Total Staff',
@@ -72,12 +72,12 @@ export function HRDashboardTab({
       sub: `${metrics.activeStaff} active · ${metrics.onProbation} probation`,
       icon: Users,
       iconBg: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
-      tab: 'employees' as HRTabKey,
+      tab: 'staff' as HRTabKey,
     },
     {
       label: 'Present Today',
       value: metrics.presentToday,
-      sub: `${presentPct}% roll call rate`,
+      sub: `${presentPct}% campus roll call`,
       icon: UserCheck,
       iconBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
       valueColor: 'text-emerald-600 dark:text-emerald-400',
@@ -95,27 +95,27 @@ export function HRDashboardTab({
     {
       label: 'On Leave',
       value: metrics.onLeaveToday,
-      sub: 'Approved educator leaves',
+      sub: 'Approved staff leaves',
       icon: Clock,
       iconBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
       tab: 'leave' as HRTabKey,
     },
     {
-      label: 'Preschool Teachers',
-      value: metrics.totalTeachers ?? Math.max(0, metrics.totalStaff - 3),
-      sub: 'Classroom educators',
-      icon: GraduationCap,
-      iconBg: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
-      tab: 'schedule' as HRTabKey,
+      label: 'Payroll Status',
+      value: metrics.latestPayrollStatus || 'DRAFT',
+      sub: metrics.latestPayrollNet ? `${money(metrics.latestPayrollNet)} net` : 'Current cycle',
+      icon: CreditCard,
+      iconBg: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
+      tab: 'payroll' as HRTabKey,
     },
     {
-      label: 'Pending Requests',
+      label: 'Pending Approvals',
       value: metrics.pendingLeaves,
       sub: metrics.pendingLeaves > 0 ? 'Action required' : 'Inbox caught up',
       icon: AlertCircle,
       iconBg: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
       valueColor: metrics.pendingLeaves > 0 ? 'text-orange-600 dark:text-orange-400' : undefined,
-      tab: 'requests' as HRTabKey,
+      tab: 'leave' as HRTabKey,
     },
   ]
 
@@ -125,13 +125,13 @@ export function HRDashboardTab({
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            Workforce Snapshot
+            Today's Workforce Snapshot
           </h2>
           <button
-            onClick={() => onNavigateTab('employees')}
+            onClick={() => onNavigateTab('staff')}
             className="text-xs text-primary hover:underline font-semibold flex items-center gap-1"
           >
-            Directory <ArrowRight size={12} />
+            Staff Directory <ArrowRight size={12} />
           </button>
         </div>
 
@@ -181,8 +181,119 @@ export function HRDashboardTab({
         </div>
       </div>
 
-      {/* ── SECTIONS 2, 3, 4: Operational Cards ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* ── PENDING ACTIONS HUB (Clear Direct-Action Cards) ── */}
+      <div className="p-4 sm:p-5 rounded-2xl border border-border/80 bg-card shadow-xs space-y-3">
+        <div className="flex items-center justify-between pb-2 border-b border-border/50">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center">
+              <AlertCircle size={15} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-foreground">Action Items Requiring Attention</h3>
+              <p className="text-[11px] text-muted-foreground">Direct shortcuts to pending approvals, daily roll calls and payroll tasks</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Action 1: Leaves */}
+          <div
+            onClick={() => onNavigateTab('leave')}
+            className="p-3 rounded-xl border border-border/70 bg-muted/20 hover:bg-muted/50 cursor-pointer transition-all flex flex-col justify-between space-y-2 group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <CalendarDays size={14} className="text-amber-500" />
+                <span>Leave Approvals</span>
+              </span>
+              <span className={`badge ${metrics.pendingLeaves > 0 ? 'b-warning' : 'b-neutral'} text-[10.5px] font-bold px-1.5`}>
+                {metrics.pendingLeaves} pending
+              </span>
+            </div>
+            <p className="text-[11.5px] text-muted-foreground">
+              {metrics.pendingLeaves > 0
+                ? `${metrics.pendingLeaves} staff leave request(s) awaiting approval.`
+                : 'No pending leave requests.'}
+            </p>
+            <span className="text-[11px] text-primary font-semibold flex items-center gap-1 group-hover:underline pt-1">
+              Review Leaves <ChevronRight size={12} />
+            </span>
+          </div>
+
+          {/* Action 2: Daily Roll Call */}
+          <div
+            onClick={() => onNavigateTab('attendance')}
+            className="p-3 rounded-xl border border-border/70 bg-muted/20 hover:bg-muted/50 cursor-pointer transition-all flex flex-col justify-between space-y-2 group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <CalendarCheck size={14} className="text-emerald-500" />
+                <span>Daily Attendance</span>
+              </span>
+              <span className={`badge ${metrics.absentToday > 0 ? 'b-danger' : 'b-success'} text-[10.5px] font-bold px-1.5`}>
+                {metrics.absentToday > 0 ? `${metrics.absentToday} absent` : '100% Roll Call'}
+              </span>
+            </div>
+            <p className="text-[11.5px] text-muted-foreground">
+              {metrics.absentToday > 0
+                ? `${metrics.absentToday} staff marked absent or unrecorded today.`
+                : `${metrics.presentToday} staff checked in today.`}
+            </p>
+            <span className="text-[11px] text-primary font-semibold flex items-center gap-1 group-hover:underline pt-1">
+              Open Attendance <ChevronRight size={12} />
+            </span>
+          </div>
+
+          {/* Action 3: Payroll Cycle */}
+          <div
+            onClick={() => onNavigateTab('payroll')}
+            className="p-3 rounded-xl border border-border/70 bg-muted/20 hover:bg-muted/50 cursor-pointer transition-all flex flex-col justify-between space-y-2 group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <CreditCard size={14} className="text-teal-500" />
+                <span>Monthly Payroll</span>
+              </span>
+              <StatusBadge status={metrics.latestPayrollStatus || 'DRAFT'} />
+            </div>
+            <p className="text-[11.5px] text-muted-foreground">
+              {metrics.latestPayrollNet > 0
+                ? `Net payout: ${money(metrics.latestPayrollNet)}`
+                : 'Current cycle pending calculation.'}
+            </p>
+            <span className="text-[11px] text-primary font-semibold flex items-center gap-1 group-hover:underline pt-1">
+              Go to Payroll <ChevronRight size={12} />
+            </span>
+          </div>
+
+          {/* Action 4: Statutory & Compliance */}
+          <div
+            onClick={() => onNavigateTab('staff')}
+            className="p-3 rounded-xl border border-border/70 bg-muted/20 hover:bg-muted/50 cursor-pointer transition-all flex flex-col justify-between space-y-2 group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <ShieldCheck size={14} className="text-purple-500" />
+                <span>Compliance & Safety</span>
+              </span>
+              <span className={`badge ${metrics.poshDue > 0 ? 'b-warning' : 'b-success'} text-[10.5px] font-bold px-1.5`}>
+                {metrics.poshDue > 0 ? `${metrics.poshDue} due` : 'Compliant'}
+              </span>
+            </div>
+            <p className="text-[11.5px] text-muted-foreground">
+              {metrics.poshDue > 0
+                ? `${metrics.poshDue} certifications due within 30 days.`
+                : 'Police & POSH verifications up to date.'}
+            </p>
+            <span className="text-[11px] text-primary font-semibold flex items-center gap-1 group-hover:underline pt-1">
+              View Staff Records <ChevronRight size={12} />
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── SECTIONS 2, 3: Operational Breakdown ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* SECTION 2: Today's Attendance Roll Call */}
         <div className="p-4 sm:p-5 rounded-2xl border border-border/80 bg-card shadow-xs flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-border/50">
@@ -248,80 +359,14 @@ export function HRDashboardTab({
           </div>
         </div>
 
-        {/* SECTION 3: Requests & Approvals */}
-        <div className="p-4 sm:p-5 rounded-2xl border border-border/80 bg-card shadow-xs flex flex-col justify-between space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-border/50">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center">
-                <AlertCircle size={15} />
-              </div>
-              <h3 className="text-sm font-bold text-foreground">Requests & Approvals</h3>
-            </div>
-            <button
-              onClick={() => onNavigateTab('requests')}
-              className="text-xs text-primary hover:underline font-semibold flex items-center gap-1"
-            >
-              All Requests <ArrowRight size={12} />
-            </button>
-          </div>
-
-          <div className="space-y-2 text-xs">
-            <div
-              onClick={() => onNavigateTab('requests')}
-              className="flex items-center justify-between p-2.5 rounded-xl bg-muted/30 hover:bg-muted/60 transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <CalendarDays size={14} className="text-amber-500" />
-                <span className="text-foreground font-medium">Pending Leave Requests</span>
-              </div>
-              <span className="badge b-warning text-[10.5px] font-bold px-2 py-0.5">
-                {metrics.pendingLeaves} review
-              </span>
-            </div>
-
-            <div
-              onClick={() => onNavigateTab('requests')}
-              className="flex items-center justify-between p-2.5 rounded-xl bg-muted/30 hover:bg-muted/60 transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <Clock size={14} className="text-blue-500" />
-                <span className="text-foreground font-medium">Notice & Exit Checklists</span>
-              </div>
-              <span className="font-medium text-foreground text-[11.5px] px-1.5 py-0.5 rounded bg-muted/50">
-                {metrics.pendingResignations} active
-              </span>
-            </div>
-
-            <div
-              onClick={() => onNavigateTab('training')}
-              className="flex items-center justify-between p-2.5 rounded-xl bg-muted/30 hover:bg-muted/60 transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <ShieldCheck size={14} className="text-purple-500" />
-                <span className="text-foreground font-medium">POSH Expiries (30 Days)</span>
-              </div>
-              <span className="font-semibold text-warning text-[11.5px]">
-                {metrics.poshDue} due
-              </span>
-            </div>
-          </div>
-
-          <div className="pt-3 border-t border-border/40 flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Urgent Approvals:</span>
-            <span className="font-semibold text-foreground">
-              {metrics.pendingLeaves + metrics.pendingResignations} total
-            </span>
-          </div>
-        </div>
-
-        {/* SECTION 4: Payroll & Compliance */}
+        {/* SECTION 3: Payroll Summary */}
         <div className="p-4 sm:p-5 rounded-2xl border border-border/80 bg-card shadow-xs flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-border/50">
             <div className="flex items-center gap-2.5">
               <div className="w-7 h-7 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center">
                 <CreditCard size={15} />
               </div>
-              <h3 className="text-sm font-bold text-foreground">Payroll & Statutory</h3>
+              <h3 className="text-sm font-bold text-foreground">Payroll & Statutory Snapshot</h3>
             </div>
             <button
               onClick={() => onNavigateTab('payroll')}
@@ -334,7 +379,7 @@ export function HRDashboardTab({
           <div className="space-y-2 text-xs">
             <div className="flex items-center justify-between p-2.5 rounded-xl bg-muted/30">
               <span className="text-muted-foreground font-medium">Current Month Status</span>
-              <StatusBadge status={metrics.latestPayrollStatus} />
+              <StatusBadge status={metrics.latestPayrollStatus || 'DRAFT'} />
             </div>
 
             <div className="flex items-center justify-between p-2.5 rounded-xl bg-muted/30">
@@ -345,18 +390,21 @@ export function HRDashboardTab({
             </div>
 
             <div className="flex items-center justify-between p-2.5 rounded-xl bg-muted/30">
-              <span className="text-muted-foreground font-medium">Child Safety & POSH</span>
+              <span className="text-muted-foreground font-medium">Child Safety & Compliance</span>
               <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold text-xs">
-                <ShieldCheck size={14} /> Audit Ready
+                <ShieldCheck size={14} /> Statutory Gate Active
               </span>
             </div>
           </div>
 
           <div className="pt-3 border-t border-border/40 flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Statutory Gate:</span>
-            <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
-              <CheckCircle2 size={13} /> PF / ESI Active
-            </span>
+            <span className="text-muted-foreground">Action:</span>
+            <button
+              onClick={() => onNavigateTab('payroll')}
+              className="text-primary font-semibold hover:underline"
+            >
+              Review Salary Cycles & Payouts →
+            </button>
           </div>
         </div>
       </div>
@@ -416,17 +464,17 @@ export function HRDashboardTab({
           </button>
 
           <button
-            onClick={() => onNavigateTab('schedule')}
+            onClick={() => onNavigateTab('payroll')}
             className="p-3.5 rounded-2xl border border-border/80 bg-card hover:bg-card/90 text-left transition-all duration-200 shadow-xs hover:shadow-sm flex items-center gap-3 group"
           >
-            <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-              <CalendarRange size={16} />
+            <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
+              <CreditCard size={16} />
             </div>
             <div>
               <div className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
-                Classroom Roster
+                Payroll
               </div>
-              <div className="text-[11px] text-muted-foreground">Educator shifts</div>
+              <div className="text-[11px] text-muted-foreground">Salary cycles & payouts</div>
             </div>
           </button>
         </div>

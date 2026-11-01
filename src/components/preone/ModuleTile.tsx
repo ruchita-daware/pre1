@@ -12,6 +12,7 @@ export function ModuleTile({ module: m }: { module: HomeModule }) {
       href={m.href}
       className={`tile tile-${m.tileSize}`}
       aria-label={m.label}
+      data-module={m.key}
       draggable={false}
     >
       <span className="tile-ico">

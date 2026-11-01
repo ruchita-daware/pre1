@@ -64,8 +64,10 @@ export function AnimatedModuleIcon({
             height: 'auto',
             objectFit: 'contain',
             transform: triggerAnimation ? 'scale(1.08) translateY(-1px)' : 'scale(1)',
-            transition: 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)',
-            filter: 'drop-shadow(0 3px 8px rgba(0, 0, 0, 0.08))',
+            transition: 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.22s ease',
+            filter: triggerAnimation
+              ? 'drop-shadow(0 4px 10px color-mix(in srgb, var(--module-accent, #7c3aed) 25%, rgba(0, 0, 0, 0.1)))'
+              : 'drop-shadow(0 3px 8px rgba(0, 0, 0, 0.08))',
           }}
         />
       ) : (
@@ -76,15 +78,15 @@ export function AnimatedModuleIcon({
             width: 46,
             height: 46,
             borderRadius: 14,
-            background: `linear-gradient(135deg, ${theme.iconBg}, color-mix(in srgb, ${theme.iconColor} 14%, #ffffff))`,
-            border: `1px solid ${theme.iconBorder}`,
-            color: theme.iconColor,
-            boxShadow: `0 4px 12px -2px color-mix(in srgb, ${theme.iconColor} 20%, transparent)`,
+            background: `linear-gradient(135deg, var(--module-bg, ${theme.iconBg}), color-mix(in srgb, var(--module-accent, ${theme.iconColor}) 14%, #ffffff))`,
+            border: `1px solid color-mix(in srgb, var(--module-accent, ${theme.iconBorder}) 24%, transparent)`,
+            color: 'var(--module-accent, inherit)',
+            boxShadow: `0 4px 12px -2px color-mix(in srgb, var(--module-accent, ${theme.iconColor}) 20%, transparent)`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             transform: triggerAnimation ? 'scale(1.06) translateY(-1px)' : 'scale(1)',
-            transition: 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            transition: 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.22s ease',
           }}
         >
           <FallbackIcon size={24} strokeWidth={2.2} />

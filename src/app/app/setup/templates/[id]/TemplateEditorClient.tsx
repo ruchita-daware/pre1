@@ -185,8 +185,36 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
         setTemplateName(json.data.name)
         setTemplateType(json.data.type)
         setIsDefault(json.data.isDefault)
-        setDefinition(json.data.definition)
-        setHistory([json.data.definition])
+
+        const rawDef = json.data.definition || {}
+        const defaultPageSize: PageFormat = String(json.data.type || '').includes('ID_CARD')
+          ? 'ID_CARD_PORTRAIT'
+          : String(json.data.type || '').includes('RECEIPT')
+          ? 'RECEIPT_THERMAL'
+          : 'A4_PORTRAIT'
+        const pageSize = (rawDef.pageSize && PAGE_DIMENSIONS[rawDef.pageSize as PageFormat])
+          ? (rawDef.pageSize as PageFormat)
+          : defaultPageSize
+        const dim = PAGE_DIMENSIONS[pageSize] || PAGE_DIMENSIONS.A4_PORTRAIT
+
+        const safeDef: TemplateDefinition = {
+          version: typeof rawDef.version === 'number' ? rawDef.version : 1,
+          status: rawDef.status === 'PUBLISHED' ? 'PUBLISHED' : 'DRAFT',
+          documentType: rawDef.documentType || json.data.type || 'GENERAL_LETTER',
+          pageSize,
+          orientation: rawDef.orientation || (dim.widthMm > dim.heightMm ? 'landscape' : 'portrait'),
+          widthMm: typeof rawDef.widthMm === 'number' && rawDef.widthMm > 0 ? rawDef.widthMm : dim.widthMm,
+          heightMm: typeof rawDef.heightMm === 'number' && rawDef.heightMm > 0 ? rawDef.heightMm : dim.heightMm,
+          backgroundColor: rawDef.backgroundColor || '#FFFFFF',
+          elements: Array.isArray(rawDef.elements) ? rawDef.elements : [],
+          marginsMm: rawDef.marginsMm || { top: 10, right: 10, bottom: 10, left: 10 },
+          publishedAt: rawDef.publishedAt,
+          publishedBy: rawDef.publishedBy,
+          description: rawDef.description,
+        }
+
+        setDefinition(safeDef)
+        setHistory([safeDef])
         setHistoryIndex(0)
         setIsDirty(false)
       } else {
@@ -210,8 +238,8 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
     const availableW = container.clientWidth - 80
     const availableH = container.clientHeight - 80
 
-    const docWidthPx = definition.widthMm * MM_TO_PX
-    const docHeightPx = definition.heightMm * MM_TO_PX
+    const docWidthPx = (definition.widthMm || 210) * MM_TO_PX
+    const docHeightPx = (definition.heightMm || 297) * MM_TO_PX
 
     const scaleX = availableW / docWidthPx
     const scaleY = availableH / docHeightPx
@@ -970,8 +998,8 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
   }
 
   const sampleData = getDefaultSampleData()
-  const canvasWidthPx = definition.widthMm * MM_TO_PX
-  const canvasHeightPx = definition.heightMm * MM_TO_PX
+  const canvasWidthPx = (definition.widthMm || 210) * MM_TO_PX
+  const canvasHeightPx = (definition.heightMm || 297) * MM_TO_PX
 
   return (
     <div
@@ -2152,7 +2180,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
               minHeight: canvasHeightPx * zoom,
               backgroundColor: definition.backgroundColor || '#FFFFFF',
               boxShadow: '0 20px 45px -10px rgba(0,0,0,0.5), 0 0 1px rgba(0,0,0,0.3)',
-              borderRadius: definition.pageSize.includes('ID_CARD') ? 10 : 2,
+              borderRadius: definition.pageSize?.includes('ID_CARD') ? 10 : 2,
               position: 'relative',
               overflow: 'hidden',
               transformOrigin: 'top center',
@@ -2511,7 +2539,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
           >
             <span>{definition.widthMm} × {definition.heightMm} mm</span>
             <span>•</span>
-            <span>{PAGE_DIMENSIONS[definition.pageSize]?.name || definition.pageSize}</span>
+            <span>{definition.pageSize ? (PAGE_DIMENSIONS[definition.pageSize]?.name || definition.pageSize) : 'A4 Portrait'}</span>
             <span>•</span>
             <span>{Math.round(zoom * 100)}%</span>
           </div>
@@ -2969,7 +2997,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                         Page Format & Dimensions
                       </label>
                       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
-                        {PAGE_DIMENSIONS[definition.pageSize]?.name || definition.pageSize}
+                        {definition.pageSize ? (PAGE_DIMENSIONS[definition.pageSize]?.name || definition.pageSize) : 'A4 Portrait'}
                       </div>
                       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
                         {definition.widthMm} × {definition.heightMm} mm ({definition.orientation})

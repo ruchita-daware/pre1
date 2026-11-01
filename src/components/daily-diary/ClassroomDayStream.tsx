@@ -323,23 +323,25 @@ export function ClassroomDayStream({
           </div>
 
           {/* Date Controls & Quick Actions */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center bg-muted/40 border border-border/60 rounded-xl p-1 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-start lg:justify-end">
+            <div className="flex items-center bg-muted/40 border border-border/60 rounded-xl p-1 shadow-sm shrink-0">
               <button
                 type="button"
                 onClick={handlePrevDay}
                 className="p-1.5 hover:bg-background rounded-lg text-foreground/80 hover:text-foreground transition"
                 title="Previous Day"
+                aria-label="Previous Day"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <div className="flex items-center gap-1.5 px-2">
-                <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => onDateChange(e.target.value)}
-                  className="bg-transparent text-xs font-semibold outline-none cursor-pointer"
+                  className="bg-transparent text-xs font-semibold outline-none cursor-pointer max-w-[115px] sm:max-w-none"
+                  aria-label="Select date"
                 />
               </div>
               <button
@@ -347,6 +349,7 @@ export function ClassroomDayStream({
                 onClick={handleNextDay}
                 className="p-1.5 hover:bg-background rounded-lg text-foreground/80 hover:text-foreground transition"
                 title="Next Day"
+                aria-label="Next Day"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -356,7 +359,7 @@ export function ClassroomDayStream({
               <button
                 type="button"
                 onClick={handleToday}
-                className="btn btn-sm btn-ghost border border-border/60 rounded-xl text-xs"
+                className="btn btn-sm btn-ghost border border-border/60 rounded-xl text-xs shrink-0"
               >
                 Today
               </button>
@@ -366,8 +369,9 @@ export function ClassroomDayStream({
               type="button"
               onClick={onRefresh}
               disabled={loading}
-              className="btn btn-sm btn-ghost p-2 rounded-xl text-muted-foreground hover:text-foreground"
+              className="btn btn-sm btn-ghost p-2 rounded-xl text-muted-foreground hover:text-foreground shrink-0"
               title="Refresh Stream"
+              aria-label="Refresh Stream"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -377,7 +381,7 @@ export function ClassroomDayStream({
               <button
                 type="button"
                 onClick={onOpenCopyRoutine}
-                className="btn btn-sm btn-ghost border border-border/70 rounded-xl flex items-center gap-1.5 text-xs font-semibold hover:border-primary/50 text-foreground/90 shadow-2xs"
+                className="btn btn-sm btn-ghost border border-border/70 rounded-xl flex items-center gap-1.5 text-xs font-semibold hover:border-primary/50 text-foreground/90 shadow-2xs shrink-0"
                 title="Copy routine from yesterday or last school day"
               >
                 <Copy className="w-3.5 h-3.5 text-primary" />
@@ -390,7 +394,7 @@ export function ClassroomDayStream({
               <button
                 type="button"
                 onClick={onOpenWeeklyTemplate}
-                className="btn btn-sm btn-ghost border border-purple-500/30 rounded-xl flex items-center gap-1.5 text-xs font-semibold hover:border-purple-500/60 text-purple-700 dark:text-purple-300 shadow-2xs"
+                className="btn btn-sm btn-ghost border border-purple-500/30 rounded-xl flex items-center gap-1.5 text-xs font-semibold hover:border-purple-500/60 text-purple-700 dark:text-purple-300 shadow-2xs shrink-0"
                 title="Load a weekly theme routine template"
               >
                 <BookOpen className="w-3.5 h-3.5 text-purple-500" />
@@ -403,7 +407,7 @@ export function ClassroomDayStream({
             <button
               type="button"
               onClick={() => onOpenQuickLog()}
-              className="btn btn-sm btn-primary rounded-xl flex items-center gap-1.5 shadow-sm"
+              className="btn btn-sm btn-primary rounded-xl flex items-center gap-1.5 shadow-sm shrink-0 ml-auto sm:ml-0"
             >
               <Plus className="w-4 h-4" />
               <span>+ Quick Log</span>
@@ -538,43 +542,64 @@ export function ClassroomDayStream({
           </div>
         </div>
       ) : (
-        <div className="relative pl-2 sm:pl-4 space-y-5">
-          {/* Timeline Rail Track */}
-          <div className="absolute top-4 bottom-4 left-6 sm:left-8 w-0.5 bg-border/80" />
-
-          {events.map((evt) => {
+        <div className="relative space-y-4 sm:space-y-5">
+          {events.map((evt, idx) => {
             const Icon = getEventIcon(evt.streamType)
             const accent = getEventAccent(evt.streamType, evt.status)
             const isExpanded = !!expandedEventIds[evt.id]
+            const isFirst = idx === 0
+            const isLast = idx === events.length - 1
 
             return (
-              <div key={evt.id} className="relative flex items-start gap-3 sm:gap-4 group">
-                {/* Time Badge (Desktop Left) */}
-                <div className="w-16 sm:w-20 pt-1 shrink-0 text-right">
-                  <span className="text-xs font-bold text-foreground/90 block">{evt.time}</span>
+              <div key={evt.id} className="relative flex items-start gap-2.5 sm:gap-4 group">
+                {/* Time Badge (Desktop Left >= sm) */}
+                <div className="hidden sm:block w-20 pt-1 shrink-0 text-right">
+                  <span className="text-xs font-bold text-foreground/90 font-mono block">{evt.time}</span>
                   {evt.endTime && (
                     <span className="text-[10px] text-muted-foreground block -mt-0.5">to {evt.endTime}</span>
                   )}
                 </div>
 
-                {/* Timeline Connector Dot & Icon */}
-                <div
-                  className={`relative z-10 w-8 h-8 rounded-full border-2 border-background flex items-center justify-center shrink-0 shadow-sm ${accent.iconBg} ring-2 ${accent.dot}`}
-                >
-                  <Icon className="w-4 h-4" />
+                {/* Timeline Connector Rail & Dot */}
+                <div className="relative flex flex-col items-center shrink-0 w-8 self-stretch">
+                  {/* Continuous connector line behind dot */}
+                  <div
+                    className={`absolute w-0.5 bg-border/80 ${
+                      isFirst && isLast
+                        ? 'hidden'
+                        : isFirst
+                        ? 'top-4 bottom-0'
+                        : isLast
+                        ? 'top-0 h-4'
+                        : 'top-0 bottom-0'
+                    }`}
+                  />
+
+                  {/* Dot with Icon */}
+                  <div
+                    className={`relative z-10 w-8 h-8 rounded-full border-2 border-background flex items-center justify-center shrink-0 shadow-sm ${accent.iconBg} ring-2 ${accent.dot}`}
+                  >
+                    <Icon className="w-4 h-4" />
+                  </div>
                 </div>
 
                 {/* Event Card */}
                 <div
-                  className={`flex-1 glass-panel p-4 rounded-xl border border-border/70 shadow-sm hover:shadow-md transition-all ${accent.card}`}
+                  className={`flex-1 min-w-0 glass-panel p-3.5 sm:p-4 rounded-xl border border-border/70 shadow-sm hover:shadow-md transition-all ${accent.card}`}
                 >
+                  {/* Mobile Time Badge (< sm) */}
+                  <div className="sm:hidden flex items-center gap-1.5 text-xs font-bold font-mono text-purple-600 dark:text-purple-400 mb-1.5">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>{evt.time}{evt.endTime ? ` – ${evt.endTime}` : ''}</span>
+                  </div>
+
                   {/* Card Header */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="space-y-0.5">
+                    <div className="space-y-0.5 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-sm font-bold text-foreground">{evt.title}</h3>
+                        <h3 className="text-sm font-bold text-foreground break-words">{evt.title}</h3>
                         <span
-                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${accent.badge}`}
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${accent.badge}`}
                         >
                           {evt.badge.label}
                         </span>
@@ -592,7 +617,7 @@ export function ClassroomDayStream({
                     </div>
 
                     {/* Quick Contextual Action Buttons */}
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex flex-wrap items-center gap-1.5 shrink-0 mt-1 sm:mt-0">
                       {/* Attendance Fast Roll Call Action */}
                       {evt.streamType === 'ATTENDANCE' && (
                         <button

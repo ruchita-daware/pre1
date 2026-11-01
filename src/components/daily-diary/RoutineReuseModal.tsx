@@ -368,7 +368,7 @@ export function RoutineReuseModal({
     >
       <div className="space-y-6">
         {/* Mode Selector Tabs */}
-        <div className="grid grid-cols-2 p-1 bg-muted/40 rounded-xl border border-border/60">
+        <div className="grid grid-cols-1 sm:grid-cols-2 p-1 bg-muted/40 rounded-xl border border-border/60 gap-1">
           <button
             type="button"
             onClick={() => handleTabChange('COPY_YESTERDAY')}
@@ -607,7 +607,7 @@ export function RoutineReuseModal({
                       />
                     </div>
 
-                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
+                    <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap sm:flex-nowrap shrink-0 w-full sm:w-auto pt-1 sm:pt-0 border-t sm:border-t-0 border-border/40">
                       {/* Time Pickers */}
                       <div className="flex items-center gap-1 bg-muted/30 border border-border/60 rounded-lg px-2 py-1">
                         <Clock className="w-3.5 h-3.5 text-muted-foreground" />
@@ -665,12 +665,12 @@ export function RoutineReuseModal({
         )}
 
         {/* Modal Footer Controls */}
-        <div className="flex items-center justify-between gap-3 pt-3 border-t border-border/60">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-border/60">
           <button
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="btn btn-sm btn-ghost"
+            className="btn btn-sm btn-ghost w-full sm:w-auto justify-center"
           >
             Cancel
           </button>
@@ -679,7 +679,7 @@ export function RoutineReuseModal({
             type="button"
             onClick={() => handleApplyRoutine(false)}
             disabled={submitting || activities.length === 0}
-            className="btn btn-sm btn-primary min-w-[200px] font-bold flex items-center justify-center gap-2 shadow-sm"
+            className="btn btn-sm btn-primary w-full sm:w-auto min-w-[200px] font-bold flex items-center justify-center gap-2 shadow-sm"
           >
             {submitting ? (
               <>

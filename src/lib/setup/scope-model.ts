@@ -171,6 +171,17 @@ export const SETUP_SCOPE_REGISTRY: Record<StepKey, SetupStepScopeInfo> = {
     copyable: true,
     copyCategory: 'fee_structures',
   },
+  payment_gateway: {
+    key: 'payment_gateway',
+    scope: 'TENANT',
+    title: 'Payment Gateway',
+    globalLabel: '🌐 All Branches',
+    branchLabelPrefix: '',
+    description: 'Configure online payment gateways (Razorpay, Cashfree, PayU), sandbox/live credentials, and webhook settlement for automated preschool fee collections.',
+    schoolWideExplanation: 'Payment gateway configurations apply organization-wide across all campuses.',
+    branchSpecificExplanation: '',
+    copyable: false,
+  },
   promotion: {
     key: 'promotion',
     scope: 'BRANCH',

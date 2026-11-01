@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import {
   GraduationCap, ArrowRight, CheckCircle2, AlertTriangle, RotateCw, Save,
   Users, Building2, Calendar, ShieldCheck, ChevronRight, HelpCircle,
-  Filter, Search, UserCheck, ArrowUpRight, Check, X, RefreshCw, Award, Info
+  Filter, Search, UserCheck, ArrowUpRight, Check, X, RefreshCw, Award, Info,
+  Sliders, School, Sparkles, CheckSquare, Layers
 } from 'lucide-react'
 import { PageHead, Skeleton, EmptyState, StatusBadge, SetupScopeBadge } from '@/components/preone'
 import { Modal } from '@/components/preone/Modal'
@@ -42,8 +43,8 @@ export default function PromotionHubPage() {
   const router = useRouter()
   const toast = useToast()
 
-  // Navigation & Tabs
-  const [activeTab, setActiveTab] = useState<'overview' | 'rules' | 'mapping' | 'candidates' | 'wizard'>('overview')
+  // Primary View Mode: 'classes' (Visual Cards) | 'students' (Customizer Table) | 'policies' (Settings)
+  const [viewMode, setViewMode] = useState<'classes' | 'students' | 'policies'>('classes')
 
   // Setup Step Status
   const [stepStatus, setStepStatus] = useState<string>('PENDING')
@@ -76,15 +77,22 @@ export default function PromotionHubPage() {
     Record<string, { outcome: string; targetClassroomId?: string; notes?: string }>
   >({})
 
-  // Filtering on Candidates tab
+  // Target class overrides at the classroom level: sourceClassroomId -> targetClassroomId
+  const [classTargetOverrides, setClassTargetOverrides] = useState<Record<string, string>>({})
+
+  // Filtering on Student Roster tab
   const [searchQuery, setSearchQuery] = useState('')
   const [filterOutcome, setFilterOutcome] = useState('ALL')
   const [filterClassroom, setFilterClassroom] = useState('ALL')
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set())
 
-  // Batch Execution Modal
+  // Execution Modal State
   const [confirmModalOpen, setConfirmModalOpen] = useState(false)
   const [executingBatch, setExecutingBatch] = useState(false)
+  const [batchScope, setBatchScope] = useState<'ALL' | 'CLASS' | 'SELECTED'>('ALL')
+  const [targetClassroomForBatch, setTargetClassroomForBatch] = useState<string | null>(null)
   const [batchResult, setBatchResult] = useState<any | null>(null)
+  const [resultModalOpen, setResultModalOpen] = useState(false)
 
   // 1. Initial Load: Academic Sessions & Config
   const loadInitialData = useCallback(async () => {
@@ -94,7 +102,7 @@ export default function PromotionHubPage() {
         fetch('/api/v1/academic-years').then((r) => r.json()),
         fetch('/api/v1/setup/config/PROMOTION').then((r) => r.json()),
         fetch('/api/v1/setup/status').then((r) => r.json()),
-        fetch('/api/v1/classrooms').then((r) => r.json()),
+        fetch('/api/v1/classrooms?pageSize=100').then((r) => r.json()),
       ])
 
       if (sessionsRes.success && Array.isArray(sessionsRes.data)) {
@@ -157,14 +165,20 @@ export default function PromotionHubPage() {
 
         // Initialize default decisions
         const initialOverrides: Record<string, { outcome: string; targetClassroomId?: string; notes?: string }> = {}
+        const defaultClassTargets: Record<string, string> = {}
+
         for (const c of json.data.candidates as CandidateEvaluation[]) {
           initialOverrides[c.studentId] = {
             outcome: c.suggestedOutcome,
             targetClassroomId: c.proposedClassroomId || undefined,
             notes: c.notes || '',
           }
+          if (c.currentClassroomId && c.proposedClassroomId && !defaultClassTargets[c.currentClassroomId]) {
+            defaultClassTargets[c.currentClassroomId] = c.proposedClassroomId
+          }
         }
         setDecisionOverrides(initialOverrides)
+        setClassTargetOverrides((prev) => ({ ...defaultClassTargets, ...prev }))
       } else {
         toast.warning('Preview Notice', json.error?.message || 'No candidates found for selected sessions.')
         setCandidates([])
@@ -183,6 +197,69 @@ export default function PromotionHubPage() {
     }
   }, [sourceSessionId, targetSessionId, loadPreview])
 
+  // Target classrooms for current target session
+  const targetSessionClassrooms = useMemo(() => {
+    return classrooms.filter((c) => c.academicSessionId === targetSessionId && (c as any).isActive !== false)
+  }, [classrooms, targetSessionId])
+
+  // Classrooms in the source session grouped from candidate data
+  const classProgressionCards = useMemo(() => {
+    const classMap: Record<string, {
+      classroomId: string
+      classroomName: string
+      programType: string
+      candidates: CandidateEvaluation[]
+      readyCount: number
+      continueCount: number
+      reviewCount: number
+      graduateCount: number
+      defaultTargetClassId?: string
+    }> = {}
+
+    for (const c of candidates) {
+      if (!classMap[c.currentClassroomId]) {
+        classMap[c.currentClassroomId] = {
+          classroomId: c.currentClassroomId,
+          classroomName: c.currentClassroomName,
+          programType: c.currentProgramType,
+          candidates: [],
+          readyCount: 0,
+          continueCount: 0,
+          reviewCount: 0,
+          graduateCount: 0,
+          defaultTargetClassId: classTargetOverrides[c.currentClassroomId] || c.proposedClassroomId || undefined,
+        }
+      }
+
+      const item = classMap[c.currentClassroomId]
+      item.candidates.push(c)
+
+      const outcome = decisionOverrides[c.studentId]?.outcome || c.suggestedOutcome
+      if (outcome === 'PROMOTED') item.readyCount++
+      else if (outcome === 'CONTINUE_CURRENT_LEVEL') item.continueCount++
+      else if (outcome === 'GRADUATED') item.graduateCount++
+      else item.reviewCount++
+    }
+
+    return Object.values(classMap)
+  }, [candidates, decisionOverrides, classTargetOverrides])
+
+  // Filtered Candidates for the Detailed Roster View
+  const filteredCandidates = useMemo(() => {
+    return candidates.filter((c) => {
+      const decision = decisionOverrides[c.studentId]?.outcome || c.suggestedOutcome
+      if (filterOutcome !== 'ALL' && decision !== filterOutcome) return false
+      if (filterClassroom !== 'ALL' && c.currentClassroomId !== filterClassroom) return false
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim()
+        const matchName = c.name.toLowerCase().includes(q)
+        const matchAdm = c.admissionNo.toLowerCase().includes(q)
+        if (!matchName && !matchAdm) return false
+      }
+      return true
+    })
+  }, [candidates, decisionOverrides, filterOutcome, filterClassroom, searchQuery])
+
   // 3. Save Policy Configuration
   const handleSaveConfig = async () => {
     setSavingConfig(true)
@@ -195,7 +272,6 @@ export default function PromotionHubPage() {
       const json = await res.json()
       if (json.success) {
         toast.success('Promotion policies saved', 'New progression and cut-off rules are now active.')
-        // Reload preview with new rules
         loadPreview()
       } else {
         toast.error('Failed to save policies', json.error?.message)
@@ -231,17 +307,34 @@ export default function PromotionHubPage() {
     }
   }
 
-  // 5. Execute Batch Promotion
-  const handleExecuteBatch = async () => {
+  // 5. Execute Promotion (Single Class, Selected, or All)
+  const handleExecutePromotion = async () => {
     if (!sourceSessionId || !targetSessionId) return
     setExecutingBatch(true)
+
     try {
-      const decisions = candidates.map((c) => {
+      let targetCandidates: CandidateEvaluation[] = []
+
+      if (batchScope === 'CLASS' && targetClassroomForBatch) {
+        targetCandidates = candidates.filter((c) => c.currentClassroomId === targetClassroomForBatch)
+      } else if (batchScope === 'SELECTED') {
+        targetCandidates = candidates.filter((c) => selectedStudentIds.has(c.studentId))
+      } else {
+        targetCandidates = candidates
+      }
+
+      if (targetCandidates.length === 0) {
+        toast.warning('No students selected', 'Please select at least one student candidate.')
+        return
+      }
+
+      const decisions = targetCandidates.map((c) => {
         const d = decisionOverrides[c.studentId] || { outcome: c.suggestedOutcome }
+        const classTarget = classTargetOverrides[c.currentClassroomId]
         return {
           studentId: c.studentId,
           outcome: d.outcome as any,
-          targetClassroomId: d.targetClassroomId || c.proposedClassroomId || undefined,
+          targetClassroomId: d.targetClassroomId || classTarget || c.proposedClassroomId || undefined,
           notes: d.notes || c.notes,
         }
       })
@@ -258,10 +351,15 @@ export default function PromotionHubPage() {
       const json = await res.json()
       if (json.success) {
         setBatchResult(json.data)
-        toast.success('Batch Promotion Executed', `Processed ${json.data.processedCount} students successfully.`)
+        setResultModalOpen(true)
+        toast.success(
+          'Promotion Executed Successfully',
+          `Processed ${json.data.processedCount} students: ${json.data.promotedCount} promoted, ${json.data.continuedCount} continued.`
+        )
         loadPreview()
+        setSelectedStudentIds(new Set())
       } else {
-        toast.error('Batch Execution Failed', json.error?.message)
+        toast.error('Execution Failed', json.error?.message)
       }
     } catch (err: any) {
       toast.error('Execution Error', err.message)
@@ -271,26 +369,32 @@ export default function PromotionHubPage() {
     }
   }
 
-  // Target classrooms for current target session
-  const targetSessionClassrooms = useMemo(() => {
-    return classrooms.filter((c) => c.academicSessionId === targetSessionId && c.isActive)
-  }, [classrooms, targetSessionId])
+  // Quick Promote Single Class Helper
+  const triggerClassPromotion = (classroomId: string) => {
+    setBatchScope('CLASS')
+    setTargetClassroomForBatch(classroomId)
+    setConfirmModalOpen(true)
+  }
 
-  // Filtered Candidates
-  const filteredCandidates = useMemo(() => {
-    return candidates.filter((c) => {
-      const decision = decisionOverrides[c.studentId]?.outcome || c.suggestedOutcome
-      if (filterOutcome !== 'ALL' && decision !== filterOutcome) return false
-      if (filterClassroom !== 'ALL' && c.currentClassroomId !== filterClassroom) return false
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim()
-        const matchName = c.name.toLowerCase().includes(q)
-        const matchAdm = c.admissionNo.toLowerCase().includes(q)
-        if (!matchName && !matchAdm) return false
-      }
-      return true
+  // Bulk Apply Decision to Selected Students
+  const applyBulkDecision = (outcome: string, targetClassId?: string) => {
+    if (selectedStudentIds.size === 0) {
+      toast.warning('No selection', 'Check students in the table first.')
+      return
+    }
+    setDecisionOverrides((prev) => {
+      const next = { ...prev }
+      selectedStudentIds.forEach((id) => {
+        next[id] = {
+          ...next[id],
+          outcome,
+          ...(targetClassId ? { targetClassroomId: targetClassId } : {}),
+        }
+      })
+      return next
     })
-  }, [candidates, decisionOverrides, filterOutcome, filterClassroom, searchQuery])
+    toast.success('Updated Decisions', `Applied to ${selectedStudentIds.size} selected students.`)
+  }
 
   if (loading) {
     return (
@@ -321,7 +425,7 @@ export default function PromotionHubPage() {
             </span>
           </div>
         }
-        sub="Preschool developmental progression, age cut-off eligibility, classroom capacity balancing, and year-end batch transition."
+        sub="One-click class progression, individualized student overrides, and seamless academic year transitions."
         actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <a className="btn btn-ghost" href="/app/setup">
@@ -337,15 +441,30 @@ export default function PromotionHubPage() {
               <RotateCw size={14} className={previewLoading ? 'animate-spin' : ''} />
               <span>{previewLoading ? 'Recalculating…' : 'Refresh'}</span>
             </button>
-            {stepStatus !== 'COMPLETE' && (
+            {candidates.length > 0 && (
               <button
                 type="button"
                 className="btn btn-primary"
+                onClick={() => {
+                  setBatchScope('ALL')
+                  setTargetClassroomForBatch(null)
+                  setConfirmModalOpen(true)
+                }}
+                disabled={executingBatch}
+              >
+                <Sparkles size={15} />
+                <span>Promote All Ready Classes ({candidates.length})</span>
+              </button>
+            )}
+            {stepStatus !== 'COMPLETE' && (
+              <button
+                type="button"
+                className="btn btn-outline"
                 onClick={handleCompleteSetupStep}
                 disabled={completingStep || savingConfig}
               >
                 <CheckCircle2 size={15} />
-                <span>{completingStep ? 'Saving…' : 'Save & Mark Complete'}</span>
+                <span>{completingStep ? 'Saving…' : 'Mark Step Complete'}</span>
               </button>
             )}
           </div>
@@ -361,54 +480,22 @@ export default function PromotionHubPage() {
         }}
       />
 
-      {/* ── KPI METRIC CARDS ── */}
-      <div className="roles-summary-grid" style={{ marginBottom: 16 }}>
-        <div className="card" style={{ padding: 14 }}>
-          <div className="card-sub" style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase' }}>
-            Total Cohort in Scope
-          </div>
-          <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, color: 'var(--text-main)' }}>
-            {previewSummary?.totalEligible ?? '—'}
-          </div>
-          <div className="helper" style={{ fontSize: 11.5, marginTop: 2 }}>
-            Active students in source session
-          </div>
-        </div>
-
-        <div className="card" style={{ padding: 14 }}>
-          <div className="card-sub" style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase' }}>
-            Ready for Promotion
-          </div>
-          <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, color: '#16a34a' }}>
-            {previewSummary?.readyToPromote ?? '—'}
-          </div>
-          <div className="helper" style={{ fontSize: 11.5, marginTop: 2 }}>
-            Progression to next developmental grade
-          </div>
-        </div>
-
-        <div className="card" style={{ padding: 14 }}>
-          <div className="card-sub" style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase' }}>
-            Continue Current Level
-          </div>
-          <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, color: '#0284c7' }}>
-            {previewSummary?.continueCurrentLevel ?? '—'}
-          </div>
-          <div className="helper" style={{ fontSize: 11.5, marginTop: 2 }}>
-            Consolidating milestones (non-punitive)
-          </div>
-        </div>
-
-        <div className="card" style={{ padding: 14 }}>
-          <div className="card-sub" style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase' }}>
-            Graduation / Exit
-          </div>
-          <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, color: '#9333ea' }}>
-            {previewSummary?.graduating ?? '—'}
-          </div>
-          <div className="helper" style={{ fontSize: 11.5, marginTop: 2 }}>
-            Sr. KG completion (preschool alumni)
-          </div>
+      {/* ── REASSURANCE BANNER (Fearless Promotion) ── */}
+      <div
+        style={{
+          padding: '12px 16px',
+          marginBottom: 16,
+          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(59, 130, 246, 0.05) 100%)',
+          border: '1px solid rgba(16, 185, 129, 0.25)',
+          borderRadius: 10,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}
+      >
+        <ShieldCheck size={20} style={{ color: '#059669', shrink: 0 }} />
+        <div style={{ fontSize: 13, color: 'var(--text-main)', flex: 1 }}>
+          <strong>Historical Record Safety Guarantee:</strong> Promoting students advances their enrollment for the new academic session. All past attendance, daily diaries, milestone observations, and fee invoices from the source session remain <strong>fully preserved and archived</strong>.
         </div>
       </div>
 
@@ -428,7 +515,7 @@ export default function PromotionHubPage() {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Calendar size={16} style={{ color: 'var(--color-primary)' }} />
-          <span style={{ fontSize: 13, fontWeight: 700 }}>Transition Context:</span>
+          <span style={{ fontSize: 13, fontWeight: 700 }}>Academic Transition:</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -478,287 +565,238 @@ export default function PromotionHubPage() {
         )}
       </div>
 
-      {/* ── TAB STRIP ── */}
+      {/* ── KPI METRICS CARDS ── */}
+      <div className="roles-summary-grid" style={{ marginBottom: 16 }}>
+        <div className="card" style={{ padding: 14 }}>
+          <div className="card-sub" style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase' }}>
+            Total Cohort in Scope
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, color: 'var(--text-main)' }}>
+            {previewSummary?.totalEligible ?? '—'}
+          </div>
+          <div className="helper" style={{ fontSize: 11.5, marginTop: 2 }}>
+            Active students in source session
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: 14 }}>
+          <div className="card-sub" style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase' }}>
+            Ready for Promotion
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, color: '#16a34a' }}>
+            {previewSummary?.readyToPromote ?? '—'}
+          </div>
+          <div className="helper" style={{ fontSize: 11.5, marginTop: 2 }}>
+            Advancing to next grade level
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: 14 }}>
+          <div className="card-sub" style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase' }}>
+            Continue Current Level
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, color: '#0284c7' }}>
+            {previewSummary?.continueCurrentLevel ?? '—'}
+          </div>
+          <div className="helper" style={{ fontSize: 11.5, marginTop: 2 }}>
+            Consolidating milestones (non-punitive)
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: 14 }}>
+          <div className="card-sub" style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase' }}>
+            Graduation / ECE Alumni
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, color: '#9333ea' }}>
+            {previewSummary?.graduating ?? '—'}
+          </div>
+          <div className="helper" style={{ fontSize: 11.5, marginTop: 2 }}>
+            Sr. KG completion (preschool alumni)
+          </div>
+        </div>
+      </div>
+
+      {/* ── VIEW MODE TOGGLE STRIP ── */}
       <div className="roles-tab-strip" style={{ marginBottom: 16 }}>
         <button
           type="button"
-          className={`roles-tab-item ${activeTab === 'overview' ? 'active' : ''}`}
-          onClick={() => setActiveTab('overview')}
+          className={`roles-tab-item ${viewMode === 'classes' ? 'active' : ''}`}
+          onClick={() => setViewMode('classes')}
         >
-          Overview & Diagnostics
+          <School size={15} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />
+          Class-to-Class Quick Promote ({classProgressionCards.length} Classes)
         </button>
         <button
           type="button"
-          className={`roles-tab-item ${activeTab === 'rules' ? 'active' : ''}`}
-          onClick={() => setActiveTab('rules')}
+          className={`roles-tab-item ${viewMode === 'students' ? 'active' : ''}`}
+          onClick={() => setViewMode('students')}
         >
-          Progression Rules & Policies
+          <Users size={15} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />
+          Student Roster & Exceptions ({candidates.length} Students)
         </button>
         <button
           type="button"
-          className={`roles-tab-item ${activeTab === 'mapping' ? 'active' : ''}`}
-          onClick={() => setActiveTab('mapping')}
+          className={`roles-tab-item ${viewMode === 'policies' ? 'active' : ''}`}
+          onClick={() => setViewMode('policies')}
         >
-          Section Mapping Matrix
-        </button>
-        <button
-          type="button"
-          className={`roles-tab-item ${activeTab === 'candidates' ? 'active' : ''}`}
-          onClick={() => setActiveTab('candidates')}
-        >
-          Candidate Review ({candidates.length})
-        </button>
-        <button
-          type="button"
-          className={`roles-tab-item ${activeTab === 'wizard' ? 'active' : ''}`}
-          onClick={() => setActiveTab('wizard')}
-        >
-          Transition Wizard & Batch Run
+          <Sliders size={15} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />
+          Progression Policies & Rules
         </button>
       </div>
 
-      {/* ── TAB 1: OVERVIEW & DIAGNOSTICS ── */}
-      {activeTab === 'overview' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
-          <div className="card" style={{ padding: 18 }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700 }}>ECE Promotion Principles</h3>
-            <p className="card-sub" style={{ fontSize: 13, marginBottom: 14 }}>
-              PreOne implements Early Childhood Education developmental progression rather than numerical pass/fail examinations:
-            </p>
-            <ul style={{ paddingLeft: 18, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8, margin: 0 }}>
-              <li>
-                <strong>No Failure Stigma:</strong> Children needing more time continue at the same developmental stage (<code>CONTINUE_CURRENT_LEVEL</code>) without academic penalty.
-              </li>
-              <li>
-                <strong>Developmental Milestones:</strong> Evaluates speech, fine/gross motor skills, social adaptability, and independence.
-              </li>
-              <li>
-                <strong>Age Cut-off Reference:</strong> Calculates exact age as of configured cut-off date (e.g. July 31).
-              </li>
-              <li>
-                <strong>Family Continuity:</strong> Parent logins, portal history, and guardian pickup PINs remain continuous across sessions.
-              </li>
-            </ul>
-          </div>
-
-          <div className="card" style={{ padding: 18 }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700 }}>Operational Readiness</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Teacher Sign-Off Requirement:</span>
-                <span className={`badge ${config.requireTeacherSignOff ? 'b-primary' : 'b-neutral'}`}>
-                  {config.requireTeacherSignOff ? 'Mandatory' : 'Optional'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Age Cut-off Reference Date:</span>
-                <span className="badge b-info">
-                  Month {config.cutOffMonth}, Day {config.cutOffDay}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Capacity Guard Strategy:</span>
-                <span className="badge b-neutral">{config.capacityGuardStrategy}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Unpaid Fee Policy:</span>
-                <span className="badge b-neutral">{config.financialPolicy}</span>
-              </div>
-            </div>
-            <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
-              <button className="btn btn-outline btn-sm" onClick={() => setActiveTab('rules')}>
-                Configure Business Policies →
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── TAB 2: PROGRESSION RULES & POLICIES ── */}
-      {activeTab === 'rules' && (
-        <div className="card" style={{ padding: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Preschool Progression & Policy Configuration</h3>
-              <p className="card-sub" style={{ margin: '4px 0 0', fontSize: 13 }}>
-                Customize the progression ladder, cut-off dates, teacher sign-off mandates, and capacity enforcement.
-              </p>
-            </div>
-            <button className="btn btn-primary" onClick={handleSaveConfig} disabled={savingConfig}>
-              <Save size={14} /> {savingConfig ? 'Saving…' : 'Save Policies'}
-            </button>
-          </div>
-
-          <div className="form-grid">
-            <div className="field" style={{ gridColumn: '1 / -1' }}>
-              <label>Progression Ladder Note</label>
-              <input
-                className="input"
-                value={config.progressionMappingNote || ''}
-                onChange={(e) => setConfig({ ...config, progressionMappingNote: e.target.value })}
-                placeholder="e.g. Playgroup → Nursery → LKG → UKG → Graduated"
-              />
-              <div className="helper">Visual summary of early childhood education progression path.</div>
-            </div>
-
-            <div className="field">
-              <label>Age Cut-off Month</label>
-              <select
-                className="select"
-                value={config.cutOffMonth}
-                onChange={(e) => setConfig({ ...config, cutOffMonth: Number(e.target.value) })}
-              >
-                <option value={3}>March (31)</option>
-                <option value={5}>May (31)</option>
-                <option value={6}>June (30)</option>
-                <option value={7}>July (31) — Standard Academic</option>
-                <option value={8}>August (31)</option>
-                <option value={9}>September (30)</option>
-                <option value={12}>December (31)</option>
-              </select>
-            </div>
-
-            <div className="field">
-              <label>Age Cut-off Day</label>
-              <input
-                type="number"
-                min={1}
-                max={31}
-                className="input"
-                value={config.cutOffDay}
-                onChange={(e) => setConfig({ ...config, cutOffDay: Number(e.target.value) })}
+      {/* ══════════════════════════════════════════════════════════════════════
+          MODE 1: CLASS-TO-CLASS PROGRESSION CARDS (THE 80% FAST PATH)
+         ══════════════════════════════════════════════════════════════════════ */}
+      {viewMode === 'classes' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {classProgressionCards.length === 0 ? (
+            <div className="card" style={{ padding: 32, textAlign: 'center' }}>
+              <EmptyState
+                icon={<School size={36} style={{ color: 'var(--foreground-muted)' }} />}
+                title="No classrooms or candidates found"
+                description="Make sure the source session contains active enrolled students and target classrooms exist."
               />
             </div>
+          ) : (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
+                gap: 16,
+              }}
+            >
+              {classProgressionCards.map((card) => {
+                const currentSelectedTarget = classTargetOverrides[card.classroomId] || card.defaultTargetClassId || ''
+                const targetClassObj = targetSessionClassrooms.find((c) => c.id === currentSelectedTarget)
 
-            <div className="field">
-              <label>Classroom Capacity Strategy</label>
-              <select
-                className="select"
-                value={config.capacityGuardStrategy}
-                onChange={(e) => setConfig({ ...config, capacityGuardStrategy: e.target.value as any })}
-              >
-                <option value="WAITLIST_IF_FULL">WAITLIST_IF_FULL (Place overflow in queue)</option>
-                <option value="STRICT_REJECT">STRICT_REJECT (Reject over-capacity allocations)</option>
-                <option value="AUTO_SECTION_BALANCE">AUTO_SECTION_BALANCE (Distribute across sections)</option>
-              </select>
-            </div>
-
-            <div className="field">
-              <label>Unpaid Balance Strategy</label>
-              <select
-                className="select"
-                value={config.financialPolicy}
-                onChange={(e) => setConfig({ ...config, financialPolicy: e.target.value as any })}
-              >
-                <option value="ROLLOVER_DUES">ROLLOVER_DUES (Carry forward arrears without erasing debt)</option>
-                <option value="STRICT_HOLD">STRICT_HOLD (Hold enrollment until accounts clearance)</option>
-                <option value="CONDITIONAL_PROMOTION">CONDITIONAL_PROMOTION (Provisional 15-day grace)</option>
-              </select>
-            </div>
-
-            <div className="field" style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={config.requireTeacherSignOff}
-                  onChange={(e) => setConfig({ ...config, requireTeacherSignOff: e.target.checked })}
-                />
-                Require Lead Teacher Developmental Sign-Off before final promotion confirmation
-              </label>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── TAB 3: SECTION MAPPING MATRIX ── */}
-      {activeTab === 'mapping' && (
-        <div className="card" style={{ padding: 20 }}>
-          <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 700 }}>Classroom & Section Mapping Matrix</h3>
-          <p className="card-sub" style={{ margin: '0 0 16px', fontSize: 13 }}>
-            Review capacity utilization of upcoming classrooms in <strong>{sessions.find((s) => s.id === targetSessionId)?.name || 'Target Session'}</strong>.
-          </p>
-
-          <div className="dtable-scroll">
-            <table className="dtable">
-              <thead>
-                <tr>
-                  <th>Target Classroom</th>
-                  <th>Program Type</th>
-                  <th>Lead Teacher</th>
-                  <th>Capacity</th>
-                  <th>Target Enrolled</th>
-                  <th>Incoming Eligible</th>
-                  <th>Projected Utilization</th>
-                </tr>
-              </thead>
-              <tbody>
-                {targetSessionClassrooms.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--foreground-muted)' }}>
-                      No classrooms found in target academic session. Configure classrooms in Setup → Classrooms.
-                    </td>
-                  </tr>
-                ) : (
-                  targetSessionClassrooms.map((c) => {
-                    const incomingCount = candidates.filter(
-                      (cand) => (decisionOverrides[cand.studentId]?.targetClassroomId || cand.proposedClassroomId) === c.id
-                    ).length
-                    const totalProjected = (c as any)._count?.students || 0 + incomingCount
-                    const isOver = totalProjected > c.capacity
-                    return (
-                      <tr key={c.id}>
-                        <td>
-                          <span className="cell-strong">{c.name}</span>
-                          <span className="cell-sub">{c.code}</span>
-                        </td>
-                        <td>
-                          <span className="badge b-info">{c.programType}</span>
-                        </td>
-                        <td>{c.primaryTeacher?.fullName || <span className="badge b-warning">Unassigned</span>}</td>
-                        <td>{c.capacity} seats</td>
-                        <td>{(c as any)._count?.students || 0}</td>
-                        <td>
-                          <span className="cell-strong" style={{ color: 'var(--color-primary)' }}>
-                            +{incomingCount}
-                          </span>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div
-                              style={{
-                                width: 80,
-                                height: 8,
-                                background: 'var(--border-subtle)',
-                                borderRadius: 4,
-                                overflow: 'hidden',
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: `${Math.min(100, (totalProjected / c.capacity) * 100)}%`,
-                                  height: '100%',
-                                  background: isOver ? '#ef4444' : '#16a34a',
-                                }}
-                              />
-                            </div>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: isOver ? '#ef4444' : 'inherit' }}>
-                              {totalProjected} / {c.capacity}
-                            </span>
+                return (
+                  <div
+                    key={card.classroomId}
+                    className="card"
+                    style={{
+                      padding: 18,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      border: '1px solid var(--border-subtle)',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                    }}
+                  >
+                    <div>
+                      {/* Card Header */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                        <div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)' }}>
+                            {card.classroomName}
                           </div>
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                          <div className="helper" style={{ fontSize: 12 }}>
+                            {card.programType} • {card.candidates.length} enrolled students
+                          </div>
+                        </div>
+                        <span className="badge b-purple" style={{ fontSize: 11, fontWeight: 700 }}>
+                          {card.candidates.length} Students
+                        </span>
+                      </div>
+
+                      {/* Progression Arrow & Target Section Dropdown */}
+                      <div
+                        style={{
+                          background: 'var(--surface-muted)',
+                          padding: '10px 12px',
+                          borderRadius: 8,
+                          marginBottom: 12,
+                          border: '1px solid var(--border-subtle)',
+                        }}
+                      >
+                        <div style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', color: 'var(--foreground-muted)', marginBottom: 6 }}>
+                          Target Section for Next Academic Year:
+                        </div>
+                        <select
+                          className="select"
+                          style={{ width: '100%', height: 34, fontSize: 13 }}
+                          value={currentSelectedTarget}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            setClassTargetOverrides((prev) => ({ ...prev, [card.classroomId]: val }))
+                          }}
+                        >
+                          <option value="">Select target section…</option>
+                          {targetSessionClassrooms.map((tc) => (
+                            <option key={tc.id} value={tc.id}>
+                              {tc.name} ({tc.programType}) — Cap: {tc.capacity}
+                            </option>
+                          ))}
+                        </select>
+                        {targetClassObj && (
+                          <div className="helper" style={{ fontSize: 11, marginTop: 4 }}>
+                            Assigned to: {targetClassObj.name} ({targetClassObj.programType})
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Micro KPI Badge Row */}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+                        <span className="badge b-success" style={{ fontSize: 11 }}>
+                          🟢 {card.readyCount} Ready to Promote
+                        </span>
+                        {card.continueCount > 0 && (
+                          <span className="badge b-info" style={{ fontSize: 11 }}>
+                            🔵 {card.continueCount} Continue Grade
+                          </span>
+                        )}
+                        {card.reviewCount > 0 && (
+                          <span className="badge b-warning" style={{ fontSize: 11 }}>
+                            🟡 {card.reviewCount} Need Review
+                          </span>
+                        )}
+                        {card.graduateCount > 0 && (
+                          <span className="badge b-purple" style={{ fontSize: 11 }}>
+                            🎓 {card.graduateCount} Graduating
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div style={{ display: 'flex', gap: 8, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        style={{ flex: 1 }}
+                        onClick={() => triggerClassPromotion(card.classroomId)}
+                        disabled={executingBatch}
+                        title={`Promote all ${card.candidates.length} students from ${card.classroomName}`}
+                      >
+                        <Sparkles size={13} />
+                        <span>Quick Promote ({card.candidates.length})</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={() => {
+                          setFilterClassroom(card.classroomId)
+                          setViewMode('students')
+                        }}
+                        title="Review and tweak individual students in this class"
+                      >
+                        <span>Customize ({card.candidates.length})</span>
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── TAB 4: CANDIDATE REVIEW ── */}
-      {activeTab === 'candidates' && (
+      {/* ══════════════════════════════════════════════════════════════════════
+          MODE 2: DETAILED STUDENT ROSTER & CUSTOMIZER (BULK + EXCEPTIONS)
+         ══════════════════════════════════════════════════════════════════════ */}
+      {viewMode === 'students' && (
         <div className="card" style={{ padding: 18 }}>
+          {/* Filter Bar */}
           <div
             style={{
               display: 'flex',
@@ -774,6 +812,23 @@ export default function PromotionHubPage() {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <Filter size={14} style={{ color: 'var(--foreground-muted)' }} />
+              <span style={{ fontSize: 12.5, fontWeight: 700 }}>Classroom:</span>
+              <select
+                className="select"
+                style={{ height: 32, fontSize: 12.5 }}
+                value={filterClassroom}
+                onChange={(e) => setFilterClassroom(e.target.value)}
+              >
+                <option value="ALL">All Classrooms ({candidates.length})</option>
+                {classProgressionCards.map((c) => (
+                  <option key={c.classroomId} value={c.classroomId}>
+                    {c.classroomName} ({c.candidates.length})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 12.5, fontWeight: 700 }}>Outcome:</span>
               <select
                 className="select"
@@ -802,10 +857,96 @@ export default function PromotionHubPage() {
             </div>
           </div>
 
+          {/* Bulk Action Toolbar for Checked Students */}
+          {selectedStudentIds.size > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 14px',
+                background: 'rgba(124, 58, 237, 0.08)',
+                border: '1px solid rgba(124, 58, 237, 0.25)',
+                borderRadius: 8,
+                marginBottom: 12,
+                gap: 12,
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-primary)' }}>
+                {selectedStudentIds.size} student{selectedStudentIds.size === 1 ? '' : 's'} selected
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span className="helper" style={{ fontSize: 12 }}>Set Decision:</span>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-xs"
+                  onClick={() => applyBulkDecision('PROMOTED')}
+                >
+                  Promote
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-xs"
+                  onClick={() => applyBulkDecision('CONTINUE_CURRENT_LEVEL')}
+                >
+                  Continue Level
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-xs"
+                  onClick={() => applyBulkDecision('GRADUATED')}
+                >
+                  Graduate
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-xs"
+                  onClick={() => applyBulkDecision('SPECIAL_REVIEW')}
+                >
+                  Special Review
+                </button>
+
+                <div style={{ height: 16, width: 1, background: 'var(--border-subtle)', margin: '0 4px' }} />
+
+                <button
+                  type="button"
+                  className="btn btn-primary btn-xs"
+                  onClick={() => {
+                    setBatchScope('SELECTED')
+                    setTargetClassroomForBatch(null)
+                    setConfirmModalOpen(true)
+                  }}
+                >
+                  <Sparkles size={12} />
+                  <span>Promote Selected ({selectedStudentIds.size})</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Student Candidates Table */}
           <div className="dtable-scroll">
             <table className="dtable">
               <thead>
                 <tr>
+                  <th style={{ width: 36 }}>
+                    <input
+                      type="checkbox"
+                      checked={
+                        filteredCandidates.length > 0 &&
+                        filteredCandidates.every((c) => selectedStudentIds.has(c.studentId))
+                      }
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedStudentIds(new Set(filteredCandidates.map((c) => c.studentId)))
+                        } else {
+                          setSelectedStudentIds(new Set())
+                        }
+                      }}
+                    />
+                  </th>
                   <th>Student</th>
                   <th>Current Section</th>
                   <th>Age (Target Cut-Off)</th>
@@ -818,7 +959,7 @@ export default function PromotionHubPage() {
               <tbody>
                 {filteredCandidates.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--foreground-muted)' }}>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: 24, color: 'var(--foreground-muted)' }}>
                       No matching student candidates.
                     </td>
                   </tr>
@@ -826,12 +967,38 @@ export default function PromotionHubPage() {
                   filteredCandidates.map((c) => {
                     const currentDecision = decisionOverrides[c.studentId]?.outcome || c.suggestedOutcome
                     const currentTargetClass =
-                      decisionOverrides[c.studentId]?.targetClassroomId || c.proposedClassroomId || ''
+                      decisionOverrides[c.studentId]?.targetClassroomId ||
+                      classTargetOverrides[c.currentClassroomId] ||
+                      c.proposedClassroomId ||
+                      ''
+                    const isSelected = selectedStudentIds.has(c.studentId)
 
                     return (
-                      <tr key={c.studentId}>
+                      <tr key={c.studentId} style={{ background: isSelected ? 'rgba(124, 58, 237, 0.03)' : undefined }}>
                         <td>
-                          <span className="cell-strong">{c.name}</span>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              setSelectedStudentIds((prev) => {
+                                const next = new Set(prev)
+                                if (e.target.checked) next.add(c.studentId)
+                                else next.delete(c.studentId)
+                                return next
+                              })
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <a
+                            href={`/app/students/${c.studentId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="cell-strong"
+                            style={{ color: 'var(--color-primary)', textDecoration: 'none' }}
+                          >
+                            {c.name}
+                          </a>
                           <span className="cell-sub">{c.admissionNo}</span>
                         </td>
                         <td>
@@ -940,144 +1107,199 @@ export default function PromotionHubPage() {
         </div>
       )}
 
-      {/* ── TAB 5: WIZARD & BATCH EXECUTION ── */}
-      {activeTab === 'wizard' && (
-        <div className="card" style={{ padding: 22 }}>
-          <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700 }}>Year-End Batch Transition Execution</h3>
-          <p className="card-sub" style={{ margin: '0 0 20px', fontSize: 13 }}>
-            Atomically transitions student allocations from <strong>{sessions.find((s) => s.id === sourceSessionId)?.name}</strong> into <strong>{sessions.find((s) => s.id === targetSessionId)?.name}</strong>.
-          </p>
+      {/* ══════════════════════════════════════════════════════════════════════
+          MODE 3: PROGRESSION POLICIES & SETTINGS
+         ══════════════════════════════════════════════════════════════════════ */}
+      {viewMode === 'policies' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Progression Policies & Cut-offs</h3>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleSaveConfig}
+                disabled={savingConfig}
+              >
+                <Save size={14} /> {savingConfig ? 'Saving…' : 'Save Policies'}
+              </button>
+            </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-              gap: 16,
-              marginBottom: 20,
-            }}
-          >
-            <div style={{ padding: 14, background: 'var(--surface-muted)', borderRadius: 8 }}>
-              <div style={{ fontSize: 12, color: 'var(--foreground-muted)' }}>Approved for Promotion</div>
-              <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: '#16a34a' }}>
-                {Object.values(decisionOverrides).filter((d) => d.outcome === 'PROMOTED').length}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label className="label" style={{ fontSize: 12 }}>
+                  Age Eligibility Cut-off Date
+                </label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <select
+                    className="select"
+                    style={{ flex: 1, height: 34 }}
+                    value={config.cutOffMonth}
+                    onChange={(e) => setConfig({ ...config, cutOffMonth: parseInt(e.target.value) })}
+                  >
+                    {[
+                      'January', 'February', 'March', 'April', 'May', 'June',
+                      'July', 'August', 'September', 'October', 'November', 'December',
+                    ].map((m, idx) => (
+                      <option key={idx + 1} value={idx + 1}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    className="input"
+                    style={{ width: 80, height: 34 }}
+                    min={1}
+                    max={31}
+                    value={config.cutOffDay}
+                    onChange={(e) => setConfig({ ...config, cutOffDay: parseInt(e.target.value) || 1 })}
+                  />
+                </div>
+                <div className="helper" style={{ fontSize: 11, marginTop: 4 }}>
+                  Age calculated as of this calendar date for the target academic year.
+                </div>
               </div>
-            </div>
-            <div style={{ padding: 14, background: 'var(--surface-muted)', borderRadius: 8 }}>
-              <div style={{ fontSize: 12, color: 'var(--foreground-muted)' }}>Approved for Continuation</div>
-              <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: '#0284c7' }}>
-                {Object.values(decisionOverrides).filter((d) => d.outcome === 'CONTINUE_CURRENT_LEVEL').length}
+
+              <div>
+                <label className="label" style={{ fontSize: 12 }}>
+                  Teacher Sign-Off Requirement
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                  <input
+                    type="checkbox"
+                    checked={config.requireTeacherSignOff}
+                    onChange={(e) => setConfig({ ...config, requireTeacherSignOff: e.target.checked })}
+                  />
+                  <span>Mandatory teacher recommendation before promoting</span>
+                </label>
               </div>
-            </div>
-            <div style={{ padding: 14, background: 'var(--surface-muted)', borderRadius: 8 }}>
-              <div style={{ fontSize: 12, color: 'var(--foreground-muted)' }}>Preschool Graduation</div>
-              <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: '#9333ea' }}>
-                {Object.values(decisionOverrides).filter((d) => d.outcome === 'GRADUATED').length}
-              </div>
-            </div>
-            <div style={{ padding: 14, background: 'var(--surface-muted)', borderRadius: 8 }}>
-              <div style={{ fontSize: 12, color: 'var(--foreground-muted)' }}>Special Review Holds</div>
-              <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: '#eab308' }}>
-                {Object.values(decisionOverrides).filter((d) => d.outcome === 'SPECIAL_REVIEW').length}
+
+              <div>
+                <label className="label" style={{ fontSize: 12 }}>
+                  Capacity Guard Strategy
+                </label>
+                <select
+                  className="select"
+                  style={{ width: '100%', height: 34 }}
+                  value={config.capacityGuardStrategy}
+                  onChange={(e) => setConfig({ ...config, capacityGuardStrategy: e.target.value as any })}
+                >
+                  <option value="STRICT_REJECT">Strict Reject (Prevent over-capacity)</option>
+                  <option value="WAITLIST_OVERFLOW">Waitlist Overflow</option>
+                  <option value="ALLOW_WITH_AUDIT">Allow with Audit Log</option>
+                </select>
               </div>
             </div>
           </div>
 
-          <div style={{ padding: 14, background: 'var(--bg-subtle)', borderRadius: 8, marginBottom: 20, fontSize: 13 }}>
-            <div style={{ fontWeight: 700, marginBottom: 4 }}>Atomic Execution Guarantees:</div>
-            <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <li>Current session allocation is marked <code>COMPLETED</code>; historical records are never deleted.</li>
-              <li>New active allocation is created in target classroom with seat reservation.</li>
-              <li>Parent portal and student pointers immediately update to show the new academic year and teacher.</li>
-              <li>All transitions are recorded in the institutional audit log with actor ID and timestamp.</li>
+          <div className="card" style={{ padding: 20 }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700 }}>ECE Progression Principles</h3>
+            <ul style={{ paddingLeft: 18, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8, margin: 0 }}>
+              <li>
+                <strong>No Failure Stigma:</strong> Children needing more time continue at the same developmental stage (<code>CONTINUE_CURRENT_LEVEL</code>) without academic penalty.
+              </li>
+              <li>
+                <strong>Developmental Milestones:</strong> Evaluates speech, fine/gross motor skills, social adaptability, and independence.
+              </li>
+              <li>
+                <strong>Family Continuity:</strong> Parent logins, portal history, and guardian pickup PINs remain continuous across sessions.
+              </li>
+              <li>
+                <strong>Historical Data Preservation:</strong> Past session attendance and daily diaries remain intact.
+              </li>
             </ul>
           </div>
-
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setConfirmModalOpen(true)}
-            disabled={candidates.length === 0 || executingBatch}
-          >
-            <ShieldCheck size={16} /> Execute Batch Transition Now
-          </button>
-
-          {/* ── EXECUTION RESULTS REPORT ── */}
-          {batchResult && (
-            <div
-              style={{
-                marginTop: 24,
-                padding: 16,
-                background: '#f0fdf4',
-                border: '1px solid #bbf7d0',
-                borderRadius: 8,
-              }}
-            >
-              <h4 style={{ margin: '0 0 8px', color: '#166534', fontSize: 15, fontWeight: 700 }}>
-                Batch Execution Completed
-              </h4>
-              <p style={{ margin: '0 0 12px', fontSize: 13, color: '#15803d' }}>
-                Successfully processed {batchResult.processedCount} students: {batchResult.promotedCount} promoted,{' '}
-                {batchResult.continuedCount} continued at same grade, {batchResult.graduatedCount} graduated.
-              </p>
-              <div className="dtable-scroll">
-                <table className="dtable" style={{ background: '#ffffff' }}>
-                  <thead>
-                    <tr>
-                      <th>Student ID</th>
-                      <th>Outcome</th>
-                      <th>Status</th>
-                      <th>Message</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {batchResult.results?.map((r: any, idx: number) => (
-                      <tr key={idx}>
-                        <td><code>{r.studentId}</code></td>
-                        <td><span className="badge b-primary">{r.outcome}</span></td>
-                        <td><span className={`badge ${r.status === 'SUCCESS' ? 'b-success' : 'b-danger'}`}>{r.status}</span></td>
-                        <td>{r.message || 'Transition complete'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
-      {/* ── CONFIRMATION MODAL ── */}
+      {/* ── EXECUTION CONFIRMATION MODAL ── */}
       {confirmModalOpen && (
         <Modal
-          title="Confirm Academic Year Transition"
+          open={confirmModalOpen}
           onClose={() => setConfirmModalOpen(false)}
-          actions={
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button className="btn btn-outline" onClick={() => setConfirmModalOpen(false)} disabled={executingBatch}>
+          title="Confirm Academic Transition Execution"
+          subtitle="Atomic progression of student allocations into the target academic year"
+          icon={<ShieldCheck size={20} />}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ padding: 14, background: 'var(--surface-muted)', borderRadius: 8, fontSize: 13 }}>
+              <div><strong>Source Session:</strong> {sessions.find((s) => s.id === sourceSessionId)?.name}</div>
+              <div style={{ marginTop: 4 }}><strong>Target Session:</strong> {sessions.find((s) => s.id === targetSessionId)?.name}</div>
+              <div style={{ marginTop: 4 }}>
+                <strong>Execution Scope:</strong>{' '}
+                {batchScope === 'ALL'
+                  ? `All Ready Classes (${candidates.length} Students)`
+                  : batchScope === 'CLASS'
+                  ? `Single Classroom: ${classProgressionCards.find((c) => c.classroomId === targetClassroomForBatch)?.classroomName}`
+                  : `${selectedStudentIds.size} Selected Students`}
+              </div>
+            </div>
+
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--foreground-muted)' }}>
+              This will update active student allocations into their target classrooms for the new academic session. All past attendance and historical data will be safely archived and preserved.
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setConfirmModalOpen(false)}
+                disabled={executingBatch}
+              >
                 Cancel
               </button>
-              <button className="btn btn-primary" onClick={handleExecuteBatch} disabled={executingBatch}>
-                {executingBatch ? 'Executing…' : 'Confirm & Transition Cohort'}
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleExecutePromotion}
+                disabled={executingBatch}
+              >
+                {executingBatch ? 'Processing Transition…' : 'Confirm & Execute Now'}
               </button>
             </div>
-          }
+          </div>
+        </Modal>
+      )}
+
+      {/* ── EXECUTION RESULT MODAL ── */}
+      {resultModalOpen && batchResult && (
+        <Modal
+          open={resultModalOpen}
+          onClose={() => setResultModalOpen(false)}
+          title="Promotion Transition Completed"
+          subtitle="Cohort execution results"
+          icon={<CheckCircle2 size={20} style={{ color: '#16a34a' }} />}
         >
-          <div style={{ fontSize: 13.5, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <p style={{ margin: 0 }}>
-              You are about to execute the academic transition for{' '}
-              <strong>{candidates.length} students</strong> from{' '}
-              <strong>{sessions.find((s) => s.id === sourceSessionId)?.name}</strong> to{' '}
-              <strong>{sessions.find((s) => s.id === targetSessionId)?.name}</strong>.
-            </p>
-            <div style={{ padding: 12, background: 'var(--surface-muted)', borderRadius: 6 }}>
-              <div>• Promoted: {Object.values(decisionOverrides).filter((d) => d.outcome === 'PROMOTED').length}</div>
-              <div>• Continue Grade: {Object.values(decisionOverrides).filter((d) => d.outcome === 'CONTINUE_CURRENT_LEVEL').length}</div>
-              <div>• Graduating: {Object.values(decisionOverrides).filter((d) => d.outcome === 'GRADUATED').length}</div>
-              <div>• Special Review: {Object.values(decisionOverrides).filter((d) => d.outcome === 'SPECIAL_REVIEW').length}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, textAlign: 'center' }}>
+              <div style={{ padding: 10, background: '#f0fdf4', borderRadius: 8 }}>
+                <div style={{ fontSize: 20, fontWeight: 800, color: '#16a34a' }}>{batchResult.promotedCount}</div>
+                <div style={{ fontSize: 11, color: '#15803d' }}>Promoted</div>
+              </div>
+              <div style={{ padding: 10, background: '#eff6ff', borderRadius: 8 }}>
+                <div style={{ fontSize: 20, fontWeight: 800, color: '#0284c7' }}>{batchResult.continuedCount}</div>
+                <div style={{ fontSize: 11, color: '#0369a1' }}>Continued</div>
+              </div>
+              <div style={{ padding: 10, background: '#faf5ff', borderRadius: 8 }}>
+                <div style={{ fontSize: 20, fontWeight: 800, color: '#9333ea' }}>{batchResult.graduatedCount}</div>
+                <div style={{ fontSize: 11, color: '#7e22ce' }}>Graduated</div>
+              </div>
             </div>
-            <p style={{ margin: 0, color: 'var(--foreground-muted)' }}>
-              This operation is atomic and idempotent. Existing historical allocations will be marked completed and new session allocations created.
-            </p>
+
+            <div style={{ fontSize: 13, color: 'var(--foreground-muted)' }}>
+              Total {batchResult.processedCount} students were processed. Their student profiles, parent portals, and classroom rosters are now updated.
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setResultModalOpen(false)}
+              >
+                Close & Review Roster
+              </button>
+            </div>
           </div>
         </Modal>
       )}

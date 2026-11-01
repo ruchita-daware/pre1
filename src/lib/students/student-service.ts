@@ -904,9 +904,12 @@ export class StudentService {
           : null,
         allocations: student.allocations.map((a) => ({
           id: a.id,
+          sessionId: a.academicSession.id,
           sessionName: a.academicSession.name,
+          isCurrentSession: a.academicSession.isCurrent,
           classroomName: a.classroom.name,
           classroomCode: a.classroom.code,
+          classroomId: a.classroom.id,
           programType: a.programType,
           status: a.status,
           startedAt: a.startedAt,
@@ -2316,7 +2319,7 @@ export class StudentService {
     const scope = await this.verifyScope(ctx.tenantId, ctx.branchId, ctx.academicSessionId)
     const { PromotionService } = await import('@/lib/promotion/promotion-service')
     return PromotionService.graduateStudent(
-      { id: ctx.actorId, name: ctx.actorName, role: ctx.actorRole, tenantId: scope.tenantId },
+      { id: ctx.actorId || '', name: ctx.actorName || '', role: ctx.actorRole || '', tenantId: scope.tenantId },
       studentId,
       input
     )

@@ -37,8 +37,27 @@ function HRPageContent() {
   const toast = useToast()
 
   // 1. Navigation & Search State
-  const initialTab = (searchParams.get('tab') as HRTabKey) || 'dashboard'
+  const normalizeTab = (raw: string | null): HRTabKey => {
+    if (!raw) return 'overview'
+    if (raw === 'dashboard') return 'overview'
+    if (raw === 'employees') return 'staff'
+    if (raw === 'schedule' || raw === 'training' || raw === 'performance') return 'staff'
+    if (raw === 'requests') return 'leave'
+    return (raw as HRTabKey) || 'overview'
+  }
+
+  const initialTab = normalizeTab(searchParams.get('tab'))
   const [tab, setTab] = useState<HRTabKey>(initialTab)
+  const initialStaffSub = (
+    searchParams.get('tab') === 'schedule'
+      ? 'schedule'
+      : searchParams.get('tab') === 'training'
+      ? 'compliance'
+      : searchParams.get('tab') === 'performance'
+      ? 'performance'
+      : 'directory'
+  )
+  const [staffSubView, setStaffSubView] = useState<any>(initialStaffSub)
   const [searchQuery, setSearchQuery] = useState('')
   const [lastSyncTime, setLastSyncTime] = useState('')
   const [busy, setBusy] = useState(false)
@@ -106,6 +125,13 @@ function HRPageContent() {
       if (resHr.success) {
         setMetrics(resHr.data.metrics)
         setLastSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+        if (resHr.data.session) {
+          setRole(resHr.data.session.role)
+          if (resHr.data.session.branchId && !resHr.data.session.isPrivileged) {
+            setStaffBranch(resHr.data.session.branchId)
+            setAttendanceBranch(resHr.data.session.branchId)
+          }
+        }
       }
       if (resBranches.success) {
         setBranches(resBranches.data || [])
@@ -175,8 +201,8 @@ function HRPageContent() {
 
   // Tab switch loader
   useEffect(() => {
-    if (tab === 'dashboard') loadOverview()
-    else if (tab === 'employees') loadStaff()
+    if (tab === 'overview' || tab === 'dashboard') loadOverview()
+    else if (tab === 'staff' || tab === 'employees') loadStaff()
     else if (tab === 'attendance') loadAttendance()
     else if (tab === 'leave') loadLeaves()
     else if (tab === 'payroll') loadPayroll()
@@ -334,6 +360,29 @@ function HRPageContent() {
     }
   }
 
+  const handleApplyLeave = async (payload: any) => {
+    setBusy(true)
+    try {
+      const res = await fetch('/api/v1/hr/leaves', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then((r) => r.json())
+
+      if (res.success) {
+        toast.success('Leave Application Submitted', 'Your request has been routed for management approval.')
+        loadLeaves()
+        loadOverview()
+      } else {
+        toast.error('Application Failed', res.error?.message)
+      }
+    } catch (e: any) {
+      toast.error('Error', e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const handleProcessPayroll = async (payload: any) => {
     setBusy(true)
     try {
@@ -411,7 +460,7 @@ function HRPageContent() {
         onSearchChange={setSearchQuery}
         onRefresh={() => {
           loadOverview()
-          if (tab === 'employees') loadStaff()
+          if (tab === 'staff' || tab === 'employees') loadStaff()
           if (tab === 'attendance') loadAttendance()
           if (tab === 'leave') loadLeaves()
           if (tab === 'payroll') loadPayroll()
@@ -425,9 +474,10 @@ function HRPageContent() {
         onOpenProcessPayroll={() => setIsProcessPayrollOpen(true)}
       />
 
-      {/* ── Tab Workspace ── */}
+      {/* ── 6 Primary HR Section Workspaces ── */}
       <main className="min-h-[400px]">
-        {tab === 'dashboard' && (
+        {/* 1. Overview */}
+        {(tab === 'overview' || tab === 'dashboard') && (
           <HRDashboardTab
             metrics={metrics}
             loading={busy && !metrics}
@@ -437,7 +487,8 @@ function HRPageContent() {
           />
         )}
 
-        {tab === 'employees' && (
+        {/* 2. Staff (with sub-views for Directory, Schedule, Compliance & Performance) */}
+        {(tab === 'staff' || tab === 'employees') && (
           <HREmployeesTab
             staffList={staffList}
             branches={branches}
@@ -464,9 +515,12 @@ function HRPageContent() {
             }}
             onOpenOnboard={() => setIsOnboardOpen(true)}
             canWrite={canWrite}
+            subView={staffSubView}
+            onSubViewChange={setStaffSubView}
           />
         )}
 
+        {/* 3. Attendance */}
         {tab === 'attendance' && (
           <HRAttendanceTab
             attendanceRecords={attendanceRecords}
@@ -487,20 +541,22 @@ function HRPageContent() {
           />
         )}
 
+        {/* 4. Leave */}
         {tab === 'leave' && (
           <HRLeaveTab
             leaves={leaves}
             statusFilter={leaveStatus}
             onStatusFilterChange={setLeaveStatus}
             onActionLeave={handleActionLeave}
+            onApplyLeave={handleApplyLeave}
+            staffList={staffList || []}
             canApprove={canApprove}
             canWrite={canWrite}
             loadingAction={leaveActionLoading}
           />
         )}
 
-        {tab === 'schedule' && <HRScheduleTab branchFilter={staffBranch} />}
-
+        {/* 5. Payroll */}
         {tab === 'payroll' && (
           <HRPayrollTab
             cycles={payrollCycles}
@@ -514,18 +570,19 @@ function HRPageContent() {
           />
         )}
 
-        {tab === 'performance' && <HRPerformanceTab canWrite={canWrite} />}
+        {/* 6. Reports */}
+        {tab === 'reports' && <HRReportsTab branches={branches} />}
 
+        {/* Legacy aliases fallbacks */}
+        {tab === 'schedule' && <HRScheduleTab branchFilter={staffBranch} />}
         {tab === 'training' && <HRTrainingTab canWrite={canWrite} />}
-
+        {tab === 'performance' && <HRPerformanceTab canWrite={canWrite} />}
         {tab === 'requests' && (
           <HRRequestsTab
             canApprove={canApprove}
             onLeaveAction={handleActionLeave}
           />
         )}
-
-        {tab === 'reports' && <HRReportsTab branches={branches} />}
       </main>
 
       {/* ── Modals & Drawers ── */}
@@ -551,6 +608,7 @@ function HRPageContent() {
         branches={branches}
         onSave={handleSaveStaffEdit}
         loading={busy}
+        canManageSensitive={role === 'OWNER' || role === 'SUPER_ADMIN' || role === 'DIRECTOR' || role === 'PLATFORM_ADMIN'}
       />
 
       <AttendanceCorrectionModal

@@ -3,25 +3,34 @@
 import React, { useState } from 'react'
 import Link from 'next/link'
 import type { HomeModule } from '@/lib/modules'
-import { SEMANTIC_THEME_TOKENS } from '@/lib/modules'
+import { SEMANTIC_THEME_TOKENS, getModulePastelTokens } from '@/lib/modules'
 import { AnimatedModuleIcon } from './AnimatedModuleIcon'
 
-interface ModuleCardProps {
+export interface ModuleCardProps {
   module: HomeModule
   className?: string
+  isSelected?: boolean
+  isDisabled?: boolean
 }
 
 /**
- * Clean PreOne ModuleCard
+ * PreOne ModuleCard — Soft Pastel Module Identity
  *
- * Minimalist Fluent Metro tile layout:
- * - Rounded card surface with soft elevation and subtle borders
- * - Semantic theme icon container with hardware-accelerated 3D illustration
- * - Crisp module title (clean, no subheadings or Launch action clutter)
- * - Non-intrusive subtle background watermark motif
+ * Minimalist Fluent Metro tile layout with refined interactive responses:
+ * - Default: Crisp neutral/white surface, subtle neutral border, dark neutral title
+ * - Hover / Focus: Soft pastel background, module-specific accent border,
+ *   accessible accent title, subtle colored shadow, 2.5px lift, soft icon halo
+ * - Active / Touch: Subtle scale compression & deeper pastel tint
+ * - Accessible: WCAG AA contrast, keyboard navigation, prefers-reduced-motion
  */
-export function ModuleCard({ module: m, className = '' }: ModuleCardProps) {
+export function ModuleCard({
+  module: m,
+  className = '',
+  isSelected = false,
+  isDisabled = false,
+}: ModuleCardProps) {
   const theme = SEMANTIC_THEME_TOKENS[m.semanticTheme] || SEMANTIC_THEME_TOKENS.lavender
+  const pastel = m.pastelIdentity || getModulePastelTokens(m.key)
 
   const [isHovered, setIsHovered] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
@@ -32,7 +41,10 @@ export function ModuleCard({ module: m, className = '' }: ModuleCardProps) {
       prefetch={true}
       className={`module-card group ${className}`.trim()}
       aria-label={m.label}
+      aria-disabled={isDisabled ? 'true' : undefined}
       data-module={m.key}
+      data-selected={isSelected ? 'true' : undefined}
+      tabIndex={isDisabled ? -1 : 0}
       draggable={false}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -40,8 +52,16 @@ export function ModuleCard({ module: m, className = '' }: ModuleCardProps) {
       onBlur={() => setIsFocused(false)}
       style={
         {
-          '--card-hover-border': theme.hoverBorder,
-          '--card-accent-glow': theme.accentGlow,
+          '--module-bg': pastel.defaultBg || pastel.bg,
+          '--module-hover-bg': pastel.hoverBg,
+          '--module-accent': pastel.accent,
+          '--module-text': pastel.text || pastel.titleText,
+          '--module-dark-bg': pastel.darkBg,
+          '--module-dark-hover-bg': pastel.darkHoverBg,
+          '--module-dark-accent': pastel.darkAccent,
+          '--module-dark-text': pastel.darkTitleText,
+          '--card-hover-border': pastel.accent,
+          '--card-accent-glow': `color-mix(in srgb, ${pastel.accent} 24%, transparent)`,
         } as React.CSSProperties
       }
     >
@@ -63,7 +83,7 @@ export function ModuleCard({ module: m, className = '' }: ModuleCardProps) {
       </div>
 
       {/* Subtle Preschool Watermark Motif (Decorative, non-intrusive) */}
-      <div className="module-card-watermark" aria-hidden="true" style={{ color: theme.iconColor }}>
+      <div className="module-card-watermark" aria-hidden="true">
         <svg width="60" height="60" viewBox="0 0 64 64" fill="none">
           <circle cx="48" cy="48" r="28" stroke="currentColor" strokeWidth="2" strokeDasharray="3 4" opacity="0.32" />
           <path

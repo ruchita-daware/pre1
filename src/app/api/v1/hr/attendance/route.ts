@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { ok, Errors } from '@/lib/api'
 import { requireApi, isResponse, getAuthorizedBranchIds, requireBranchAccess } from '@/lib/auth-api'
 import { AuditService } from '@/lib/audit/audit-service'
+import { AttendanceCalculator } from '@/lib/hr/attendance-calculator'
 
 async function _GET(req: NextRequest) {
   const session = await requireApi(req, 'hr:read')
@@ -21,19 +22,19 @@ async function _GET(req: NextRequest) {
     }
 
     const authorizedBranches = await getAuthorizedBranchIds(session)
-    if (authorizedBranches !== 'ALL' && authorizedBranches.length === 0) {
-      return ok([])
+    if (authorizedBranches !== null && authorizedBranches.length === 0) {
+      return ok({ date: dateStr, records: [], summary: { total: 0, present: 0, late: 0, halfDay: 0, fullDay: 0, absent: 0, onLeave: 0, missingCheckout: 0 } })
     }
 
     const branchFilter = requestedBranchId
       ? { branchId: requestedBranchId }
-      : authorizedBranches === 'ALL'
-      ? {}
-      : { branchId: { in: authorizedBranches } }
+      : authorizedBranches !== null
+      ? { branchId: { in: authorizedBranches } }
+      : {}
 
     const date = new Date(dateStr)
 
-    // Fetch active staff
+    // Fetch active staff within branch scope
     const staffList = await db.staffProfile.findMany({
       where: {
         tenantId: session.tenantId,
@@ -56,9 +57,15 @@ async function _GET(req: NextRequest) {
       },
     })
     const punchMap = new Map(punches.map((p) => [p.staffProfileId, p]))
+    const now = new Date()
 
     const records = staffList.map((s) => {
       const p = punchMap.get(s.id)
+      const calculation = AttendanceCalculator.calculatePunch({
+        checkIn: p?.checkIn || null,
+        checkOut: p?.checkOut || null,
+      }, now)
+
       return {
         staffProfileId: s.id,
         employeeCode: s.employeeCode,
@@ -68,14 +75,17 @@ async function _GET(req: NextRequest) {
         status: p?.status || 'UNMARKED',
         checkIn: p?.checkIn || null,
         checkOut: p?.checkOut || null,
-        workedHours: p?.workedHours ?? 0,
-        lateMinutes: p?.lateMinutes ?? 0,
+        workedHours: p ? p.workedHours : 0,
+        lateMinutes: p ? p.lateMinutes : 0,
         source: p?.source || 'MANUAL',
         notes: p?.notes || null,
+        isMissingCheckout: p?.status !== 'ON_LEAVE' && p?.status !== 'ABSENT' && calculation.isMissingCheckout,
       }
     })
 
-    return ok({ date: dateStr, records })
+    const summary = AttendanceCalculator.aggregateRecords(records)
+
+    return ok({ date: dateStr, records, summary })
   } catch (e) {
     return Errors.system(e)
   }
@@ -112,15 +122,21 @@ async function _POST(req: NextRequest) {
         })
         if (!staff) continue
 
-        let workedHours = 0
-        let lateMinutes = 0
-        if (e.checkIn && e.checkOut) {
-          const inT = new Date(e.checkIn).getTime()
-          const outT = new Date(e.checkOut).getTime()
-          if (outT > inT) workedHours = parseFloat(((outT - inT) / (1000 * 60 * 60)).toFixed(2))
+        // Branch-level access verification for batch updates
+        if (staff.branchId) {
+          const branchCheck = await requireBranchAccess(session, staff.branchId)
+          if (branchCheck) {
+            throw new Error(`Unauthorized to record attendance for staff member in branch ${staff.branchId}`)
+          }
         }
 
-        if (e.status === 'LATE') lateMinutes = 30
+        // Canonical calculation of worked hours and lateness
+        const calculation = AttendanceCalculator.calculatePunch({
+          checkIn: e.checkIn,
+          checkOut: e.checkOut,
+        }, punchDate)
+
+        const lateMinutes = e.status === 'LATE' ? (calculation.lateMinutes || 30) : calculation.lateMinutes
 
         await tx.attendanceStaff.upsert({
           where: {
@@ -138,7 +154,7 @@ async function _POST(req: NextRequest) {
             checkIn: e.checkIn ? new Date(e.checkIn) : null,
             checkOut: e.checkOut ? new Date(e.checkOut) : null,
             shiftHours: 8,
-            workedHours,
+            workedHours: calculation.workedHours,
             lateMinutes,
             source: 'MANUAL',
             notes: e.notes || null,
@@ -149,7 +165,7 @@ async function _POST(req: NextRequest) {
             status: e.status,
             checkIn: e.checkIn ? new Date(e.checkIn) : null,
             checkOut: e.checkOut ? new Date(e.checkOut) : null,
-            workedHours,
+            workedHours: calculation.workedHours,
             lateMinutes,
             notes: e.notes || null,
             markedById: session.uid,
@@ -179,7 +195,7 @@ async function _POST(req: NextRequest) {
 
 /**
  * PATCH /api/v1/hr/attendance — Attendance Correction Workflow
- * Allows adjusting historical punch-in/out times or status with mandatory reason & audit
+ * Adjusts historical punch-in/out times or status with mandatory audit & branch isolation
  */
 async function _PATCH(req: NextRequest) {
   const session = await requireApi(req, 'hr:write')
@@ -206,6 +222,12 @@ async function _PATCH(req: NextRequest) {
     })
     if (!staff) return Errors.notFound('Staff profile')
 
+    // Branch isolation boundary check
+    if (staff.branchId) {
+      const branchCheck = await requireBranchAccess(session, staff.branchId)
+      if (branchCheck) return branchCheck
+    }
+
     const existingPunch = await db.attendanceStaff.findUnique({
       where: {
         staffProfileId_date: {
@@ -215,14 +237,12 @@ async function _PATCH(req: NextRequest) {
       },
     })
 
-    let workedHours = 0
-    let lateMinutes = 0
-    if (checkIn && checkOut) {
-      const inT = new Date(checkIn).getTime()
-      const outT = new Date(checkOut).getTime()
-      if (outT > inT) workedHours = parseFloat(((outT - inT) / (1000 * 60 * 60)).toFixed(2))
-    }
-    if (status === 'LATE') lateMinutes = 30
+    const calculation = AttendanceCalculator.calculatePunch({
+      checkIn,
+      checkOut,
+    }, punchDate)
+
+    const lateMinutes = status === 'LATE' ? (calculation.lateMinutes || 30) : calculation.lateMinutes
 
     const updatedPunch = await db.$transaction(async (tx) => {
       const record = await tx.attendanceStaff.upsert({
@@ -241,7 +261,7 @@ async function _PATCH(req: NextRequest) {
           checkIn: checkIn ? new Date(checkIn) : null,
           checkOut: checkOut ? new Date(checkOut) : null,
           shiftHours: 8,
-          workedHours,
+          workedHours: calculation.workedHours,
           lateMinutes,
           source: 'CORRECTION',
           notes: reason,
@@ -252,7 +272,7 @@ async function _PATCH(req: NextRequest) {
           status,
           checkIn: checkIn ? new Date(checkIn) : null,
           checkOut: checkOut ? new Date(checkOut) : null,
-          workedHours,
+          workedHours: calculation.workedHours,
           lateMinutes,
           source: 'CORRECTION',
           notes: reason,
@@ -263,6 +283,7 @@ async function _PATCH(req: NextRequest) {
 
       await AuditService.record({
         tenantId: session.tenantId!,
+        branchId: staff.branchId || null,
         actorId: session.uid,
         actorName: session.name,
         actorRole: session.role,
@@ -284,7 +305,7 @@ async function _PATCH(req: NextRequest) {
           status,
           checkIn,
           checkOut,
-          workedHours,
+          workedHours: calculation.workedHours,
           reason,
         },
       }, tx)

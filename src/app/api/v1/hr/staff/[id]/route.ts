@@ -15,6 +15,28 @@ async function _GET(req: NextRequest, { params }: { params: Promise<{ id: string
     const profile = await StaffService.getStaff360(session.tenantId, id)
     if (!profile) return Errors.notFound('Staff profile')
 
+    // Branch isolation boundary check
+    if (profile.branchId) {
+      const branchCheck = await requireBranchAccess(session, profile.branchId)
+      if (branchCheck) return branchCheck
+    }
+
+    const isPrivileged =
+      ['OWNER', 'DIRECTOR', 'PLATFORM_ADMIN', 'SUPER_ADMIN'].includes(session.role) ||
+      (session.roles && session.roles.some((r: string) => ['OWNER', 'DIRECTOR', 'PLATFORM_ADMIN'].includes(r)))
+
+    // Field-level data protection: Mask sensitive KYC identifiers for non-owner roles
+    if (!isPrivileged) {
+      if (profile.panNumber && profile.panNumber.length >= 4) {
+        profile.panNumber = `••••••${profile.panNumber.slice(-4)}`
+      }
+      if (profile.aadhaarNumber && profile.aadhaarNumber.length >= 4) {
+        profile.aadhaarNumber = `••••••••${profile.aadhaarNumber.slice(-4)}`
+      }
+      if (profile.uanNumber) profile.uanNumber = '••••••••••••'
+      if (profile.esiNumber) profile.esiNumber = '••••••••••••'
+    }
+
     return ok(profile)
   } catch (e) {
     return Errors.system(e)
@@ -30,6 +52,35 @@ async function _PATCH(req: NextRequest, { params }: { params: Promise<{ id: stri
     const { id } = await params
     const body = await req.json()
     const { branchId, designation, department, ...rest } = body
+
+    // 1. Target Staff & Branch Boundary Verification
+    const target = await db.staffProfile.findFirst({
+      where: { id, tenantId: session.tenantId, deletedAt: null },
+      select: { id: true, branchId: true },
+    })
+    if (!target) return Errors.notFound('Staff profile')
+
+    if (target.branchId) {
+      const branchCheck = await requireBranchAccess(session, target.branchId)
+      if (branchCheck) return branchCheck
+    }
+
+    const isPrivileged =
+      ['OWNER', 'DIRECTOR', 'PLATFORM_ADMIN', 'SUPER_ADMIN'].includes(session.role) ||
+      (session.roles && session.roles.some((r: string) => ['OWNER', 'DIRECTOR', 'PLATFORM_ADMIN'].includes(r)))
+
+    // 2. Field-Level Permission Enforcement
+    if (!isPrivileged) {
+      if (rest.salary) {
+        return Errors.forbidden('Only School Owner or authorized HR Admin can modify salary structure')
+      }
+      if (rest.panNumber || rest.aadhaarNumber || rest.uanNumber || rest.esiNumber || rest.bankDetails) {
+        return Errors.forbidden('Only School Owner or authorized HR Admin can modify statutory KYC or bank details')
+      }
+      if (branchId && branchId !== target.branchId) {
+        return Errors.forbidden('Only School Owner can transfer staff between campus branches')
+      }
+    }
 
     const actor = {
       id: session.uid,

@@ -1,14 +1,14 @@
+export type HRPrimarySection = 'overview' | 'staff' | 'attendance' | 'leave' | 'payroll' | 'reports'
+
 export type HRTabKey =
+  | HRPrimarySection
+  // Legacy aliases for backward-compatible routing & deep links
   | 'dashboard'
   | 'employees'
-  | 'attendance'
-  | 'leave'
   | 'schedule'
-  | 'payroll'
   | 'performance'
   | 'training'
   | 'requests'
-  | 'reports'
 
 export interface HRMetrics {
   totalStaff: number

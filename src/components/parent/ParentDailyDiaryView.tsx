@@ -174,7 +174,7 @@ export function ParentDailyDiaryView({ session }: { session?: any }) {
       {/* ── Date Navigator & Attendance Bar ── */}
       <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         {/* Date Selector Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={handlePrevDay}
@@ -185,12 +185,12 @@ export function ParentDailyDiaryView({ session }: { session?: any }) {
           </button>
 
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted/40 border border-border/60">
-            <Calendar size={14} className="text-purple-600 dark:text-purple-400" />
+            <Calendar size={14} className="text-purple-600 dark:text-purple-400 shrink-0" />
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-foreground focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs font-semibold text-foreground focus:outline-none cursor-pointer max-w-[115px] sm:max-w-none"
             />
           </div>
 
@@ -215,7 +215,7 @@ export function ParentDailyDiaryView({ session }: { session?: any }) {
         </div>
 
         {/* Daily Attendance Status Pill */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <span className="text-xs text-muted-foreground font-medium">Daily Attendance:</span>
           {diaryData?.todayAttendance ? (
             <div className="flex items-center gap-2">

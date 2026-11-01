@@ -332,6 +332,9 @@ export class StaffService {
       }
     }
 
+    // Fetch employment history timeline from audit logs & milestones
+    const employmentHistory = await this.getEmploymentHistory(tenantId, staffProfileId)
+
     return {
       ...profile,
       panNumber: safeDecrypt(profile.panNumber),
@@ -345,7 +348,102 @@ export class StaffService {
       classrooms,
       recentAttendance,
       recentPayslips,
+      employmentHistory,
     }
+  }
+
+  /**
+   * Get structured employment & designation history timeline
+   */
+  static async getEmploymentHistory(tenantId: string, staffProfileId: string) {
+    const profile = await db.staffProfile.findFirst({
+      where: { id: staffProfileId, tenantId, deletedAt: null },
+      include: { branch: true },
+    })
+    if (!profile) return []
+
+    const logs = await db.auditLog.findMany({
+      where: {
+        tenantId,
+        entity: 'StaffProfile',
+        entityId: staffProfileId,
+        action: {
+          in: [
+            'STAFF_CREATED',
+            'STAFF_BRANCH_TRANSFERRED',
+            'STAFF_DESIGNATION_UPDATED',
+            'STAFF_PROFILE_UPDATED',
+          ],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    })
+
+    const history: Array<{
+      id: string
+      date: string
+      type: 'JOINED' | 'TRANSFER' | 'PROMOTION' | 'DESIGNATION' | 'UPDATE'
+      title: string
+      description: string
+      actorName: string | null
+      effectiveDate?: string
+    }> = []
+
+    for (const log of logs) {
+      if (log.action === 'STAFF_CREATED') {
+        history.push({
+          id: log.id,
+          date: log.createdAt.toISOString(),
+          type: 'JOINED',
+          title: 'Joined Institution',
+          description: `Onboarded as ${profile.designation || 'Staff'} at ${profile.branch?.name || 'Branch'}`,
+          actorName: log.actorName,
+          effectiveDate: profile.joiningDate ? profile.joiningDate.toISOString().slice(0, 10) : undefined,
+        })
+      } else if (log.action === 'STAFF_BRANCH_TRANSFERRED') {
+        history.push({
+          id: log.id,
+          date: log.createdAt.toISOString(),
+          type: 'TRANSFER',
+          title: 'Campus Branch Transfer',
+          description: log.summary || 'Transferred between campus branches',
+          actorName: log.actorName,
+        })
+      } else if (log.action === 'STAFF_DESIGNATION_UPDATED') {
+        history.push({
+          id: log.id,
+          date: log.createdAt.toISOString(),
+          type: 'DESIGNATION',
+          title: 'Designation / Department Change',
+          description: log.summary || 'Updated designation or department',
+          actorName: log.actorName,
+        })
+      } else if (log.action === 'STAFF_PROFILE_UPDATED') {
+        history.push({
+          id: log.id,
+          date: log.createdAt.toISOString(),
+          type: 'UPDATE',
+          title: 'Workforce Profile Update',
+          description: log.summary || 'Updated operational employee records',
+          actorName: log.actorName,
+        })
+      }
+    }
+
+    if (history.length === 0) {
+      history.push({
+        id: 'init-' + profile.id,
+        date: profile.createdAt.toISOString(),
+        type: 'JOINED',
+        title: 'Joined Institution',
+        description: `Active as ${profile.designation || 'Staff'} at ${profile.branch?.name || 'Branch'}`,
+        actorName: 'System',
+        effectiveDate: profile.joiningDate ? profile.joiningDate.toISOString().slice(0, 10) : undefined,
+      })
+    }
+
+    return history
   }
 
   /**

@@ -14,14 +14,15 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: false,
   compress: true,
-  ...(process.env.VERCEL === "1" ? {} : { output: "standalone" }),
+  ...(process.env.NODE_ENV === "production" && process.env.VERCEL !== "1" ? { output: "standalone" } : {}),
   experimental: {
     staleTimes: {
       dynamic: 30,
       static: 180,
     },
-    turbopackFileSystemCacheForDev: true,
     optimizePackageImports: [
+      'three',
+      'zod',
       'lucide-react',
       'date-fns',
       'recharts',

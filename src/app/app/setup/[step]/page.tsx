@@ -5,7 +5,7 @@ import {
   ArrowLeft, CheckCircle2, AlertTriangle, Plus, Lock, RotateCcw, RotateCw, Save,
   UserPlus, CalendarPlus, Trash2, Building2, Upload, Users, Settings2,
   Blocks, CalendarDays, DoorOpen, GraduationCap, LayoutGrid, IndianRupee, Edit3, Edit, Power, Check, BookOpen,
-  ArrowUpRight, ShieldCheck, Download, Filter, X, FileSpreadsheet,
+  ArrowUpRight, ShieldCheck, Download, Filter, X, FileSpreadsheet, CreditCard,
 } from 'lucide-react'
 import { PageHead, Skeleton, EmptyState, StatusBadge, KpiTile } from '@/components/preone/ui'
 import { SpreadsheetImportWorkspace } from '@/components/importers/SpreadsheetImportWorkspace'
@@ -13,6 +13,10 @@ import { SetupScopeBadge } from '@/components/preone/SetupScopeBadge'
 import { SmartDependencyResolver } from '@/components/setup/SmartDependencyResolver'
 import { Modal } from '@/components/preone/Modal'
 import { useToast } from '@/components/preone/Toast'
+import { GlobalDatePicker } from '@/components/ui/GlobalDatePicker'
+import { FeeStructureConsole } from '@/components/setup/FeeStructureConsole'
+import { PaymentGatewayConsole } from '@/components/setup/PaymentGatewayConsole'
+import { ReceiptTemplateStudio } from '@/components/setup/ReceiptTemplateStudio'
 import { CONFIG_FORMS, type FormField, type DomainForm } from '@/lib/setup/step-forms'
 import { LEGACY_KEY_MAP, STEP_MAP } from '@/lib/setup/steps'
 import { SETUP_SCOPE_REGISTRY } from '@/lib/setup/scope-model'
@@ -194,6 +198,7 @@ export default function SetupStepPage() {
       case 'classroom': return 'classes'
       case 'subject': return 'subjects'
       case 'fees_setup': return 'fees'
+      case 'payment_gateway': return 'gateway'
       default: return 'unknown'
     }
   }, [def])
@@ -284,7 +289,7 @@ export default function SetupStepPage() {
     }
   }, [kind, configDomain])
 
-  useEffect(() => { Promise.resolve().then(loadStatus); Promise.resolve().then(loadBody) }, [loadStatus, loadBody])
+  useEffect(() => { void loadStatus(); void loadBody() }, [loadStatus, loadBody])
 
   const refreshAll = useCallback(async () => {
     setReloading(true)
@@ -357,7 +362,7 @@ export default function SetupStepPage() {
   if (!def) {
     return <EmptyState icon={<AlertTriangle size={40} />} title="Unknown setup step" message={`No setup step "${stepKey}" exists.`} />
   }
-  const hideStepMeta = ['school_profile', 'branch', 'academic_year', 'programs', 'classroom'].includes(stepKey)
+  const hideStepMeta = ['school_profile', 'branch', 'academic_year', 'programs', 'classroom', 'subject'].includes(stepKey)
 
   if (status === null) {
     return <><PageHead title={def.label} sub={hideStepMeta ? undefined : def.description} /><div className="card"><div style={{ padding: 16 }}><Skeleton h={200} /></div></div></>
@@ -675,6 +680,12 @@ export default function SetupStepPage() {
 
             {kind === 'fees' && (
               <FeeSetupSection onDone={refreshAll} api={api} toast={toast} refreshTrigger={reloadTrigger} />
+            )}
+
+            {kind === 'gateway' && (
+              <div style={{ padding: '0 0 24px 0' }}>
+                <PaymentGatewayConsole />
+              </div>
             )}
 
             {kind === 'import' && (
@@ -2115,7 +2126,21 @@ function FeeSetupSection({
 }) {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [feeSubTab, setFeeSubTab] = useState<'STRUCTURES' | 'SCHEDULES' | 'DEPOSITS' | 'PAYMENTS'>('STRUCTURES')
+  const searchParams = useSearchParams()
+  const initialSubTab = searchParams?.get('tab')?.toUpperCase() || searchParams?.get('subTab')?.toUpperCase()
+  const [feeSubTab, setFeeSubTab] = useState<'STRUCTURES' | 'GATEWAY' | 'TEMPLATES' | 'SCHEDULES' | 'DEPOSITS' | 'PAYMENTS'>(() => {
+    if (initialSubTab && ['STRUCTURES', 'GATEWAY', 'TEMPLATES', 'SCHEDULES', 'DEPOSITS', 'PAYMENTS'].includes(initialSubTab)) {
+      return initialSubTab as any
+    }
+    return 'STRUCTURES'
+  })
+
+  useEffect(() => {
+    const qTab = searchParams?.get('tab')?.toUpperCase() || searchParams?.get('subTab')?.toUpperCase()
+    if (qTab && ['STRUCTURES', 'GATEWAY', 'TEMPLATES', 'SCHEDULES', 'DEPOSITS', 'PAYMENTS'].includes(qTab)) {
+      setFeeSubTab(qTab as any)
+    }
+  }, [searchParams])
   const [branches, setBranches] = useState<any[]>([])
   const [programs, setPrograms] = useState<any[]>([])
   const [academicYears, setAcademicYears] = useState<any[]>([])
@@ -2306,13 +2331,65 @@ function FeeSetupSection({
         </div>
       </div>
 
-      {/* ── Sub-Tab Switcher (Phase D: Unified Fees Management) ── */}
+      {/* ── Online Payment Gateway & Setup Callout ── */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 12,
+          padding: '12px 16px',
+          background: 'rgba(5, 150, 105, 0.08)',
+          border: '1px solid rgba(5, 150, 105, 0.25)',
+          borderRadius: 8,
+          marginBottom: 16,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <CreditCard size={18} color="#059669" />
+          <div style={{ fontSize: 13, color: 'var(--foreground)' }}>
+            <strong>Online Payments & Merchant Gateway:</strong> Configure Razorpay, Cashfree, or PayU credentials, webhooks, and sandbox testing.
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline"
+            onClick={() => setFeeSubTab('GATEWAY')}
+            style={{ fontSize: 12, fontWeight: 600, color: '#059669', borderColor: '#059669' }}
+          >
+            Open Payment Gateway Tab →
+          </button>
+          <a
+            href="/app/setup/payment-gateway"
+            className="btn btn-sm btn-primary"
+            style={{ fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          >
+            Standalone Gateway Console <ArrowUpRight size={12} />
+          </a>
+        </div>
+      </div>
+
+      {/* ── Sub-Tab Switcher ── */}
       <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <button
           className={`btn btn-sm ${feeSubTab === 'STRUCTURES' ? 'btn-primary' : 'btn-outline'}`}
           onClick={() => setFeeSubTab('STRUCTURES')}
         >
           Fee Structures & Coverage
+        </button>
+        <button
+          className={`btn btn-sm ${feeSubTab === 'GATEWAY' ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => setFeeSubTab('GATEWAY')}
+        >
+          Payment Gateway
+        </button>
+        <button
+          className={`btn btn-sm ${feeSubTab === 'TEMPLATES' ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => setFeeSubTab('TEMPLATES')}
+        >
+          Receipt Templates
         </button>
         <button
           className={`btn btn-sm ${feeSubTab === 'SCHEDULES' ? 'btn-primary' : 'btn-outline'}`}
@@ -2336,209 +2413,22 @@ function FeeSetupSection({
 
       {/* ── SUB-TAB 1: STRUCTURES & COVERAGE ── */}
       {feeSubTab === 'STRUCTURES' && (
-        <>
-          {/* Campus Branch Filter & Readiness Bar */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, background: 'var(--surface-muted)', padding: '10px 14px', borderRadius: 8, flexWrap: 'wrap', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Building2 size={16} style={{ color: 'var(--foreground-muted)' }} />
-              <span style={{ fontSize: 13, fontWeight: 600 }}>Filter by Campus:</span>
-              <select
-                className="select"
-                style={{ height: 32, fontSize: 12.5, minWidth: 160 }}
-                value={selectedBranchId}
-                onChange={(e) => setSelectedBranchId(e.target.value)}
-              >
-                <option value="ALL">All Campuses ({branches.length})</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
-            </div>
+        <FeeStructureConsole
+          branches={branches}
+          programs={programs}
+          academicYears={academicYears}
+          onRefreshNeeded={loadFeeData}
+        />
+      )}
 
-            <div>
-              {missingCoverageCount === 0 ? (
-                <span className="badge b-success" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <ShieldCheck size={13} /> 100% Fee Coverage — Go-Live Ready
-                </span>
-              ) : (
-                <span className="badge b-danger">
-                  {missingCoverageCount} program mapping(s) lack active fee structure
-                </span>
-              )}
-            </div>
-          </div>
+      {/* ── SUB-TAB 2: PAYMENT GATEWAY CONFIGURATION ── */}
+      {feeSubTab === 'GATEWAY' && (
+        <PaymentGatewayConsole onUpdated={loadFeeData} />
+      )}
 
-          {/* Program Coverage Matrix Table */}
-          <div style={{ marginBottom: 20 }}>
-            <h4 style={{ margin: '0 0 8px 0', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--foreground-muted)' }}>
-              Campus Program Pricing Coverage
-            </h4>
-            <div className="dtable-scroll">
-              <table className="dtable">
-                <thead>
-                  <tr>
-                    <th>Campus Branch</th>
-                    <th>Program</th>
-                    <th>Active Fee Structure</th>
-                    <th>Annual Amount</th>
-                    <th>Status</th>
-                    <th style={{ textAlign: 'right' }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {coverageMatrix.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} style={{ textAlign: 'center', padding: 24, color: 'var(--foreground-muted)' }}>
-                        No programs mapped to the selected campus filter.
-                      </td>
-                    </tr>
-                  ) : (
-                    coverageMatrix.map((row, idx) => (
-                      <tr key={idx}>
-                        <td>
-                          <span className="cell-strong">{row.branch.name}</span>
-                          <span className="cell-sub">{row.branch.code}</span>
-                        </td>
-                        <td>
-                          <span className="cell-strong">{row.program.name}</span>
-                          <span className="cell-sub">{row.program.code}</span>
-                        </td>
-                        <td>
-                          {row.activeStructure ? (
-                            <div>
-                              <span style={{ fontWeight: 600, color: 'var(--foreground)' }}>{row.activeStructure.name}</span>
-                              <span className="cell-sub">{row.activeStructure.academicSession?.name || 'AY'}</span>
-                            </div>
-                          ) : (
-                            <span style={{ color: 'var(--foreground-muted)', fontStyle: 'italic' }}>Not configured</span>
-                          )}
-                        </td>
-                        <td>
-                          {row.activeStructure ? (
-                            <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                              ₹{(
-                                row.activeStructure.items?.reduce((s: number, i: any) => s + (i.amountCents || 0), 0) / 100
-                              ).toLocaleString('en-IN')}
-                            </span>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                        <td>
-                          {row.status === 'CONFIGURED' ? (
-                            <span className="badge b-success">Active</span>
-                          ) : (
-                            <span className="badge b-danger">Missing Fee Structure</span>
-                          )}
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          {row.status === 'MISSING' ? (
-                            <button
-                              className="btn btn-sm btn-outline"
-                              onClick={() => {
-                                setSelectedBranchId(row.branch.id)
-                                setShowCreateModal(true)
-                              }}
-                            >
-                              <Plus size={12} /> Configure
-                            </button>
-                          ) : (
-                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                              <button
-                                className="btn btn-sm btn-outline"
-                                onClick={() => applyFeeStructure(row.activeStructure.id)}
-                                title="Apply this fee structure to enrolled students in this class/program"
-                              >
-                                <CheckCircle2 size={12} /> Apply to Class
-                              </button>
-                              <a href="/app/finance" target="_blank" rel="noreferrer" className="btn btn-sm btn-ghost" title="View details in Finance">
-                                Finance <ArrowUpRight size={12} />
-                              </a>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Configured Structures List */}
-          <div>
-            <h4 style={{ margin: '0 0 8px 0', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--foreground-muted)' }}>
-              Configured Canonical Fee Structures ({filteredStructures.length})
-            </h4>
-            {filteredStructures.length === 0 ? (
-              <EmptyState
-                icon={<IndianRupee size={36} />}
-                title="No fee structures found"
-                message="Click 'Create Fee Structure' to define tuition, admission fees, and deposit rules for your programs."
-              />
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
-                {filteredStructures.map((st) => {
-                  const totalRupees =
-                    (st.items?.reduce((s: number, i: any) => s + (i.amountCents || 0), 0) || 0) / 100
-                  const branchName = branches.find((b) => b.id === st.branchId)?.name || 'All Campuses'
-
-                  return (
-                    <div key={st.id} className="card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div>
-                          <h5 style={{ margin: '0 0 2px 0', fontSize: 14, fontWeight: 700 }}>{st.name}</h5>
-                          <span className="cell-sub">{branchName} · {st.academicSession?.name || 'AY'}</span>
-                        </div>
-                        <span className={`badge ${st.status === 'ACTIVE' ? 'b-success' : 'b-neutral'}`}>
-                          {st.status}
-                        </span>
-                      </div>
-
-                      <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '8px 10px', fontSize: 12, background: 'var(--surface-muted)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontWeight: 600 }}>
-                          <span>Fee Heads ({st.items?.length || 0})</span>
-                          <span style={{ fontFamily: 'monospace' }}>Total: ₹{totalRupees.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                          {st.items?.slice(0, 3).map((item: any, i: number) => (
-                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--foreground-muted)' }}>
-                              <span>{item.name}</span>
-                              <span style={{ fontFamily: 'monospace' }}>₹{((item.amountCents || 0) / 100).toLocaleString('en-IN')}</span>
-                            </div>
-                          ))}
-                          {st.items?.length > 3 && (
-                            <span style={{ fontSize: 11, color: 'var(--foreground-muted)', fontStyle: 'italic' }}>
-                              +{st.items.length - 3} more head(s)
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 'auto', flexWrap: 'wrap' }}>
-                        <button
-                          className="btn btn-sm btn-outline"
-                          onClick={() => applyFeeStructure(st.id)}
-                          title="Apply this fee structure to enrolled students in this class/program"
-                        >
-                          <CheckCircle2 size={12} /> Apply to Class
-                        </button>
-                        <a href="/app/finance" target="_blank" rel="noreferrer" className="btn btn-sm btn-ghost" style={{ fontSize: 12 }}>
-                          Inspect in Finance <ArrowUpRight size={12} />
-                        </a>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-
-          <div style={{ marginTop: 20 }}>
-            <p className="card-sub" style={{ marginBottom: 8 }}>Accepted payment methods (Finance configuration):</p>
-            <QuickFinanceConfig onDone={() => { onDone(); loadFeeData() }} api={api} toast={toast} />
-          </div>
-        </>
+      {/* ── SUB-TAB 3: RECEIPT TEMPLATES & STUDIO MAPPING ── */}
+      {feeSubTab === 'TEMPLATES' && (
+        <ReceiptTemplateStudio />
       )}
 
       {/* ── SUB-TAB 2: STUDENT SCHEDULES & DUES ── */}
@@ -2791,7 +2681,7 @@ function BranchModal({ onClose, onDone, api, toast }: { onClose: () => void; onD
     const fd = Object.fromEntries(new FormData(e.currentTarget).entries())
     const j = await api('/api/v1/branches', 'POST', fd)
     setBusy(false)
-    if (j.success) { toast.success('Branch created', String(j.data.name)); onDone() } else toast.error('Failed', j.error?.message)
+    if (j.success) { toast.success('Branch created', String(j.data.name)); onClose(); onDone() } else toast.error('Failed', j.error?.message)
   }
   return (
     <Modal open onClose={onClose} title="Add Branch / Campus" icon={<Building2 size={22} />} iconClass="ic-blue">
@@ -3074,23 +2964,140 @@ function ProgramCampusMappingSection({
 
 function YearModal({ onClose, onDone, api, toast }: { onClose: () => void; onDone: () => void; api: ApiFn; toast: ToastFn }) {
   const [busy, setBusy] = useState(false)
+  const [name, setName] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [status, setStatus] = useState('ACTIVE')
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault(); setBusy(true)
-    const fd = Object.fromEntries(new FormData(e.currentTarget).entries())
-    const j = await api('/api/v1/academic-years', 'POST', fd)
-    setBusy(false)
-    if (j.success) { toast.success('Academic year created', String(j.data.name)); onDone() } else toast.error('Failed', j.error?.message)
+    e.preventDefault()
+    if (busy) return
+    setErrorMsg(null)
+
+    const cleanName = name.trim()
+    if (!cleanName) {
+      setErrorMsg('Academic Year name is required.')
+      return
+    }
+    if (!startDate) {
+      setErrorMsg('Start date is required.')
+      return
+    }
+    if (!endDate) {
+      setErrorMsg('End date is required.')
+      return
+    }
+    if (new Date(startDate) >= new Date(endDate)) {
+      setErrorMsg('End date must be after start date.')
+      return
+    }
+
+    setBusy(true)
+    try {
+      const payload = {
+        name: cleanName,
+        startDate,
+        endDate,
+        status,
+      }
+      const j = await api('/api/v1/academic-years', 'POST', payload)
+      if (j.success) {
+        toast.success('Academic Year created successfully.', String(j.data?.name || cleanName))
+        onClose()
+        onDone()
+      } else {
+        const msg = j.error?.message || 'Failed to create academic year.'
+        setErrorMsg(msg)
+        toast.error('Failed to create academic year', msg)
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'An unexpected error occurred while creating the academic year.'
+      setErrorMsg(msg)
+      toast.error('Error', msg)
+    } finally {
+      setBusy(false)
+    }
   }
+
   return (
     <Modal open onClose={onClose} title="Create Academic Year" icon={<CalendarPlus size={22} />} iconClass="ic-green">
       <form onSubmit={submit}>
+        {errorMsg && (
+          <div
+            className="alert alert-error"
+            role="alert"
+            style={{
+              padding: '10px 14px',
+              borderRadius: 8,
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              color: 'var(--red-600, #dc2626)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              marginBottom: 16,
+              fontSize: 13,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <AlertTriangle size={16} />
+            <span>{errorMsg}</span>
+          </div>
+        )}
         <div className="form-grid">
-          <div className="field"><label>Name <span className="req">*</span></label><input className="input" name="name" required placeholder="2026-27" /></div>
-          <div className="field"><label>Start date <span className="req">*</span></label><input className="input" name="startDate" type="date" required /></div>
-          <div className="field"><label>End date <span className="req">*</span></label><input className="input" name="endDate" type="date" required /></div>
+          <div className="field">
+            <label>Name <span className="req">*</span></label>
+            <input
+              className="input"
+              name="name"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value)
+                if (errorMsg) setErrorMsg(null)
+              }}
+              required
+              placeholder="e.g. 2026-27"
+              disabled={busy}
+            />
+          </div>
+          <div className="field">
+            <label>Start date <span className="req">*</span></label>
+            <GlobalDatePicker
+              name="startDate"
+              value={startDate}
+              onChange={(val) => {
+                setStartDate(val)
+                if (errorMsg) setErrorMsg(null)
+              }}
+              placeholder="Select start date"
+              required
+              disabled={busy}
+            />
+          </div>
+          <div className="field">
+            <label>End date <span className="req">*</span></label>
+            <GlobalDatePicker
+              name="endDate"
+              value={endDate}
+              onChange={(val) => {
+                setEndDate(val)
+                if (errorMsg) setErrorMsg(null)
+              }}
+              placeholder="Select end date"
+              minDate={startDate || undefined}
+              required
+              disabled={busy}
+            />
+          </div>
           <div className="field">
             <label>Initial Status</label>
-            <select className="select" name="status" defaultValue="ACTIVE">
+            <select
+              className="select"
+              name="status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              disabled={busy}
+            >
               <option value="PLANNED">Planned</option>
               <option value="ACTIVE">Active</option>
               <option value="CLOSING">Closing</option>
@@ -3101,8 +3108,10 @@ function YearModal({ onClose, onDone, api, toast }: { onClose: () => void; onDon
         </div>
         <p className="helper">The first academic year is automatically marked current. Terms can be added in Operating Configuration.</p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button type="submit" className={`btn btn-primary ${busy ? 'is-loading' : ''}`} disabled={busy}>Create Year</button>
+          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="submit" className={`btn btn-primary ${busy ? 'is-loading' : ''}`} disabled={busy}>
+            {busy ? 'Creating...' : 'Create Year'}
+          </button>
         </div>
       </form>
     </Modal>
@@ -3116,7 +3125,7 @@ function EventModal({ onClose, onDone, api, toast }: { onClose: () => void; onDo
     const fd = Object.fromEntries(new FormData(e.currentTarget).entries())
     const j = await api('/api/v1/calendar', 'POST', fd)
     setBusy(false)
-    if (j.success) { toast.success('Event added', String(fd.title)); onDone() } else toast.error('Failed', j.error?.message)
+    if (j.success) { toast.success('Event added', String(fd.title)); onClose(); onDone() } else toast.error('Failed', j.error?.message)
   }
   return (
     <Modal open onClose={onClose} title="Add Calendar Event" icon={<CalendarPlus size={22} />} iconClass="ic-cyan">
@@ -3147,7 +3156,7 @@ function FacilityModal({ onClose, onDone, api, toast }: { onClose: () => void; o
     const fd = Object.fromEntries(new FormData(e.currentTarget).entries())
     const j = await api('/api/v1/facilities', 'POST', fd)
     setBusy(false)
-    if (j.success) { toast.success('Facility registered', String(j.data.name)); onDone() } else toast.error('Failed', j.error?.message)
+    if (j.success) { toast.success('Facility registered', String(j.data.name)); onClose(); onDone() } else toast.error('Failed', j.error?.message)
   }
   return (
     <Modal open onClose={onClose} title="Register Facility / Area" icon={<DoorOpen size={22} />} iconClass="ic-orange">
@@ -3183,7 +3192,7 @@ function StaffModal({ onClose, onDone, api, toast }: { onClose: () => void; onDo
     const fd = Object.fromEntries(new FormData(e.currentTarget).entries())
     const j = await api('/api/v1/staff', 'POST', { ...fd, mode: 'new' })
     setBusy(false)
-    if (j.success) { toast.success('Staff created', String(fd.employeeCode)); onDone() } else toast.error('Failed', j.error?.message)
+    if (j.success) { toast.success('Staff created', String(fd.employeeCode)); onClose(); onDone() } else toast.error('Failed', j.error?.message)
   }
   return (
     <Modal open onClose={onClose} title="Add Staff Member" icon={<UserPlus size={22} />} iconClass="ic-purple" wide>
@@ -3878,21 +3887,6 @@ function ProgramWiseSubjectSection({
             </button>
           </div>
         </div>
-
-        {/* Clear Branch & Program Identification Line */}
-        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5 }}>
-          <span style={{ color: 'var(--foreground-muted)' }}>Configuring Context:</span>
-          <span className="badge b-primary">
-            {selectedBranchObj ? `Campus: ${selectedBranchObj.name}` : 'All Campuses (Shared Master)'}
-          </span>
-          <span>→</span>
-          <span className="badge b-neutral">
-            {selectedProgramObj ? `Program: ${selectedProgramObj.name}` : 'All Programs'}
-          </span>
-          <span className="helper" style={{ margin: 0 }}>
-            Subjects map to academic programs and are operational across campuses serving those programs.
-          </span>
-        </div>
       </div>
 
       <TableToolbar
@@ -4151,9 +4145,6 @@ function EditSubjectModal({ item, onClose, onDone, api, toast }: { item: Dict; o
               <Lock size={12} style={{ color: 'var(--text-muted)' }} /> Subject Code (Permanent Reference)
             </label>
             <input className="input" value={String(item.code || '')} disabled title="Subject code is a permanent reference identifier" />
-            <span className="helper" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              Permanent curriculum identifier used across lesson plans, report cards, and assessments.
-            </span>
           </div>
           <div className="field"><label>Short Name</label><input className="input" name="shortName" defaultValue={String(item.shortName || '')} /></div>
           <div className="field"><label>Subject Type <span className="req">*</span></label>

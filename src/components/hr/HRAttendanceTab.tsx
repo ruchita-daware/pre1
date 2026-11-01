@@ -14,6 +14,8 @@ import {
 } from 'lucide-react'
 import { Avatar, StatusBadge, IconButton } from '@/components/preone/ui'
 import { DataTable, Column } from '@/components/preone/DataTable'
+import { GlobalDatePicker } from '@/components/ui/GlobalDatePicker'
+import { AttendanceCalculator } from '@/lib/hr/attendance-calculator'
 import type { AttendanceRecord, BranchOption } from './types'
 import { timeOf } from './types'
 
@@ -65,31 +67,12 @@ export function HRAttendanceTab({
     onDateChange(new Date().toISOString().split('T')[0])
   }
 
-  // Summary counts for the selected date
+  // Summary counts for the selected date calculated via Canonical Attendance Engine
   const summary = useMemo(() => {
-    if (!attendanceRecords) return { total: 0, present: 0, late: 0, halfDay: 0, onLeave: 0, absent: 0 }
-    let present = 0
-    let late = 0
-    let halfDay = 0
-    let onLeave = 0
-    let absent = 0
-
-    for (const r of attendanceRecords) {
-      if (r.status === 'PRESENT') present++
-      else if (r.status === 'LATE') late++
-      else if (r.status === 'HALF_DAY') halfDay++
-      else if (r.status === 'ON_LEAVE') onLeave++
-      else if (r.status === 'ABSENT' || r.status === 'UNMARKED') absent++
+    if (!attendanceRecords) {
+      return { total: 0, present: 0, late: 0, halfDay: 0, fullDay: 0, onLeave: 0, absent: 0, missingCheckout: 0 }
     }
-
-    return {
-      total: attendanceRecords.length,
-      present,
-      late,
-      halfDay,
-      onLeave,
-      absent,
-    }
+    return AttendanceCalculator.aggregateRecords(attendanceRecords)
   }, [attendanceRecords])
 
   // Columns definition
@@ -192,6 +175,12 @@ export function HRAttendanceTab({
   const recordsToDisplay = useMemo(() => {
     if (!attendanceRecords) return null
     if (statusFilter === 'ALL') return attendanceRecords
+    if (statusFilter === 'MISSING_CHECKOUT') {
+      return attendanceRecords.filter((r) => r.isMissingCheckout || (r.checkIn && !r.checkOut))
+    }
+    if (statusFilter === 'FULL_DAY') {
+      return attendanceRecords.filter((r) => (r.status === 'PRESENT' || r.status === 'LATE') && (r.workedHours ?? 0) >= 7.0)
+    }
     return attendanceRecords.filter((r) => r.status === statusFilter)
   }, [attendanceRecords, statusFilter])
 
@@ -209,13 +198,11 @@ export function HRAttendanceTab({
             <ChevronLeft size={16} />
           </button>
 
-          <div className="flex items-center gap-1.5">
-            <Calendar size={15} className="text-primary shrink-0" />
-            <input
-              type="date"
-              className="input text-xs py-1 px-3 h-9 font-medium cursor-pointer rounded-xl bg-background/80 border border-border/80"
+          <div className="w-[160px]">
+            <GlobalDatePicker
               value={date}
-              onChange={(e) => onDateChange(e.target.value)}
+              onChange={onDateChange}
+              size="sm"
             />
           </div>
 
@@ -254,16 +241,22 @@ export function HRAttendanceTab({
           <span className="badge b-danger text-xs font-semibold px-2.5 py-1">
             Absent: {summary.absent}
           </span>
+          {summary.missingCheckout > 0 && (
+            <span className="badge b-danger text-xs font-semibold px-2.5 py-1 border border-danger/40">
+              Missing Punch: {summary.missingCheckout}
+            </span>
+          )}
         </div>
       </div>
 
       {/* ── 2. Filters & Attendance Table ── */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         {/* Campus Filter */}
         <select
-          className="select text-xs py-1.5 px-3 h-9 font-medium rounded-xl bg-background/80 border border-border/80"
+          className="select !w-auto min-w-[130px] max-w-[180px] text-xs py-1.5 px-3 h-9 font-medium rounded-xl bg-background/80 border border-border/80 cursor-pointer shadow-2xs hover:border-border transition-colors focus:ring-1 focus:ring-primary/30"
           value={branchFilter}
           onChange={(e) => onBranchFilterChange(e.target.value)}
+          aria-label="Filter by campus"
         >
           <option value="ALL">All Campuses</option>
           {branches.map((b) => (
@@ -275,15 +268,18 @@ export function HRAttendanceTab({
 
         {/* Status Filter */}
         <select
-          className="select text-xs py-1.5 px-3 h-9 font-medium rounded-xl bg-background/80 border border-border/80"
+          className="select !w-auto min-w-[120px] max-w-[170px] text-xs py-1.5 px-3 h-9 font-medium rounded-xl bg-background/80 border border-border/80 cursor-pointer shadow-2xs hover:border-border transition-colors focus:ring-1 focus:ring-primary/30"
           value={statusFilter}
           onChange={(e) => onStatusFilterChange(e.target.value)}
+          aria-label="Filter by status"
         >
           <option value="ALL">All Statuses</option>
           <option value="PRESENT">Present Only</option>
+          <option value="FULL_DAY">Full-Day Staff</option>
           <option value="LATE">Late Arrivals</option>
           <option value="HALF_DAY">Half Day</option>
           <option value="ON_LEAVE">On Leave</option>
+          <option value="MISSING_CHECKOUT">Missing Check-outs</option>
           <option value="ABSENT">Absent / Unmarked</option>
         </select>
       </div>

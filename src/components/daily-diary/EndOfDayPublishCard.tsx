@@ -85,17 +85,17 @@ export function EndOfDayPublishCard({
                 {titleText}
               </h3>
             </div>
-            <p className="text-xs text-muted-foreground pl-10">
+            <p className="text-xs text-muted-foreground pl-0 sm:pl-10 pt-1 sm:pt-0">
               End-of-day parent report publishing. Review child attendance, meals, naps, activities, and observations before sending.
             </p>
           </div>
 
           {/* Action Button */}
-          <div className="flex items-center gap-2 shrink-0 sm:self-center">
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => setModalOpen(true)}
-              className="btn btn-sm btn-primary rounded-xl font-bold flex items-center gap-2 shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-all"
+              className="w-full sm:w-auto justify-center btn btn-sm btn-primary rounded-xl font-bold flex items-center gap-2 shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-all"
             >
               <Send className="w-4 h-4" />
               <span>Review & Send to Parents</span>

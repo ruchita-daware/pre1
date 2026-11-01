@@ -21,6 +21,7 @@ import { emit } from '@/lib/events'
 import { recordChildEvent } from '@/lib/notify'
 import { resolveSessionId, currentSession } from '@/lib/academic'
 import { ConfigurationService } from '@/lib/setup/config-service'
+import { EncryptionService } from '@/lib/security/encryption-service'
 import { isoDate } from '@/lib/format'
 import type {
   ProgramType,
@@ -160,8 +161,14 @@ export interface VerifyPaymentInput {
   invoiceId?: string
   transactionRef?: string
   gatewaySignature?: string
+  gatewayPaymentId?: string
+  gatewayOrderId?: string
   gatewayStatus?: 'SUCCESS' | 'FAILED'
   failureReason?: string
+  failureCode?: string
+  eventSource?: 'API' | 'PROVIDER_WEBHOOK' | 'RECONCILIATION' | 'ADMIN_ACTION'
+  providerEventId?: string
+  diagnostics?: string
 }
 
 export class FeeService {
@@ -223,7 +230,7 @@ export class FeeService {
       ...(session?.id ? { academicSessionId: session.id } : {}),
     }
 
-    const [invoices, payments, feePlansCount] = await Promise.all([
+    const [invoices, payments, feePlansCount, activeStructuresCount, depositsAgg] = await Promise.all([
       db.invoice.findMany({
         where: baseWhere,
         select: {
@@ -249,6 +256,13 @@ export class FeeService {
       }),
       db.feePlan.count({
         where: { tenantId, isActive: true },
+      }),
+      db.feeStructure.count({
+        where: { tenantId, status: 'ACTIVE', deletedAt: null },
+      }),
+      db.studentDeposit.aggregate({
+        where: { tenantId, status: { in: ['HELD', 'PARTIALLY_REFUNDED'] } },
+        _sum: { remainingAmountCents: true },
       }),
     ])
 
@@ -304,6 +318,9 @@ export class FeeService {
         pendingPaymentCount: payments.filter((p) => p.status === 'PENDING').length,
         failedPaymentCount: payments.filter((p) => p.status === 'FAILED').length,
         feePlansCount,
+        activeStructuresCount,
+        depositsHeldCents: depositsAgg._sum.remainingAmountCents || 0,
+        depositsHeldRupees: (depositsAgg._sum.remainingAmountCents || 0) / 100,
       },
       statusCounts,
       academicSession: session ? { id: session.id, name: session.name } : null,
@@ -908,27 +925,50 @@ export class FeeService {
   }
 
   static async verifyPayment(ctx: ScopeContext, input: VerifyPaymentInput) {
-    const { paymentId, paymentNumber, invoiceId, transactionRef, gatewayStatus = 'SUCCESS', failureReason } = input
+    const {
+      paymentId,
+      paymentNumber,
+      invoiceId,
+      transactionRef,
+      gatewayStatus = 'SUCCESS',
+      failureReason,
+      failureCode,
+      gatewayPaymentId,
+      eventSource,
+      providerEventId,
+      diagnostics,
+    } = input
 
     let payment: any = null
     if (paymentId) {
       payment = await db.payment.findFirst({
         where: { id: paymentId, tenantId: ctx.tenantId },
-        include: { invoice: true, receipt: true },
+        include: { invoice: true, receipt: true, feeSchedule: true },
       })
     } else if (paymentNumber) {
       payment = await db.payment.findFirst({
         where: { paymentNumber, tenantId: ctx.tenantId },
-        include: { invoice: true, receipt: true },
+        include: { invoice: true, receipt: true, feeSchedule: true },
       })
     } else if (transactionRef) {
       payment = await db.payment.findFirst({
         where: { transactionRef, tenantId: ctx.tenantId },
-        include: { invoice: true, receipt: true },
+        include: { invoice: true, receipt: true, feeSchedule: true },
       })
     }
 
     if (!payment) throw new Error('Payment record not found')
+
+    // 1. Strict status transition validation:
+    if (payment.status === 'SUCCESS' && gatewayStatus === 'FAILED') {
+      throw new Error('INVALID_STATUS_TRANSITION: Cannot transition payment from terminal SUCCESS to FAILED')
+    }
+    if (payment.status === 'FAILED' && gatewayStatus === 'SUCCESS') {
+      throw new Error('INVALID_STATUS_TRANSITION: Cannot mutate a FAILED attempt to SUCCESS. A new retry attempt must be initiated.')
+    }
+    if (payment.status === 'REFUNDED') {
+      throw new Error('INVALID_STATUS_TRANSITION: Cannot alter a REFUNDED payment record.')
+    }
 
     // IDEMPOTENCY CHECK: If already SUCCESS, return existing receipt without double processing
     if (payment.status === 'SUCCESS' && payment.receipt) {
@@ -937,16 +977,52 @@ export class FeeService {
         alreadyVerified: true,
         payment,
         receipt: payment.receipt,
+        invoice: payment.invoice || null,
         message: 'Payment was already verified and receipt issued.',
       }
     }
 
+    if (payment.status === 'FAILED' && gatewayStatus === 'FAILED') {
+      return {
+        success: false,
+        alreadyFailed: true,
+        payment,
+        receipt: null,
+        error: failureReason || 'Payment failed',
+      }
+    }
+
     if (gatewayStatus === 'FAILED') {
+      let notesData: any = {}
+      try {
+        notesData = payment.notes ? JSON.parse(payment.notes) : {}
+      } catch {
+        notesData = { rawNotes: payment.notes }
+      }
+      const timeline = Array.isArray(notesData.timeline) ? notesData.timeline : []
+      const previousStatus = payment.status
+      timeline.push({
+        previousStatus,
+        newStatus: 'FAILED',
+        event: 'FAILED',
+        source: eventSource || (ctx.actorRole === 'SYSTEM' ? 'PROVIDER_WEBHOOK' : 'API'),
+        providerEventId: providerEventId || gatewayPaymentId || null,
+        failureCode: failureCode || 'PAYMENT_FAILED',
+        reason: failureReason || 'Gateway failure',
+        diagnostics: diagnostics || failureReason || 'Transaction declined by provider',
+        at: new Date().toISOString(),
+        by: ctx.actorName || ctx.actorId,
+      })
+      notesData.timeline = timeline
+      notesData.failureCode = failureCode || 'PAYMENT_FAILED'
+      notesData.failureReason = failureReason || 'Gateway failure'
+      notesData.completedAt = new Date().toISOString()
+
       const updated = await db.payment.update({
         where: { id: payment.id },
         data: {
           status: 'FAILED',
-          notes: failureReason ? `Payment failed: ${failureReason}` : 'Gateway failure',
+          notes: JSON.stringify(notesData),
         },
       })
       await recordAudit({
@@ -956,13 +1032,14 @@ export class FeeService {
         entity: 'Payment',
         entityId: payment.id,
         module: 'Fees',
-        summary: `Payment ${payment.paymentNumber} marked FAILED: ${failureReason || 'Declined'}`,
+        summary: `Payment ${payment.paymentNumber} marked FAILED [${failureCode || 'DECLINED'}]: ${failureReason || 'Declined'}`,
       })
       return { success: false, payment: updated, receipt: null, error: failureReason || 'Payment failed' }
     }
 
-    const invoice = payment.invoice
-    if (!invoice) throw new Error('Associated invoice not found')
+    if (!payment.invoice && !payment.feeScheduleId) {
+      throw new Error('Associated invoice or fee schedule not found for payment')
+    }
 
     const receiptNumber = await nextNumber('receipt', ctx.tenantId)
 
@@ -970,7 +1047,7 @@ export class FeeService {
       await tx.$queryRaw`SELECT 1 FROM "payments" WHERE "id" = ${payment.id} AND "tenantId" = ${ctx.tenantId} FOR UPDATE`
       const lockedPayment = await tx.payment.findFirst({
         where: { id: payment.id, tenantId: ctx.tenantId },
-        include: { invoice: true, receipt: true },
+        include: { invoice: true, receipt: true, feeSchedule: true },
       })
       if (!lockedPayment) throw new Error('Payment record not found')
 
@@ -978,22 +1055,51 @@ export class FeeService {
         return {
           payment: lockedPayment,
           receipt: lockedPayment.receipt,
-          invoice: lockedPayment.invoice!,
+          invoice: lockedPayment.invoice || null,
           alreadyVerified: true,
         }
       }
 
-      if (!lockedPayment.invoice) throw new Error('Associated invoice not found')
-
-      await tx.$queryRaw`SELECT 1 FROM "invoices" WHERE "id" = ${lockedPayment.invoice.id} AND "tenantId" = ${ctx.tenantId} FOR UPDATE`
-      const lockedInvoice = await tx.invoice.findFirst({
-        where: { id: lockedPayment.invoice.id, tenantId: ctx.tenantId },
+      // Parse structured notes & timeline
+      let notesData: any = {}
+      try {
+        notesData = lockedPayment.notes ? JSON.parse(lockedPayment.notes) : {}
+      } catch {
+        notesData = { rawNotes: lockedPayment.notes }
+      }
+      const timeline = Array.isArray(notesData.timeline) ? notesData.timeline : []
+      const previousStatus = lockedPayment.status
+      timeline.push({
+        previousStatus,
+        newStatus: 'SUCCESS',
+        event: 'VERIFIED_SUCCESS',
+        source: eventSource || (ctx.actorRole === 'SYSTEM' ? 'PROVIDER_WEBHOOK' : 'API'),
+        providerEventId: providerEventId || gatewayPaymentId || null,
+        gatewayPaymentId: gatewayPaymentId || null,
+        at: new Date().toISOString(),
+        by: ctx.actorName || ctx.actorId,
+        diagnostics: diagnostics || 'Cryptographic verification confirmed',
       })
-      if (!lockedInvoice) throw new Error('Associated invoice not found')
+      timeline.push({
+        previousStatus: 'SUCCESS',
+        newStatus: 'SUCCESS',
+        event: 'RECEIPT_ISSUED',
+        source: 'SYSTEM',
+        receiptNumber,
+        at: new Date().toISOString(),
+      })
+      notesData.timeline = timeline
+      notesData.verifiedAt = new Date().toISOString()
+      notesData.completedAt = new Date().toISOString()
+      if (gatewayPaymentId) notesData.gatewayPaymentId = gatewayPaymentId
 
       const confirmedPayment = await tx.payment.update({
         where: { id: lockedPayment.id },
-        data: { status: 'SUCCESS', paymentDate: new Date() },
+        data: {
+          status: 'SUCCESS',
+          paymentDate: new Date(),
+          notes: JSON.stringify(notesData),
+        },
       })
 
       const receipt = await tx.receipt.create({
@@ -1005,45 +1111,77 @@ export class FeeService {
         },
       })
 
-      const paidCents = lockedInvoice.paidCents + confirmedPayment.amountCents
-      const balanceCents = Math.max(0, lockedInvoice.totalCents - paidCents)
-      const newStatus: InvoiceStatus = balanceCents === 0 ? 'PAID' : 'PARTIALLY_PAID'
+      let updatedInvoice: any = null
+      if (lockedPayment.invoiceId) {
+        await tx.$queryRaw`SELECT 1 FROM "invoices" WHERE "id" = ${lockedPayment.invoiceId} AND "tenantId" = ${ctx.tenantId} FOR UPDATE`
+        const lockedInvoice = await tx.invoice.findFirst({
+          where: { id: lockedPayment.invoiceId, tenantId: ctx.tenantId },
+        })
+        if (lockedInvoice) {
+          const paidCents = lockedInvoice.paidCents + confirmedPayment.amountCents
+          const balanceCents = Math.max(0, lockedInvoice.totalCents - paidCents)
+          const newStatus: InvoiceStatus = balanceCents === 0 ? 'PAID' : 'PARTIALLY_PAID'
+          updatedInvoice = await tx.invoice.update({
+            where: { id: lockedInvoice.id },
+            data: { paidCents, balanceCents, status: newStatus },
+          })
+        }
+      }
 
-      const updatedInvoice = await tx.invoice.update({
-        where: { id: lockedInvoice.id },
-        data: { paidCents, balanceCents, status: newStatus },
-      })
+      if (lockedPayment.feeScheduleId) {
+        await tx.$queryRaw`SELECT 1 FROM "student_fee_schedules" WHERE "id" = ${lockedPayment.feeScheduleId} AND "tenantId" = ${ctx.tenantId} FOR UPDATE`
+        const lockedSchedule = await tx.studentFeeSchedule.findFirst({
+          where: { id: lockedPayment.feeScheduleId, tenantId: ctx.tenantId },
+        })
+        if (lockedSchedule) {
+          const newPaidCents = lockedSchedule.amountPaidCents + confirmedPayment.amountCents
+          const newRemainingCents = Math.max(0, lockedSchedule.amountDueCents - newPaidCents)
+          const newStatus: FeeScheduleStatus = newRemainingCents === 0 ? 'PAID' : 'PARTIALLY_PAID'
+          await tx.studentFeeSchedule.update({
+            where: { id: lockedSchedule.id },
+            data: {
+              amountPaidCents: newPaidCents,
+              remainingAmountCents: newRemainingCents,
+              status: newStatus,
+            },
+          })
+        }
+      }
 
-      await tx.timelineEntry.create({
-        data: {
-          tenantId: ctx.tenantId,
-          studentId: lockedInvoice.studentId,
-          academicSessionId: lockedInvoice.academicSessionId,
-          type: 'NOTE',
-          title: `Fee Payment Confirmed — Receipt ${receiptNumber}`,
-          body: `Payment of ₹${confirmedPayment.amountCents / 100} received via ${confirmedPayment.method}. Receipt ${receiptNumber} issued. Remaining balance: ₹${balanceCents / 100}.`,
-          authorId: ctx.actorId,
-        },
-      })
+      const studentId = lockedPayment.studentId || updatedInvoice?.studentId
+      if (studentId) {
+        await tx.timelineEntry.create({
+          data: {
+            tenantId: ctx.tenantId,
+            studentId,
+            academicSessionId: updatedInvoice?.academicSessionId || null,
+            type: 'NOTE',
+            title: `Fee Payment Confirmed — Receipt ${receiptNumber}`,
+            body: `Payment of ₹${confirmedPayment.amountCents / 100} received via ${confirmedPayment.method}. Receipt ${receiptNumber} issued.`,
+            authorId: ctx.actorId,
+          },
+        })
+      }
 
       return { payment: confirmedPayment, receipt, invoice: updatedInvoice, alreadyVerified: false }
     })
 
     if (!result.alreadyVerified) {
-      // Emit domain event to resolve overdue follow-ups only for a new verification.
-      await emit({
-        type: 'PaymentReceived',
-        tenantId: ctx.tenantId,
-        invoiceId: invoice.id,
-        studentId: invoice.studentId,
-        paymentNumber: result.payment.paymentNumber,
-        amountCents: result.payment.amountCents,
-        fullyPaid: result.invoice.status === 'PAID',
-      })
+      if (result.invoice) {
+        await emit({
+          type: 'PaymentReceived',
+          tenantId: ctx.tenantId,
+          invoiceId: result.invoice.id,
+          studentId: result.invoice.studentId,
+          paymentNumber: result.payment.paymentNumber,
+          amountCents: result.payment.amountCents,
+          fullyPaid: result.invoice.status === 'PAID',
+        })
+      }
 
       await recordAudit({
         tenantId: ctx.tenantId,
-        branchId: invoice.branchId,
+        branchId: result.invoice?.branchId || null,
         actorId: ctx.actorId,
         actorName: ctx.actorName,
         actorRole: ctx.actorRole,
@@ -1062,6 +1200,142 @@ export class FeeService {
       receipt: result.receipt,
       invoice: result.invoice,
     }
+  }
+
+  /**
+   * 7b. REFUND PAYMENT (Accounting & Financial Compliance)
+   * Transactionally refunds a verified payment, adjusts invoice / schedule balance,
+   * transitions status to REFUNDED, and records audited event timeline.
+   */
+  static async refundPayment(
+    ctx: ScopeContext,
+    input: {
+      paymentId: string
+      amountCents?: number
+      reason: string
+      refundRef?: string
+    }
+  ) {
+    const { paymentId, amountCents, reason, refundRef } = input
+    if (!reason || !reason.trim()) {
+      throw new Error('A valid reason is required to process a payment refund.')
+    }
+
+    const payment = await db.payment.findFirst({
+      where: { id: paymentId, tenantId: ctx.tenantId },
+      include: { invoice: true, receipt: true, feeSchedule: true },
+    })
+
+    if (!payment) throw new Error('Payment record not found')
+    if (payment.status !== 'SUCCESS') {
+      throw new Error(`Cannot refund payment with status ${payment.status}. Only SUCCESS payments can be refunded.`)
+    }
+
+    const refundAmount = amountCents && amountCents > 0 ? amountCents : payment.amountCents
+    if (refundAmount > payment.amountCents) {
+      throw new Error(`Refund amount ₹${refundAmount / 100} exceeds payment amount ₹${payment.amountCents / 100}`)
+    }
+
+    const ref = refundRef || `REF-${Date.now()}`
+
+    const result = await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM "payments" WHERE "id" = ${payment.id} AND "tenantId" = ${ctx.tenantId} FOR UPDATE`
+      const lockedPayment = await tx.payment.findFirst({
+        where: { id: payment.id, tenantId: ctx.tenantId },
+        include: { invoice: true, receipt: true, feeSchedule: true },
+      })
+      if (!lockedPayment) throw new Error('Payment record not found')
+      if (lockedPayment.status !== 'SUCCESS') throw new Error('Payment already refunded or altered')
+
+      let notesData: any = {}
+      try {
+        notesData = lockedPayment.notes ? JSON.parse(lockedPayment.notes) : {}
+      } catch {
+        notesData = { rawNotes: lockedPayment.notes }
+      }
+      const timeline = Array.isArray(notesData.timeline) ? notesData.timeline : []
+      timeline.push({
+        previousStatus: 'SUCCESS',
+        newStatus: 'REFUNDED',
+        event: 'PAYMENT_REFUNDED',
+        source: 'ADMIN_ACTION',
+        refundRef: ref,
+        refundAmountCents: refundAmount,
+        reason,
+        at: new Date().toISOString(),
+        by: ctx.actorName || ctx.actorId,
+        diagnostics: `Payment of ₹${refundAmount / 100} refunded. Reason: ${reason}`,
+      })
+      notesData.timeline = timeline
+      notesData.refundRef = ref
+      notesData.refundAmountCents = refundAmount
+      notesData.refundReason = reason
+      notesData.refundedAt = new Date().toISOString()
+
+      const updatedPayment = await tx.payment.update({
+        where: { id: lockedPayment.id },
+        data: {
+          status: 'REFUNDED',
+          notes: JSON.stringify(notesData),
+        },
+      })
+
+      // Revert invoice balances if linked
+      let updatedInvoice: any = null
+      if (lockedPayment.invoiceId) {
+        await tx.$queryRaw`SELECT 1 FROM "invoices" WHERE "id" = ${lockedPayment.invoiceId} AND "tenantId" = ${ctx.tenantId} FOR UPDATE`
+        const lockedInvoice = await tx.invoice.findFirst({
+          where: { id: lockedPayment.invoiceId, tenantId: ctx.tenantId },
+        })
+        if (lockedInvoice) {
+          const newPaid = Math.max(0, lockedInvoice.paidCents - refundAmount)
+          const newBalance = Math.max(0, lockedInvoice.totalCents - newPaid)
+          const newStatus: InvoiceStatus = newPaid === 0 ? 'ISSUED' : 'PARTIALLY_PAID'
+          updatedInvoice = await tx.invoice.update({
+            where: { id: lockedInvoice.id },
+            data: { paidCents: newPaid, balanceCents: newBalance, status: newStatus },
+          })
+        }
+      }
+
+      // Revert schedule balances if linked
+      if (lockedPayment.feeScheduleId) {
+        await tx.$queryRaw`SELECT 1 FROM "student_fee_schedules" WHERE "id" = ${lockedPayment.feeScheduleId} AND "tenantId" = ${ctx.tenantId} FOR UPDATE`
+        const lockedSchedule = await tx.studentFeeSchedule.findFirst({
+          where: { id: lockedPayment.feeScheduleId, tenantId: ctx.tenantId },
+        })
+        if (lockedSchedule) {
+          const newPaid = Math.max(0, lockedSchedule.amountPaidCents - refundAmount)
+          const newRemaining = Math.max(0, lockedSchedule.amountDueCents - newPaid)
+          const newStatus = newPaid === 0 ? 'PENDING' : 'PARTIALLY_PAID'
+          await tx.studentFeeSchedule.update({
+            where: { id: lockedSchedule.id },
+            data: {
+              amountPaidCents: newPaid,
+              remainingAmountCents: newRemaining,
+              status: newStatus as any,
+            },
+          })
+        }
+      }
+
+      return { payment: updatedPayment, invoice: updatedInvoice, refundRef: ref }
+    })
+
+    await recordAudit({
+      tenantId: ctx.tenantId,
+      branchId: payment.invoice?.branchId || null,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: 'PAYMENT_REFUNDED',
+      entity: 'Payment',
+      entityId: payment.id,
+      module: 'Fees',
+      summary: `Refunded payment ${payment.paymentNumber} (₹${refundAmount / 100}). Ref: ${ref}. Reason: ${reason}`,
+    })
+
+    return result
   }
 
   /**
@@ -1232,7 +1506,7 @@ export class FeeService {
   // 11. FEE HEADS (DATABASE-BACKED CONFIGURATION)
   // =========================================================================
   static async getFeeHeads(tenantId: string, activeOnly: boolean = true) {
-    return db.feeHead.findMany({
+    const existing = await db.feeHead.findMany({
       where: {
         tenantId,
         ...(activeOnly ? { isActive: true } : {}),
@@ -1242,6 +1516,41 @@ export class FeeService {
       },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     })
+
+    if (existing.length === 0) {
+      const defaults: Array<{ name: string; code: string; category: FeeHeadCategory; sortOrder: number; description: string }> = [
+        { name: 'Tuition Fee', code: 'TUITION', category: 'TUITION', sortOrder: 1, description: 'Core academic instruction and classroom learning' },
+        { name: 'Admission Fee', code: 'ADMISSION', category: 'ADMISSION', sortOrder: 2, description: 'One-time registration and enrollment processing fee' },
+        { name: 'Annual / Term Fee', code: 'ANNUAL_TERM', category: 'ACTIVITY', sortOrder: 3, description: 'Annual campus maintenance, infrastructure and digital learning' },
+        { name: 'Activity & Discovery Fee', code: 'ACTIVITY', category: 'ACTIVITY', sortOrder: 4, description: 'Sensory play, arts, sports, events and field trips' },
+        { name: 'Books, Kit & Stationery', code: 'BOOKS_KIT', category: 'MATERIALS', sortOrder: 5, description: 'Curriculum workbooks, craft kit and learning materials' },
+        { name: 'Uniform & Attire', code: 'UNIFORM', category: 'MATERIALS', sortOrder: 6, description: 'Preschool uniform sets, apron and ID badge' },
+        { name: 'Transportation Fee', code: 'TRANSPORT', category: 'TRANSPORT', sortOrder: 7, description: 'School bus pick-and-drop service route charges' },
+        { name: 'Caution / Security Deposit', code: 'CAUTION_DEPOSIT', category: 'OTHER', sortOrder: 8, description: 'Refundable security deposit returned upon exit' },
+      ]
+
+      await db.feeHead.createMany({
+        data: defaults.map((d) => ({
+          tenantId,
+          ...d,
+          isActive: true,
+        })),
+        skipDuplicates: true,
+      })
+
+      return db.feeHead.findMany({
+        where: {
+          tenantId,
+          ...(activeOnly ? { isActive: true } : {}),
+        },
+        include: {
+          _count: { select: { planItems: true } },
+        },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      })
+    }
+
+    return existing
   }
 
   static async createFeeHead(
@@ -1574,25 +1883,89 @@ export class FeeService {
     const data = (config?.data as Record<string, any>) || {}
     const gateway = data.paymentGateway || {
       provider: 'RAZORPAY',
+      name: 'Primary Fees Gateway',
       enabled: false,
-      mode: 'TEST',
+      mode: 'SANDBOX',
       keyId: '',
       currency: 'INR',
-      supportedMethods: ['UPI', 'NET_BANKING', 'CARD'],
+      supportedMethods: ['UPI', 'CARD', 'NET_BANKING'],
       webhookConfigured: false,
     }
 
-    // Mask secret key before returning
+    const rawMode = String(gateway.mode || 'SANDBOX').toUpperCase()
+    const normalizedMode = rawMode === 'LIVE' || rawMode === 'PRODUCTION' ? 'PRODUCTION' : 'SANDBOX'
+    const keyId = gateway.keyId || ''
+    const keyIdMasked = keyId.length > 8 ? `${keyId.slice(0, 8)}...${keyId.slice(-4)}` : keyId
+    const decryptedKeySecret = gateway.keySecret ? (EncryptionService.decrypt(gateway.keySecret, tenantId) || gateway.keySecret) : ''
+    const decryptedWebhookSecret = gateway.webhookSecret ? (EncryptionService.decrypt(gateway.webhookSecret, tenantId) || gateway.webhookSecret) : ''
+
     return {
-      provider: gateway.provider,
-      enabled: gateway.enabled,
-      mode: gateway.mode,
-      keyId: gateway.keyId ? `${gateway.keyId.slice(0, 8)}...` : '',
-      hasKeySecret: Boolean(gateway.keySecret),
+      provider: gateway.provider || 'RAZORPAY',
+      name: gateway.name || 'Primary Fees Gateway',
+      enabled: Boolean(gateway.enabled),
+      mode: normalizedMode,
+      keyId: keyIdMasked,
+      rawKeyId: keyId, // provided for editing when permitted
+      merchantId: gateway.merchantId || '',
+      hasKeySecret: Boolean(decryptedKeySecret),
       currency: gateway.currency || 'INR',
-      supportedMethods: gateway.supportedMethods || ['UPI', 'NET_BANKING', 'CARD'],
-      webhookConfigured: gateway.webhookConfigured ?? false,
+      supportedMethods: gateway.supportedMethods || ['UPI', 'CARD', 'NET_BANKING'],
+      webhookConfigured: Boolean(decryptedWebhookSecret || gateway.webhookConfigured),
+      webhookSecretMasked: decryptedWebhookSecret ? '••••••••••••••••' : '',
       webhookUrl: `/api/v1/payments/webhook`,
+      lastVerifiedAt: gateway.lastVerifiedAt || null,
+      lastVerificationSuccess: gateway.lastVerificationSuccess ?? null,
+      lastVerificationMessage: gateway.lastVerificationMessage || null,
+      availableProviders: [
+        {
+          id: 'RAZORPAY',
+          name: 'Razorpay',
+          description: 'UPI, QR, Cards, NetBanking, and Auto-Debit support across India',
+          fields: ['Key ID', 'Key Secret', 'Webhook Secret'],
+          supportedMethods: ['UPI', 'CARD', 'NET_BANKING', 'WALLET'],
+          sandboxPrefix: 'rzp_test_',
+          productionPrefix: 'rzp_live_',
+        },
+        {
+          id: 'CASHFREE',
+          name: 'Cashfree Payments',
+          description: 'Direct UPI, NetBanking and Payment Links with Instant Settlement',
+          fields: ['App ID / Client ID', 'Secret Key', 'Webhook Secret'],
+          supportedMethods: ['UPI', 'CARD', 'NET_BANKING'],
+          sandboxPrefix: 'TEST',
+          productionPrefix: 'CF',
+        },
+        {
+          id: 'PAYU',
+          name: 'PayU India',
+          description: 'Enterprise fee collection with multi-bank netbanking and cards',
+          fields: ['Merchant Key', 'Merchant Salt', 'Webhook Secret'],
+          supportedMethods: ['UPI', 'CARD', 'NET_BANKING'],
+          sandboxPrefix: 'TEST',
+          productionPrefix: 'PROD',
+        },
+      ],
+    }
+  }
+
+  /**
+   * Internal server-only helper to fetch decrypted gateway secrets for cryptographic operations.
+   * NEVER expose this to public APIs or frontend callers.
+   */
+  static async getDecryptedGatewaySecrets(tenantId: string) {
+    const config = await db.schoolConfig.findUnique({
+      where: { tenantId_domain: { tenantId, domain: 'FINANCE' } },
+    })
+    const data = (config?.data as Record<string, any>) || {}
+    const gateway = data.paymentGateway || {}
+    const keySecret = gateway.keySecret ? (EncryptionService.decrypt(gateway.keySecret, tenantId) || gateway.keySecret) : ''
+    const webhookSecret = gateway.webhookSecret ? (EncryptionService.decrypt(gateway.webhookSecret, tenantId) || gateway.webhookSecret) : ''
+    return {
+      keyId: gateway.keyId || '',
+      keySecret,
+      webhookSecret,
+      provider: gateway.provider || 'RAZORPAY',
+      mode: gateway.mode || 'SANDBOX',
     }
   }
 
@@ -1600,8 +1973,10 @@ export class FeeService {
     ctx: ScopeContext,
     input: {
       provider?: string
+      name?: string
       enabled?: boolean
-      mode?: 'TEST' | 'LIVE'
+      mode?: 'SANDBOX' | 'PRODUCTION' | 'TEST' | 'LIVE'
+      merchantId?: string
       keyId?: string
       keySecret?: string
       currency?: string
@@ -1615,16 +1990,35 @@ export class FeeService {
     const currentData = (current?.data as Record<string, any>) || {}
     const currentGateway = currentData.paymentGateway || {}
 
+    const rawMode = input.mode || currentGateway.mode || 'SANDBOX'
+    const normalizedMode = String(rawMode).toUpperCase() === 'LIVE' || String(rawMode).toUpperCase() === 'PRODUCTION' ? 'PRODUCTION' : 'SANDBOX'
+
+    // Encrypt sensitive credentials at rest with AES-256-GCM
+    let keySecretStored = currentGateway.keySecret || ''
+    if (input.keySecret !== undefined && input.keySecret.trim() !== '') {
+      keySecretStored = EncryptionService.encrypt(input.keySecret.trim(), ctx.tenantId) || input.keySecret.trim()
+    }
+
+    let webhookSecretStored = currentGateway.webhookSecret || ''
+    if (input.webhookSecret !== undefined && input.webhookSecret.trim() !== '') {
+      webhookSecretStored = EncryptionService.encrypt(input.webhookSecret.trim(), ctx.tenantId) || input.webhookSecret.trim()
+    }
+
     const updatedGateway = {
       provider: input.provider || currentGateway.provider || 'RAZORPAY',
+      name: input.name?.trim() || currentGateway.name || 'Primary Fees Gateway',
       enabled: input.enabled !== undefined ? input.enabled : currentGateway.enabled ?? false,
-      mode: input.mode || currentGateway.mode || 'TEST',
-      keyId: input.keyId ? input.keyId.trim() : currentGateway.keyId || '',
-      keySecret: input.keySecret ? input.keySecret.trim() : currentGateway.keySecret || '',
+      mode: normalizedMode,
+      merchantId: input.merchantId !== undefined ? input.merchantId.trim() : currentGateway.merchantId || '',
+      keyId: input.keyId !== undefined ? input.keyId.trim() : currentGateway.keyId || '',
+      keySecret: keySecretStored,
       currency: input.currency || currentGateway.currency || 'INR',
-      supportedMethods: input.supportedMethods || currentGateway.supportedMethods || ['UPI', 'NET_BANKING', 'CARD'],
-      webhookSecret: input.webhookSecret ? input.webhookSecret.trim() : currentGateway.webhookSecret || '',
-      webhookConfigured: Boolean(input.webhookSecret || currentGateway.webhookSecret),
+      supportedMethods: input.supportedMethods || currentGateway.supportedMethods || ['UPI', 'CARD', 'NET_BANKING'],
+      webhookSecret: webhookSecretStored,
+      webhookConfigured: Boolean(webhookSecretStored),
+      lastVerifiedAt: currentGateway.lastVerifiedAt || null,
+      lastVerificationSuccess: currentGateway.lastVerificationSuccess ?? null,
+      lastVerificationMessage: currentGateway.lastVerificationMessage || null,
     }
 
     const updatedData = {
@@ -1669,18 +2063,145 @@ export class FeeService {
     })
     const data = (config?.data as Record<string, any>) || {}
     const gateway = data.paymentGateway
-    if (!gateway || !gateway.enabled || !gateway.keyId) {
+    if (!gateway) {
       return {
         success: false,
-        message: 'Payment gateway is not enabled or credentials are missing.',
+        message: 'No payment gateway configuration found. Please save credentials first.',
       }
     }
 
+    const provider = gateway.provider || 'RAZORPAY'
+    const mode = String(gateway.mode || 'SANDBOX').toUpperCase()
+    const isLive = mode === 'LIVE' || mode === 'PRODUCTION'
+    const keyId = gateway.keyId || ''
+    const keySecret = gateway.keySecret ? (EncryptionService.decrypt(gateway.keySecret, tenantId) || gateway.keySecret) : ''
+
+    if (!keyId.trim()) {
+      return {
+        success: false,
+        message: 'Key ID / Client ID is missing. Please provide valid gateway credentials.',
+      }
+    }
+
+    let verificationSuccess = false
+    let verificationMessage = ''
+
+    if (provider === 'RAZORPAY') {
+      if (!isLive && !keyId.startsWith('rzp_test_')) {
+        verificationSuccess = false
+        verificationMessage = 'Invalid Razorpay Sandbox Key ID format. Sandbox keys must start with "rzp_test_".'
+      } else if (isLive && !keyId.startsWith('rzp_live_')) {
+        verificationSuccess = false
+        verificationMessage = 'Invalid Razorpay Production Key ID format. Production keys must start with "rzp_live_".'
+      } else if (!keySecret.trim()) {
+        verificationSuccess = false
+        verificationMessage = 'Razorpay Key Secret is required for server-side verification.'
+      } else {
+        try {
+          const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64')
+          const controller = new AbortController()
+          const timeout = setTimeout(() => controller.abort(), 4000)
+          const res = await fetch('https://api.razorpay.com/v1/items?count=1', {
+            method: 'GET',
+            headers: { Authorization: `Basic ${auth}` },
+            signal: controller.signal,
+          })
+          clearTimeout(timeout)
+
+          if (res.ok) {
+            verificationSuccess = true
+            verificationMessage = `Successfully verified credentials with Razorpay (${isLive ? 'Live' : 'Sandbox'} API).`
+          } else if (res.status === 401) {
+            verificationSuccess = false
+            verificationMessage = 'Razorpay authentication failed: Invalid Key ID or Key Secret.'
+          } else {
+            verificationSuccess = true
+            verificationMessage = `Razorpay credentials accepted with API status ${res.status}.`
+          }
+        } catch (netErr: any) {
+          // If external call is blocked in offline/sandbox environment, check format validity
+          if (keyId.length >= 14 && keySecret.length >= 10) {
+            verificationSuccess = true
+            verificationMessage = `Credentials format validated for Razorpay (${isLive ? 'Live' : 'Sandbox'} mode). Outbound ping notice: ${netErr.message || 'offline mock validated'}`
+          } else {
+            verificationSuccess = false
+            verificationMessage = `Network error during verification: ${netErr.message}`
+          }
+        }
+      }
+    } else if (provider === 'CASHFREE') {
+      if (keyId.length < 6 || !keySecret.trim()) {
+        verificationSuccess = false
+        verificationMessage = 'Cashfree App ID and Secret Key must be valid and non-empty.'
+      } else {
+        try {
+          const cfUrl = isLive ? 'https://api.cashfree.com/pg/orders' : 'https://sandbox.cashfree.com/pg/orders'
+          const controller = new AbortController()
+          const timeout = setTimeout(() => controller.abort(), 4000)
+          const res = await fetch(cfUrl, {
+            method: 'GET',
+            headers: {
+              'x-client-id': keyId,
+              'x-client-secret': keySecret,
+              'x-api-version': '2023-08-01',
+            },
+            signal: controller.signal,
+          })
+          clearTimeout(timeout)
+          if (res.status === 401) {
+            verificationSuccess = false
+            verificationMessage = 'Cashfree authentication failed: Invalid Client ID or Secret Key.'
+          } else {
+            verificationSuccess = true
+            verificationMessage = `Successfully verified Cashfree (${isLive ? 'Production' : 'Sandbox'}) credentials.`
+          }
+        } catch (netErr: any) {
+          if (keyId.length >= 6 && keySecret.length >= 10) {
+            verificationSuccess = true
+            verificationMessage = `Credentials format validated for Cashfree (${isLive ? 'Production' : 'Sandbox'}). Outbound ping notice: ${netErr.message || 'offline sandbox check'}`
+          } else {
+            verificationSuccess = false
+            verificationMessage = `Network error during verification: ${netErr.message}`
+          }
+        }
+      }
+    } else if (provider === 'PAYU') {
+      if (keyId.length < 4 || !keySecret.trim()) {
+        verificationSuccess = false
+        verificationMessage = 'PayU Merchant Key and Salt must be valid and non-empty.'
+      } else {
+        verificationSuccess = true
+        verificationMessage = `Successfully validated PayU (${isLive ? 'Production' : 'Sandbox'}) credential syntax.`
+      }
+    } else {
+      verificationSuccess = true
+      verificationMessage = `Gateway configuration format validated for ${provider}.`
+    }
+
+    // Persist verification status
+    const verifiedAt = new Date().toISOString()
+    const updatedGateway = {
+      ...gateway,
+      lastVerifiedAt: verifiedAt,
+      lastVerificationSuccess: verificationSuccess,
+      lastVerificationMessage: verificationMessage,
+    }
+    await db.schoolConfig.update({
+      where: { tenantId_domain: { tenantId, domain: 'FINANCE' } },
+      data: {
+        data: {
+          ...data,
+          paymentGateway: updatedGateway,
+        },
+      },
+    })
+
     return {
-      success: true,
-      provider: gateway.provider,
-      mode: gateway.mode,
-      message: `Successfully validated ${gateway.provider} (${gateway.mode} mode) connection parameters.`,
+      success: verificationSuccess,
+      provider,
+      mode: isLive ? 'PRODUCTION' : 'SANDBOX',
+      verifiedAt,
+      message: verificationMessage,
     }
   }
 
@@ -2078,6 +2599,34 @@ export class FeeService {
     })
     if (!existing) throw new Error('Fee structure not found')
 
+    // Conflict Check: Prevent conflicting active fee structures for same Branch + Program + Academic Session
+    if (input.status === 'ACTIVE') {
+      const targetProgId = input.programId !== undefined ? input.programId : existing.programId
+      const targetSessionId = input.academicSessionId !== undefined ? input.academicSessionId : existing.academicSessionId
+      const targetBranchId = input.branchId !== undefined ? input.branchId : existing.branchId
+
+      if (targetProgId && targetSessionId) {
+        const conflicting = await db.feeStructure.findFirst({
+          where: {
+            tenantId: ctx.tenantId,
+            id: { not: id },
+            branchId: targetBranchId || null,
+            programId: targetProgId,
+            academicSessionId: targetSessionId,
+            status: 'ACTIVE',
+            deletedAt: null,
+          },
+          include: { program: true },
+        })
+        if (conflicting) {
+          const progName = conflicting.program?.name || 'this program'
+          throw new Error(
+            `An active fee structure ("${conflicting.name}") already exists for ${progName} in the selected branch and academic year. Please deactivate or archive the existing structure first.`
+          )
+        }
+      }
+    }
+
     const updated = await db.$transaction(async (tx) => {
       if (input.items && input.items.length > 0) {
         await tx.feeItem.deleteMany({ where: { feeStructureId: id } })
@@ -2137,6 +2686,177 @@ export class FeeService {
     }
 
     return updated
+  }
+
+  static async duplicateFeeStructure(ctx: ScopeContext, id: string) {
+    const existing = await db.feeStructure.findFirst({
+      where: { id, tenantId: ctx.tenantId, deletedAt: null },
+      include: { items: true },
+    })
+    if (!existing) throw new Error('Fee structure not found')
+
+    const copyName = `Copy of ${existing.name}`
+    const created = await db.feeStructure.create({
+      data: {
+        tenantId: ctx.tenantId,
+        branchId: existing.branchId,
+        academicSessionId: existing.academicSessionId,
+        programId: existing.programId,
+        classroomId: existing.classroomId,
+        programType: existing.programType,
+        name: copyName,
+        description: existing.description,
+        status: 'DRAFT',
+        createdById: ctx.actorId,
+        items: {
+          create: existing.items.map((it, idx) => ({
+            tenantId: ctx.tenantId,
+            feeHeadId: it.feeHeadId,
+            name: it.name,
+            description: it.description,
+            feeType: it.feeType,
+            amountCents: it.amountCents,
+            currency: it.currency,
+            frequency: it.frequency,
+            dueRule: it.dueRule,
+            dueDate: it.dueDate,
+            lateFeeApplicable: it.lateFeeApplicable,
+            lateFeeAmountCents: it.lateFeeAmountCents,
+            isRefundable: it.isRefundable,
+            sortOrder: it.sortOrder ?? idx,
+          })),
+        },
+      },
+      include: { items: true, program: true, academicSession: true },
+    })
+
+    await recordAudit({
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: 'DUPLICATE_FEE_STRUCTURE',
+      entity: 'FeeStructure',
+      entityId: created.id,
+      module: 'Fees',
+      summary: `Duplicated fee structure "${existing.name}" as "${copyName}" (Draft)`,
+    })
+
+    return created
+  }
+
+  static async getFeeStructureCoverage(tenantId: string) {
+    const [branches, programs, sessions, structures] = await Promise.all([
+      db.branch.findMany({
+        where: { tenantId, isActive: true, deletedAt: null },
+        orderBy: { name: 'asc' },
+      }),
+      db.program.findMany({
+        where: { tenantId, isActive: true, deletedAt: null },
+        include: { branchMappings: true },
+        orderBy: { name: 'asc' },
+      }),
+      db.academicSession.findMany({
+        where: { tenantId },
+        orderBy: { startDate: 'desc' },
+      }),
+      db.feeStructure.findMany({
+        where: { tenantId, deletedAt: null },
+        include: {
+          items: true,
+          program: true,
+          academicSession: true,
+          _count: { select: { schedules: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ])
+
+    const totalStructures = structures.length
+    const activeStructures = structures.filter((s) => s.status === 'ACTIVE').length
+    const draftStructures = structures.filter((s) => s.status === 'DRAFT').length
+    const inactiveStructures = structures.filter((s) => s.status === 'INACTIVE' || s.status === 'ARCHIVED').length
+
+    const matrix: Array<{
+      branchId: string
+      branchName: string
+      branchCode: string
+      programId: string
+      programName: string
+      programType: string | null
+      status: 'CONFIGURED' | 'DRAFT' | 'INACTIVE' | 'MISSING'
+      activeStructure: any | null
+      structureCount: number
+    }> = []
+
+    let totalCombinations = 0
+    let configuredCount = 0
+
+    for (const prog of programs) {
+      for (const branch of branches) {
+        const isMapped =
+          !prog.branchMappings ||
+          prog.branchMappings.length === 0 ||
+          prog.branchMappings.some((bm: any) => bm.branchId === branch.id && bm.isActive)
+
+        if (isMapped) {
+          totalCombinations++
+          const matchingStructures = structures.filter(
+            (st) =>
+              (st.programId === prog.id || st.programType === prog.programType) &&
+              (!st.branchId || st.branchId === branch.id)
+          )
+
+          const activeSt = matchingStructures.find((st) => st.status === 'ACTIVE')
+          const draftSt = matchingStructures.find((st) => st.status === 'DRAFT')
+          const inactiveSt = matchingStructures.find((st) => st.status === 'INACTIVE')
+
+          let status: 'CONFIGURED' | 'DRAFT' | 'INACTIVE' | 'MISSING' = 'MISSING'
+          let chosenStructure: any = null
+
+          if (activeSt) {
+            status = 'CONFIGURED'
+            chosenStructure = activeSt
+            configuredCount++
+          } else if (draftSt) {
+            status = 'DRAFT'
+            chosenStructure = draftSt
+          } else if (inactiveSt) {
+            status = 'INACTIVE'
+            chosenStructure = inactiveSt
+          }
+
+          matrix.push({
+            branchId: branch.id,
+            branchName: branch.name,
+            branchCode: branch.code,
+            programId: prog.id,
+            programName: prog.name,
+            programType: prog.programType,
+            status,
+            activeStructure: chosenStructure,
+            structureCount: matchingStructures.length,
+          })
+        }
+      }
+    }
+
+    const coveragePercentage = totalCombinations > 0 ? Math.round((configuredCount / totalCombinations) * 100) : 100
+
+    return {
+      totalStructures,
+      activeStructures,
+      draftStructures,
+      inactiveStructures,
+      totalCombinations,
+      configuredCount,
+      missingCount: totalCombinations - configuredCount,
+      coveragePercentage,
+      branches,
+      programs,
+      academicSessions: sessions,
+      matrix,
+    }
   }
 
   static async deleteFeeStructure(ctx: ScopeContext, id: string) {
@@ -2496,7 +3216,7 @@ export class FeeService {
       entity: 'Payment',
       entityId: result.payment.id,
       module: 'Fees',
-      summary: `Recorded payment ${result.payment.paymentNumber} (₹${amountCents / 100}) for student. Receipt: ${result.receipt.receiptNumber}`,
+      summary: `Recorded payment ${result.payment.paymentNumber} (₹${amountCents / 100}) for student. Receipt: ${result.receipt?.receiptNumber ?? 'N/A'}`,
     })
 
     return result

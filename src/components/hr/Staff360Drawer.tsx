@@ -26,7 +26,7 @@ interface Staff360DrawerProps {
   loading?: boolean
 }
 
-type SubTab = 'overview' | 'employment' | 'personal' | 'salary' | 'attendance' | 'leaves' | 'documents'
+type SubTab = 'overview' | 'employment' | 'salary' | 'attendance' | 'documents'
 
 export function Staff360Drawer({ open, onClose, staff, loading }: Staff360DrawerProps) {
   const [subTab, setSubTab] = useState<SubTab>('overview')
@@ -76,18 +76,16 @@ export function Staff360Drawer({ open, onClose, staff, loading }: Staff360Drawer
             </div>
           </div>
 
-          {/* ── Sub-Navigation Tabs ── */}
+          {/* ── Sub-Navigation Tabs (5 Clean Tabs) ── */}
           <div className="overflow-x-auto pb-1 no-scrollbar">
             <div className="seg">
               {(
                 [
                   { key: 'overview', label: 'Overview' },
                   { key: 'employment', label: 'Employment' },
-                  { key: 'personal', label: 'Personal & KYC' },
                   { key: 'salary', label: 'Salary & Bank' },
-                  { key: 'attendance', label: 'Attendance' },
-                  { key: 'leaves', label: 'Leaves' },
-                  { key: 'documents', label: 'Documents' },
+                  { key: 'attendance', label: 'Attendance & Leaves' },
+                  { key: 'documents', label: 'Documents & Compliance' },
                 ] as const
               ).map((t) => (
                 <button
@@ -122,6 +120,24 @@ export function Staff360Drawer({ open, onClose, staff, loading }: Staff360Drawer
                 <div className="p-2.5 rounded-lg border border-border/60 bg-card">
                   <div className="text-[11px] text-muted-foreground">Notice Period</div>
                   <div className="font-semibold text-foreground mt-0.5">{staff.noticePeriodDays} Days</div>
+                </div>
+              </div>
+
+              {/* Emergency Contact */}
+              <div className="p-3 rounded-lg border border-border/60 bg-card space-y-1">
+                <div className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+                  <Phone size={13} className="text-primary" />
+                  <span>Emergency Contact</span>
+                </div>
+                <div className="text-foreground">
+                  {staff.emergencyContactName ? (
+                    <>
+                      {staff.emergencyContactName}{' '}
+                      {staff.emergencyContactPhone ? `(${staff.emergencyContactPhone})` : ''}
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">None provided</span>
+                  )}
                 </div>
               </div>
 
@@ -168,14 +184,6 @@ export function Staff360Drawer({ open, onClose, staff, loading }: Staff360Drawer
                     {staff.confirmationDate ? new Date(staff.confirmationDate).toLocaleDateString('en-IN') : '—'}
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── Tab Content: Personal & KYC ── */}
-          {subTab === 'personal' && (
-            <div className="p-3.5 rounded-lg border border-border/60 bg-card space-y-3">
-              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <span className="text-muted-foreground">Date of Birth:</span>
                   <div className="font-semibold text-foreground">
@@ -187,56 +195,46 @@ export function Staff360Drawer({ open, onClose, staff, loading }: Staff360Drawer
                   <div className="font-semibold text-foreground">{staff.gender || '—'}</div>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Marital Status:</span>
-                  <div className="font-semibold text-foreground">{staff.maritalStatus || '—'}</div>
-                </div>
-                <div>
                   <span className="text-muted-foreground">Blood Group:</span>
                   <div className="font-semibold text-foreground">{staff.bloodGroup || '—'}</div>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Emergency Contact:</span>
-                  <div className="font-semibold text-foreground">
-                    {staff.emergencyContactName ? (
-                      <>
-                        {staff.emergencyContactName}{' '}
-                        {staff.emergencyContactPhone ? `(${staff.emergencyContactPhone})` : ''}
-                      </>
-                    ) : (
-                      '—'
-                    )}
-                  </div>
+                  <span className="text-muted-foreground">Marital Status:</span>
+                  <div className="font-semibold text-foreground">{staff.maritalStatus || '—'}</div>
                 </div>
-                <div>
+                <div className="col-span-2">
                   <span className="text-muted-foreground">Current Address:</span>
                   <div className="text-foreground">{staff.currentAddress || '—'}</div>
                 </div>
-                <div>
-                  <span className="text-muted-foreground">Permanent Address:</span>
-                  <div className="text-foreground">{staff.permanentAddress || '—'}</div>
+              </div>
+
+              {/* Employment & Designation History Timeline */}
+              <div className="pt-3 border-t border-border/50 space-y-2">
+                <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Briefcase size={13} className="text-primary" />
+                  <span>Employment & Designation History Timeline</span>
                 </div>
-                <div>
-                  <span className="text-muted-foreground">PAN Number:</span>
-                  <div className="font-mono font-semibold text-foreground flex items-center gap-1.5 mt-0.5">
-                    <Lock size={11} className="text-muted-foreground" />
-                    <span>{staff.panNumber || '—'}</span>
+                {staff.employmentHistory && staff.employmentHistory.length > 0 ? (
+                  <div className="relative pl-4 space-y-3 border-l-2 border-primary/30 mt-2">
+                    {staff.employmentHistory.map((item: any) => (
+                      <div key={item.id} className="relative group">
+                        <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-background" />
+                        <div className="text-[11px] font-semibold text-foreground flex items-center justify-between">
+                          <span>{item.title}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {new Date(item.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-muted-foreground mt-0.5">{item.description}</div>
+                        {item.actorName && (
+                          <div className="text-[10px] text-muted-foreground/75 mt-0.5">Recorded by: {item.actorName}</div>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Aadhaar (Masked):</span>
-                  <div className="font-mono font-semibold text-foreground flex items-center gap-1.5 mt-0.5">
-                    <Lock size={11} className="text-muted-foreground" />
-                    <span>{staff.aadhaarNumber ? `•••• •••• ${staff.aadhaarNumber.slice(-4)}` : '—'}</span>
-                  </div>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">UAN / PF Number:</span>
-                  <div className="font-mono font-semibold text-foreground">{staff.uanNumber || '—'}</div>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">ESI Number:</span>
-                  <div className="font-mono font-semibold text-foreground">{staff.esiNumber || '—'}</div>
-                </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">No historical milestones recorded.</div>
+                )}
               </div>
             </div>
           )}
@@ -271,9 +269,9 @@ export function Staff360Drawer({ open, onClose, staff, loading }: Staff360Drawer
                 </div>
               </div>
 
-              {staff.bankDetails && (
+              {staff.bankDetails ? (
                 <div className="p-3.5 rounded-lg border border-border/60 bg-card space-y-2">
-                  <div className="font-semibold text-foreground">Bank Account Details</div>
+                  <div className="font-semibold text-foreground">Bank Account Details (Confidential)</div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
                       <span className="text-muted-foreground">Bank Name:</span>
@@ -292,71 +290,109 @@ export function Staff360Drawer({ open, onClose, staff, loading }: Staff360Drawer
                     </div>
                   </div>
                 </div>
+              ) : (
+                <div className="p-3.5 rounded-lg border border-border/60 bg-card text-muted-foreground text-center">
+                  No bank details configured
+                </div>
               )}
             </div>
           )}
 
-          {/* ── Tab Content: Attendance Punches ── */}
+          {/* ── Tab Content: Attendance & Leaves ── */}
           {subTab === 'attendance' && (
-            <div className="space-y-2">
-              <div className="text-[11px] font-semibold text-muted-foreground uppercase">
-                Recent Daily Punches
-              </div>
-              <div className="divide-y divide-border/50 border border-border/60 rounded-lg overflow-hidden bg-card">
-                {staff.attendanceRecords && staff.attendanceRecords.length > 0 ? (
-                  staff.attendanceRecords.map((att: any) => (
-                    <div key={att.id} className="p-2.5 flex items-center justify-between hover:bg-muted/20">
-                      <div>
-                        <div className="font-medium text-foreground">
-                          {new Date(att.date).toLocaleDateString('en-IN')}
-                        </div>
-                        <div className="text-[11px] text-muted-foreground">
-                          In: {timeOf(att.checkIn)} • Out: {timeOf(att.checkOut)} ({att.workedHours}h)
+            <div className="space-y-4">
+              {/* Leave balances */}
+              <div className="space-y-2">
+                <div className="text-[11px] font-semibold text-muted-foreground uppercase">
+                  Annual Leave Balances
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {staff.leaveBalances && staff.leaveBalances.length > 0 ? (
+                    staff.leaveBalances.map((lb: any) => (
+                      <div key={lb.id} className="p-2.5 rounded-lg border border-border/60 bg-card space-y-0.5">
+                        <div className="text-[11px] font-medium text-foreground">{lb.leaveType?.name || 'Leave'}</div>
+                        <div className="text-lg font-bold text-primary">{lb.balance} d</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {lb.consumed} consumed • {lb.totalCredited} credited
                         </div>
                       </div>
-                      <StatusBadge status={att.status} />
+                    ))
+                  ) : (
+                    <div className="col-span-2 p-3 text-center text-muted-foreground border border-border/50 rounded-lg">
+                      Standard preschool leave quota active
                     </div>
-                  ))
-                ) : (
-                  <div className="p-4 text-center text-muted-foreground">No recent attendance records</div>
-                )}
+                  )}
+                </div>
+              </div>
+
+              {/* Attendance Punches */}
+              <div className="space-y-2">
+                <div className="text-[11px] font-semibold text-muted-foreground uppercase">
+                  Recent Daily Punches
+                </div>
+                <div className="divide-y divide-border/50 border border-border/60 rounded-lg overflow-hidden bg-card">
+                  {staff.attendanceRecords && staff.attendanceRecords.length > 0 ? (
+                    staff.attendanceRecords.slice(0, 5).map((att: any) => (
+                      <div key={att.id} className="p-2.5 flex items-center justify-between hover:bg-muted/20">
+                        <div>
+                          <div className="font-medium text-foreground">
+                            {new Date(att.date).toLocaleDateString('en-IN')}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            In: {timeOf(att.checkIn)} • Out: {timeOf(att.checkOut)} ({att.workedHours}h)
+                          </div>
+                        </div>
+                        <StatusBadge status={att.status} />
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center text-muted-foreground">No recent attendance records</div>
+                  )}
+                </div>
               </div>
             </div>
           )}
 
-          {/* ── Tab Content: Leave Balances ── */}
-          {subTab === 'leaves' && (
-            <div className="space-y-2">
-              <div className="text-[11px] font-semibold text-muted-foreground uppercase">
-                Fiscal Leave Balances (Apr–Mar)
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {staff.leaveBalances && staff.leaveBalances.length > 0 ? (
-                  staff.leaveBalances.map((lb: any) => (
-                    <div key={lb.id} className="p-2.5 rounded-lg border border-border/60 bg-card space-y-0.5">
-                      <div className="text-[11px] font-medium text-foreground">{lb.leaveType?.name || 'Leave'}</div>
-                      <div className="text-lg font-bold text-primary">{lb.balance} d</div>
-                      <div className="text-[10px] text-muted-foreground">
-                        {lb.consumed} consumed • {lb.totalCredited} credited
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="col-span-2 p-4 text-center text-muted-foreground">
-                    Standard leave quota allocated
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── Tab Content: Documents ── */}
+          {/* ── Tab Content: Documents & Compliance ── */}
           {subTab === 'documents' && (
-            <div className="space-y-2">
-              <div className="text-[11px] font-semibold text-muted-foreground uppercase">
-                Verified Documents & Clearances
+            <div className="space-y-3">
+              {/* Statutory ID Masking */}
+              <div className="p-3.5 rounded-lg border border-border/60 bg-card space-y-2.5">
+                <div className="font-semibold text-foreground flex items-center gap-1.5">
+                  <ShieldCheck size={14} className="text-emerald-500" />
+                  <span>Statutory Identifiers (Masked)</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-muted-foreground">PAN Number:</span>
+                    <div className="font-mono font-semibold text-foreground flex items-center gap-1 mt-0.5">
+                      <Lock size={11} className="text-muted-foreground" />
+                      <span>{staff.panNumber || '—'}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Aadhaar Number:</span>
+                    <div className="font-mono font-semibold text-foreground flex items-center gap-1 mt-0.5">
+                      <Lock size={11} className="text-muted-foreground" />
+                      <span>{staff.aadhaarNumber ? `•••• •••• ${staff.aadhaarNumber.slice(-4)}` : '—'}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">UAN / PF:</span>
+                    <div className="font-mono text-foreground">{staff.uanNumber || '—'}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">ESI Number:</span>
+                    <div className="font-mono text-foreground">{staff.esiNumber || '—'}</div>
+                  </div>
+                </div>
               </div>
+
+              {/* Uploaded Documents */}
               <div className="space-y-1.5">
+                <div className="text-[11px] font-semibold text-muted-foreground uppercase">
+                  Verified Documents
+                </div>
                 {staff.documents && staff.documents.length > 0 ? (
                   staff.documents.map((d: any) => (
                     <div key={d.id} className="p-2.5 rounded-lg border border-border/60 bg-card flex items-center justify-between">

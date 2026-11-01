@@ -33,15 +33,39 @@ async function _POST(req: NextRequest) {
   if (isResponse(session)) return session
   if (!session.tenantId) return Errors.forbidden('No tenant context')
 
+  let cleanName = ''
   try {
     const body = await req.json()
     const { name, startDate, endDate, terms, status } = body
-    if (!name || !startDate || !endDate) return Errors.validation('name, startDate and endDate are required')
-    const start = new Date(startDate); const end = new Date(endDate)
+    cleanName = typeof name === 'string' ? name.trim() : ''
+    if (!cleanName || !startDate || !endDate) {
+      return Errors.validation('Academic year name, start date, and end date are required')
+    }
+    const start = new Date(startDate)
+    const end = new Date(endDate)
     if (isNaN(start.getTime()) || isNaN(end.getTime())) return Errors.validation('Invalid dates')
     if (start >= end) return Errors.business('SETUP_003', 'Academic year end date must be after start date', 422)
-    const dup = await db.academicSession.findFirst({ where: { tenantId: session.tenantId, name } })
-    if (dup) return Errors.conflict(`Academic year "${name}" already exists`)
+
+    // Check duplicate name within tenant (case-insensitive)
+    const dup = await db.academicSession.findFirst({
+      where: {
+        tenantId: session.tenantId,
+        name: { equals: cleanName, mode: 'insensitive' },
+      },
+    })
+    if (dup) return Errors.conflict(`Academic year "${cleanName}" already exists`)
+
+    // Check duplicate identical date range within tenant
+    const dupDates = await db.academicSession.findFirst({
+      where: {
+        tenantId: session.tenantId,
+        startDate: start,
+        endDate: end,
+      },
+    })
+    if (dupDates) {
+      return Errors.conflict(`An academic year with identical dates (${startDate} to ${endDate}) already exists: "${dupDates.name}"`)
+    }
 
     const VALID_STATUSES = ['PLANNED', 'ACTIVE', 'CLOSING', 'CLOSED', 'ARCHIVED']
     const yearStatus = status && VALID_STATUSES.includes(status) ? status : 'PLANNED'
@@ -49,8 +73,12 @@ async function _POST(req: NextRequest) {
     const count = await db.academicSession.count({ where: { tenantId: session.tenantId } })
     const created = await db.academicSession.create({
       data: {
-        tenantId: session.tenantId, name, startDate: start, endDate: end,
-        status: yearStatus, isCurrent: count === 0, // first year automatically current
+        tenantId: session.tenantId,
+        name: cleanName,
+        startDate: start,
+        endDate: end,
+        status: yearStatus,
+        isCurrent: count === 0, // first year automatically current
       },
     })
     // terms are advisory metadata stored with the operating config
@@ -70,8 +98,18 @@ async function _POST(req: NextRequest) {
       action: 'CREATE', entity: 'AcademicSession', entityId: created.id,
       summary: `Created academic year ${created.name} (${startDate} → ${endDate})${count === 0 ? ' — set as current' : ''}`,
     })
-    return ok({ id: created.id, name: created.name, isCurrent: created.isCurrent }, undefined, 201)
-  } catch (e) {
+    return ok({
+      id: created.id,
+      name: created.name,
+      isCurrent: created.isCurrent,
+      startDate: created.startDate,
+      endDate: created.endDate,
+      status: created.status,
+    }, undefined, 201)
+  } catch (e: any) {
+    if (e?.code === 'P2002') {
+      return Errors.conflict(`Academic year "${cleanName || 'with this name'}" already exists`)
+    }
     return Errors.system(e)
   }
 }

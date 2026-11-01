@@ -988,12 +988,12 @@ export default function DailyDiaryPage() {
   })
 
   return (
-    <div className="w-full min-w-0 max-w-[1460px] mx-auto space-y-6 pb-12">
+    <div className="w-full min-w-0 max-w-[1460px] mx-auto space-y-6 pb-12 px-3 sm:px-4 md:px-6">
       {/* ── Breadcrumb Navigation ── */}
       <Breadcrumbs items={[{ label: 'Home', href: '/app' }, { label: 'Daily Diary' }]} />
 
       {/* ── PREONE PAGE HEADER ── */}
-      <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           {/* Eyebrow & Academic Session Badge */}
           <div className="flex items-center gap-2">
@@ -1017,13 +1017,13 @@ export default function DailyDiaryPage() {
         </div>
 
         {/* Header Right Controls */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full md:w-auto">
           {/* Admin Mode Switcher: School Overview vs Class View */}
           {user?.isAdmin && (
             <div className="inline-flex p-1 bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 rounded-xl shadow-2xs">
               <button
                 type="button"
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all ${
+                className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all ${
                   adminViewMode === 'school'
                     ? 'bg-purple-600 text-white font-semibold shadow-xs'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium'
@@ -1034,7 +1034,7 @@ export default function DailyDiaryPage() {
               </button>
               <button
                 type="button"
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all ${
+                className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all ${
                   adminViewMode === 'class'
                     ? 'bg-purple-600 text-white font-semibold shadow-xs'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium'
@@ -1047,7 +1047,7 @@ export default function DailyDiaryPage() {
           )}
 
           {/* Compact Date Navigation: [←] [📅 Date] [→] [Today] */}
-          <div className="inline-flex items-center bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-1 shadow-xs">
+          <div className="inline-flex items-center justify-between sm:justify-start bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-1 shadow-xs">
             <button
               type="button"
               className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -1143,13 +1143,13 @@ export default function DailyDiaryPage() {
 
           {/* School Overview KPI Metric Rail (7 Cards) */}
           {loadingAdminOverview ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
               {[1, 2, 3, 4, 5, 6, 7].map((n) => (
                 <div key={n} className="bg-white/80 dark:bg-slate-900/80 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 animate-pulse h-28" />
               ))}
             </div>
           ) : adminOverview ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
               {/* 1. Classes */}
               <div className="bg-card p-4 rounded-2xl border border-border/80 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between">
                 <div className="flex items-center justify-between">
@@ -1685,10 +1685,10 @@ export default function DailyDiaryPage() {
             </div>
 
             {/* Unified View Navigation Switcher */}
-            <div className="flex flex-wrap items-center gap-1 bg-background/60 p-1 border border-border rounded-xl">
+            <div className="flex items-center gap-1.5 bg-background/60 p-1 border border-border rounded-xl overflow-x-auto scrollbar-none flex-nowrap shrink-0 max-w-full touch-pan-x -mx-1 px-1 sm:mx-0">
               <button
                 type="button"
-                className={`btn btn-sm ${activeTab === 'stream' ? 'btn-primary' : 'btn-ghost'}`}
+                className={`btn btn-sm shrink-0 whitespace-nowrap ${activeTab === 'stream' ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => setActiveTab('stream')}
               >
                 <Sparkles size={14} className="mr-1.5" /> Day Stream
@@ -1696,7 +1696,7 @@ export default function DailyDiaryPage() {
 
               <button
                 type="button"
-                className={`btn btn-sm ${activeTab === 'builder' ? 'btn-primary' : 'btn-ghost'}`}
+                className={`btn btn-sm shrink-0 whitespace-nowrap ${activeTab === 'builder' ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => {
                   setActiveTab('builder')
                   fetchSubjects()
@@ -1707,7 +1707,7 @@ export default function DailyDiaryPage() {
 
               <button
                 type="button"
-                className={`btn btn-sm ${activeTab === 'attendance' ? 'btn-primary' : 'btn-ghost'}`}
+                className={`btn btn-sm shrink-0 whitespace-nowrap ${activeTab === 'attendance' ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => setActiveTab('attendance')}
               >
                 <UserCheck size={14} className="mr-1.5" /> Attendance Register
@@ -1715,7 +1715,7 @@ export default function DailyDiaryPage() {
 
               <button
                 type="button"
-                className={`btn btn-sm ${activeTab === 'timetable' ? 'btn-primary' : 'btn-ghost'}`}
+                className={`btn btn-sm shrink-0 whitespace-nowrap ${activeTab === 'timetable' ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => setActiveTab('timetable')}
               >
                 <Calendar size={14} className="mr-1.5" /> Weekly Timetable
@@ -1723,7 +1723,7 @@ export default function DailyDiaryPage() {
 
               <button
                 type="button"
-                className={`btn btn-sm ${activeTab === 'observations' ? 'btn-primary' : 'btn-ghost'}`}
+                className={`btn btn-sm shrink-0 whitespace-nowrap ${activeTab === 'observations' ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => setActiveTab('observations')}
               >
                 <FileText size={14} className="mr-1.5" /> Observations
@@ -1731,7 +1731,7 @@ export default function DailyDiaryPage() {
 
               <button
                 type="button"
-                className={`btn btn-sm ${activeTab === 'history' ? 'btn-primary' : 'btn-ghost'}`}
+                className={`btn btn-sm shrink-0 whitespace-nowrap ${activeTab === 'history' ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => setActiveTab('history')}
               >
                 <HistoryIcon size={14} className="mr-1.5" /> History
@@ -1739,7 +1739,7 @@ export default function DailyDiaryPage() {
 
               <button
                 type="button"
-                className={`btn btn-sm ${activeTab === 'overview' ? 'btn-primary' : 'btn-ghost'}`}
+                className={`btn btn-sm shrink-0 whitespace-nowrap ${activeTab === 'overview' ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => setActiveTab('overview')}
               >
                 <BookOpen size={14} className="mr-1.5" /> Overview
@@ -2004,7 +2004,7 @@ export default function DailyDiaryPage() {
           {activeTab === 'builder' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* LEFT PART BOX: MULTI-ROW TIMETABLE BUILDER */}
-              <div className="lg:col-span-6 glass-panel p-6 space-y-5">
+              <div className="lg:col-span-6 glass-panel p-4 sm:p-6 space-y-4 sm:space-y-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
                   <div>
                     <h3 className="text-base font-bold text-foreground flex items-center gap-2">
@@ -2014,7 +2014,7 @@ export default function DailyDiaryPage() {
                       Configure multi-row core subjects & activities for {currentClass?.name}.
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={handleOpenCopyRoutine}
@@ -2091,7 +2091,7 @@ export default function DailyDiaryPage() {
 
                 {/* Multi-Row Builder Table */}
                 <form onSubmit={handleSaveScheduleBuilder} className="space-y-4">
-                  <div className="border border-border rounded-xl overflow-x-auto max-h-[50vh] overflow-y-auto bg-card/30">
+                  <div className="border border-border rounded-xl overflow-x-auto max-h-[50vh] overflow-y-auto bg-card/30 rail-edge-fade scrollbar-none touch-pan-x">
                     <table className="w-full text-left text-xs min-w-[580px]">
                       <thead className="bg-muted font-bold text-muted-foreground border-b border-border sticky top-0 z-10">
                         <tr>
@@ -2206,7 +2206,7 @@ export default function DailyDiaryPage() {
               </div>
 
               {/* RIGHT PART BOX: DAILY SCHEDULE CHART & OPERATIONAL REPORT */}
-              <div className="lg:col-span-6 glass-panel p-6 space-y-4">
+              <div className="lg:col-span-6 glass-panel p-4 sm:p-6 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
                   <div>
                     <h3 className="text-base font-bold text-foreground flex items-center gap-2">
@@ -2228,7 +2228,7 @@ export default function DailyDiaryPage() {
                 </div>
 
                 {/* Report Filters: Date Filter, Program Filter & Status Filter */}
-                <div className="p-3 rounded-xl bg-muted/40 border border-border flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-muted/40 border border-border flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
                   {/* Date Filter */}
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="font-bold text-muted-foreground flex items-center gap-1">
@@ -2269,7 +2269,7 @@ export default function DailyDiaryPage() {
 
                   {/* Program Filter */}
                   <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-muted-foreground">Program Filter:</span>
+                    <span className="font-bold text-muted-foreground">Program:</span>
                     <select
                       className="select select-sm text-xs font-semibold"
                       value={selectedProgramFilter}
@@ -2292,24 +2292,24 @@ export default function DailyDiaryPage() {
                   </div>
 
                   {/* Status Filter Tabs (All / Done / Pending) */}
-                  <div className="join border border-border rounded-lg bg-background/60 p-0.5 flex">
+                  <div className="join border border-border rounded-lg bg-background/60 p-0.5 flex flex-wrap sm:flex-nowrap">
                     <button
                       type="button"
-                      className={`btn btn-xs ${selectedStatusFilter === 'ALL' ? 'btn-primary' : 'btn-ghost'}`}
+                      className={`btn btn-xs flex-1 sm:flex-initial ${selectedStatusFilter === 'ALL' ? 'btn-primary' : 'btn-ghost'}`}
                       onClick={() => setSelectedStatusFilter('ALL')}
                     >
                       All ({overview?.activities.length || 0})
                     </button>
                     <button
                       type="button"
-                      className={`btn btn-xs ${selectedStatusFilter === 'COMPLETED' ? 'btn-primary' : 'btn-ghost'}`}
+                      className={`btn btn-xs flex-1 sm:flex-initial ${selectedStatusFilter === 'COMPLETED' ? 'btn-primary' : 'btn-ghost'}`}
                       onClick={() => setSelectedStatusFilter('COMPLETED')}
                     >
                       Done ({overview?.activities.filter((a) => a.status === 'COMPLETED').length || 0})
                     </button>
                     <button
                       type="button"
-                      className={`btn btn-xs ${selectedStatusFilter === 'PENDING' ? 'btn-primary' : 'btn-ghost'}`}
+                      className={`btn btn-xs flex-1 sm:flex-initial ${selectedStatusFilter === 'PENDING' ? 'btn-primary' : 'btn-ghost'}`}
                       onClick={() => setSelectedStatusFilter('PENDING')}
                     >
                       Pending ({(overview?.activities.length || 0) - (overview?.activities.filter((a) => a.status === 'COMPLETED').length || 0)})
@@ -2422,8 +2422,8 @@ export default function DailyDiaryPage() {
             </div>
           )}
           {activeTab === 'attendance' && (
-            <div className="glass-panel p-6 space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
+            <div className="glass-panel p-4 sm:p-6 space-y-5 sm:space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
                 <div>
                   <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                     <UserCheck size={20} className="text-emerald-500" /> Class Attendance Register
@@ -2433,10 +2433,10 @@ export default function DailyDiaryPage() {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
                   <button
                     type="button"
-                    className="btn btn-sm btn-primary flex items-center gap-1.5 shadow-sm font-bold"
+                    className="btn btn-sm btn-primary flex-1 sm:flex-initial flex items-center justify-center gap-1.5 shadow-sm font-bold"
                     onClick={() => setFastRollCallOpen(true)}
                     title="Launch touch-friendly Fast Roll Call workspace"
                   >
@@ -2444,14 +2444,14 @@ export default function DailyDiaryPage() {
                   </button>
                   <button
                     type="button"
-                    className="btn btn-sm btn-outline"
+                    className="btn btn-sm btn-outline flex-1 sm:flex-initial"
                     onClick={handleMarkAllPresent}
                   >
                     <CheckSquare size={15} /> Mark All Present
                   </button>
                   <button
                     type="button"
-                    className="btn btn-sm btn-secondary"
+                    className="btn btn-sm btn-secondary flex-1 sm:flex-initial"
                     onClick={handleSaveAttendance}
                     disabled={savingAttendance}
                   >
@@ -2488,68 +2488,70 @@ export default function DailyDiaryPage() {
                   {attendanceRegister.map((student, idx) => (
                     <div
                       key={student.studentId}
-                      className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-card/70 transition-colors"
+                      className="p-3.5 sm:p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 hover:bg-card/70 transition-colors"
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs font-mono text-muted-foreground w-6">{idx + 1}.</span>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-xs font-mono text-muted-foreground w-6 shrink-0">{idx + 1}.</span>
                         <Avatar name={student.name} src={student.photoUrl} size="md" />
-                        <div>
-                          <h4 className="font-bold text-sm text-foreground">{student.name}</h4>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-sm text-foreground truncate">{student.name}</h4>
                           <span className="text-xs text-muted-foreground font-mono">Adm No: {student.admissionNo}</span>
                         </div>
                       </div>
 
                       {/* Status Toggle Buttons */}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                            student.status === 'PRESENT'
-                              ? 'bg-emerald-500 text-white shadow-sm'
-                              : 'bg-muted text-muted-foreground hover:bg-emerald-500/10 hover:text-emerald-600'
-                          }`}
-                          onClick={() => handleSetStudentStatus(student.studentId, 'PRESENT')}
-                        >
-                          Present
-                        </button>
-                        <button
-                          type="button"
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                            student.status === 'ABSENT'
-                              ? 'bg-rose-500 text-white shadow-sm'
-                              : 'bg-muted text-muted-foreground hover:bg-rose-500/10 hover:text-rose-600'
-                          }`}
-                          onClick={() => handleSetStudentStatus(student.studentId, 'ABSENT')}
-                        >
-                          Absent
-                        </button>
-                        <button
-                          type="button"
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                            student.status === 'LATE'
-                              ? 'bg-amber-500 text-white shadow-sm'
-                              : 'bg-muted text-muted-foreground hover:bg-amber-500/10 hover:text-amber-600'
-                          }`}
-                          onClick={() => handleSetStudentStatus(student.studentId, 'LATE')}
-                        >
-                          Late
-                        </button>
-                        <button
-                          type="button"
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                            student.status === 'HALF_DAY'
-                              ? 'bg-blue-500 text-white shadow-sm'
-                              : 'bg-muted text-muted-foreground hover:bg-blue-500/10 hover:text-blue-600'
-                          }`}
-                          onClick={() => handleSetStudentStatus(student.studentId, 'HALF_DAY')}
-                        >
-                          Half Day
-                        </button>
+                      <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 border-border/40">
+                        <div className="grid grid-cols-4 gap-1.5 flex-1 sm:flex-initial sm:flex sm:items-center">
+                          <button
+                            type="button"
+                            className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-center ${
+                              student.status === 'PRESENT'
+                                ? 'bg-emerald-500 text-white shadow-sm'
+                                : 'bg-muted text-muted-foreground hover:bg-emerald-500/10 hover:text-emerald-600'
+                            }`}
+                            onClick={() => handleSetStudentStatus(student.studentId, 'PRESENT')}
+                          >
+                            Present
+                          </button>
+                          <button
+                            type="button"
+                            className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-center ${
+                              student.status === 'ABSENT'
+                                ? 'bg-rose-500 text-white shadow-sm'
+                                : 'bg-muted text-muted-foreground hover:bg-rose-500/10 hover:text-rose-600'
+                            }`}
+                            onClick={() => handleSetStudentStatus(student.studentId, 'ABSENT')}
+                          >
+                            Absent
+                          </button>
+                          <button
+                            type="button"
+                            className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-center ${
+                              student.status === 'LATE'
+                                ? 'bg-amber-500 text-white shadow-sm'
+                                : 'bg-muted text-muted-foreground hover:bg-amber-500/10 hover:text-amber-600'
+                            }`}
+                            onClick={() => handleSetStudentStatus(student.studentId, 'LATE')}
+                          >
+                            Late
+                          </button>
+                          <button
+                            type="button"
+                            className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-center ${
+                              student.status === 'HALF_DAY'
+                                ? 'bg-blue-500 text-white shadow-sm'
+                                : 'bg-muted text-muted-foreground hover:bg-blue-500/10 hover:text-blue-600'
+                            }`}
+                            onClick={() => handleSetStudentStatus(student.studentId, 'HALF_DAY')}
+                          >
+                            Half Day
+                          </button>
+                        </div>
 
                         <input
                           type="text"
                           placeholder="Optional notes..."
-                          className="input input-xs text-xs max-w-[150px] ml-2"
+                          className="input input-xs text-xs w-full sm:w-auto sm:max-w-[150px] mt-1 sm:mt-0"
                           value={student.notes}
                           onChange={(e) => handleSetStudentNotes(student.studentId, e.target.value)}
                         />
@@ -2564,8 +2566,8 @@ export default function DailyDiaryPage() {
 
           {/* TAB 4: TIMETABLE & ACTIVITIES */}
           {activeTab === 'timetable' && (
-            <div className="glass-panel p-6 space-y-6">
-              <div className="flex items-center justify-between border-b border-border pb-4">
+            <div className="glass-panel p-4 sm:p-6 space-y-4 sm:space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
                 <div>
                   <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                     <Clock size={20} className="text-primary" /> Today&apos;s Class Timetable
@@ -2576,7 +2578,7 @@ export default function DailyDiaryPage() {
                 </div>
                 <button
                   type="button"
-                  className="btn btn-sm btn-primary"
+                  className="btn btn-sm btn-primary w-full sm:w-auto"
                   onClick={() => handleOpenScheduleBuilder()}
                 >
                   <Plus size={15} /> Schedule Activity
@@ -2601,10 +2603,10 @@ export default function DailyDiaryPage() {
                   {overview?.activities.map((act) => (
                     <div
                       key={act.id}
-                      className="p-5 rounded-xl border border-border bg-card/40 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                      className="p-4 sm:p-5 rounded-xl border border-border bg-card/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
                     >
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
+                      <div className="space-y-2 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-muted">
                             {act.startTime} – {act.endTime}
                           </span>
@@ -2615,7 +2617,7 @@ export default function DailyDiaryPage() {
                             Teacher: <strong className="text-foreground">{act.teacherName}</strong>
                           </span>
                         </div>
-                        <h4 className="text-base font-bold text-foreground">{act.title}</h4>
+                        <h4 className="text-base font-bold text-foreground break-words">{act.title}</h4>
                         {act.description && <p className="text-xs text-muted-foreground">{act.description}</p>}
                         {act.actualOutcome && (
                           <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-700">
@@ -2624,7 +2626,7 @@ export default function DailyDiaryPage() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-border/40">
                         {act.status === 'COMPLETED' ? (
                           <span className="badge b-success text-xs font-semibold px-3 py-1">
                             <CheckCircle2 size={14} className="mr-1 inline" /> Completed
@@ -2664,8 +2666,8 @@ export default function DailyDiaryPage() {
 
           {/* TAB 5: OBSERVATIONS */}
           {activeTab === 'observations' && (
-            <div className="glass-panel p-6 space-y-6">
-              <div className="flex items-center justify-between border-b border-border pb-4">
+            <div className="glass-panel p-4 sm:p-6 space-y-4 sm:space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
                 <div>
                   <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                     <FileText size={20} className="text-amber-500" /> Classroom Observations
@@ -2676,7 +2678,7 @@ export default function DailyDiaryPage() {
                 </div>
                 <button
                   type="button"
-                  className="btn btn-sm btn-primary"
+                  className="btn btn-sm btn-primary w-full sm:w-auto"
                   onClick={() => setShowObservationModal(true)}
                 >
                   <Plus size={15} /> Record Observation
@@ -2895,26 +2897,26 @@ export default function DailyDiaryPage() {
               </table>
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-border">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-border">
               <button
                 type="button"
-                className="btn btn-sm btn-outline"
+                className="btn btn-sm btn-outline w-full sm:w-auto"
                 onClick={handleAddScheduleRow}
               >
                 <Plus size={14} /> Add Row
               </button>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                 <button
                   type="button"
-                  className="btn btn-sm btn-ghost"
+                  className="btn btn-sm btn-ghost flex-1 sm:flex-initial"
                   onClick={() => setShowScheduleBuilderModal(false)}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="btn btn-sm btn-primary"
+                  className="btn btn-sm btn-primary flex-1 sm:flex-initial font-semibold"
                   disabled={submittingScheduleBuilder}
                 >
                   {submittingScheduleBuilder ? <RefreshCw className="animate-spin mr-1" size={14} /> : <Save className="mr-1" size={14} />}
@@ -2997,17 +2999,17 @@ export default function DailyDiaryPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2 border-t border-border">
               <button
                 type="button"
-                className="btn btn-sm btn-ghost"
+                className="btn btn-sm btn-ghost w-full sm:w-auto"
                 onClick={() => setShowEditActivityModal(false)}
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="btn btn-sm btn-primary"
+                className="btn btn-sm btn-primary w-full sm:w-auto"
                 disabled={submittingEditAct}
               >
                 {submittingEditAct ? <RefreshCw className="animate-spin" size={14} /> : <Save size={14} />} Save Changes
@@ -3034,17 +3036,17 @@ export default function DailyDiaryPage() {
               value={activityNotesInput}
               onChange={(e) => setActivityNotesInput(e.target.value)}
             />
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2 border-t border-border">
               <button
                 type="button"
-                className="btn btn-sm btn-ghost"
+                className="btn btn-sm btn-ghost w-full sm:w-auto"
                 onClick={() => setShowCompleteActivityModal(null)}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className="btn btn-sm btn-primary"
+                className="btn btn-sm btn-primary w-full sm:w-auto"
                 onClick={() =>
                   handleUpdateActivityStatus(
                     showCompleteActivityModal,
@@ -3125,17 +3127,17 @@ export default function DailyDiaryPage() {
               required
             />
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2 border-t border-border">
               <button
                 type="button"
-                className="btn btn-sm btn-ghost"
+                className="btn btn-sm btn-ghost w-full sm:w-auto"
                 onClick={() => setShowObservationModal(false)}
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="btn btn-sm btn-primary"
+                className="btn btn-sm btn-primary w-full sm:w-auto"
                 disabled={submittingObs}
               >
                 {submittingObs ? <RefreshCw className="animate-spin" size={14} /> : <Save size={14} />} Save Observation

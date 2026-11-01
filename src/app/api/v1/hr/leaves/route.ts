@@ -13,13 +13,70 @@ async function _GET(req: NextRequest) {
   try {
     const sp = req.nextUrl.searchParams
     const status = sp.get('status') || undefined
-    const staffProfileId = sp.get('staffProfileId') || undefined
+    const requestedStaffProfileId = sp.get('staffProfileId') || undefined
+    const requestedBranchId = sp.get('branchId') || undefined
+    const balancesOnly = sp.get('balances') === 'true'
+
+    const myProfile = await db.staffProfile.findFirst({
+      where: { userId: session.uid, tenantId: session.tenantId, deletedAt: null },
+    })
+
+    const isPrivileged =
+      ['OWNER', 'DIRECTOR', 'PLATFORM_ADMIN', 'SUPER_ADMIN'].includes(session.role) ||
+      Boolean(session.roles && session.roles.some((r: string) => ['OWNER', 'DIRECTOR', 'PLATFORM_ADMIN'].includes(r)))
+
+    const canApprove = isPrivileged || Boolean(session.permissions?.includes('hr:approve' as any))
+
+    // Staff Self-Service Balances Request
+    if (balancesOnly) {
+      const targetStaffId = requestedStaffProfileId || myProfile?.id
+      if (!targetStaffId) return Errors.notFound('Staff profile')
+      if (targetStaffId !== myProfile?.id && !canApprove) {
+        return Errors.forbidden('You can only view your own leave balances.')
+      }
+      const now = new Date()
+      const fiscalYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1
+      const balances = await LeaveService.getOrCreateBalances(session.tenantId, targetStaffId, fiscalYear)
+      return ok(balances)
+    }
+
+    if (requestedBranchId) {
+      const branchCheck = await requireBranchAccess(session, requestedBranchId)
+      if (branchCheck) return branchCheck
+    }
+
+    const authorizedBranches = await getAuthorizedBranchIds(session)
+    if (authorizedBranches !== null && authorizedBranches.length === 0) {
+      return ok([])
+    }
+
+    // Role-based scope filter
+    let staffFilter: any = {}
+    if (!canApprove) {
+      // Regular Staff: Self-scoped only
+      staffFilter = { staffProfileId: myProfile ? myProfile.id : 'none' }
+    } else {
+      // Managers / Approvers: Branch-scoped
+      const branchConstraint = requestedBranchId
+        ? { branchId: requestedBranchId }
+        : authorizedBranches !== null
+        ? { branchId: { in: authorizedBranches } }
+        : {}
+
+      staffFilter = {
+        ...(requestedStaffProfileId ? { staffProfileId: requestedStaffProfileId } : {}),
+        staffProfile: {
+          ...branchConstraint,
+          deletedAt: null,
+        },
+      }
+    }
 
     const requests = await db.leaveRequest.findMany({
       where: {
         tenantId: session.tenantId,
         ...(status ? { status: status as any } : {}),
-        ...(staffProfileId ? { staffProfileId } : {}),
+        ...staffFilter,
       },
       include: {
         staffProfile: {
@@ -49,24 +106,34 @@ async function _POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    let staffProfileId = body.staffProfileId
+    const { leaveTypeId, startDate, endDate, reason, isHalfDay } = body
 
-    // If no staffProfileId provided, resolve from session user
+    const myProfile = await db.staffProfile.findFirst({
+      where: { userId: session.uid, tenantId: session.tenantId, deletedAt: null },
+    })
+
+    const isPrivileged =
+      ['OWNER', 'DIRECTOR', 'PLATFORM_ADMIN', 'SUPER_ADMIN'].includes(session.role) ||
+      Boolean(session.roles && session.roles.some((r: string) => ['OWNER', 'DIRECTOR', 'PLATFORM_ADMIN'].includes(r)))
+
+    let staffProfileId = body.staffProfileId
+    if (staffProfileId && staffProfileId !== myProfile?.id && !isPrivileged) {
+      return Errors.forbidden('Staff self-service: You can only submit leave applications for yourself.')
+    }
+
     if (!staffProfileId) {
-      const profile = await db.staffProfile.findUnique({
-        where: { userId: session.uid },
-      })
-      if (!profile) return Errors.notFound('Staff profile for current user')
-      staffProfileId = profile.id
+      if (!myProfile) return Errors.notFound('Staff profile for current user')
+      staffProfileId = myProfile.id
     }
 
     const leave = await LeaveService.applyLeave({
       tenantId: session.tenantId,
       staffProfileId,
-      leaveTypeId: body.leaveTypeId,
-      startDate: body.startDate,
-      endDate: body.endDate,
-      reason: body.reason,
+      leaveTypeId,
+      startDate,
+      endDate,
+      reason,
+      isHalfDay: Boolean(isHalfDay),
     })
 
     return ok(leave)

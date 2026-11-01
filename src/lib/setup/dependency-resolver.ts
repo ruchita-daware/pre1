@@ -138,6 +138,12 @@ export const PREREQUISITE_EXPLANATIONS: Record<StepKey, { reason: string; whyReq
     actionLabel: 'Configure Fees',
     actionType: 'NAVIGATE_STEP',
   },
+  payment_gateway: {
+    reason: 'Payment gateway configuration is missing or disabled.',
+    whyRequired: 'Online fee collection requires an active payment gateway merchant integration.',
+    actionLabel: 'Configure Payment Gateway',
+    actionType: 'NAVIGATE_STEP',
+  },
   templates: {
     reason: 'Document templates not configured.',
     whyRequired: 'Required for invoices and certificates.',

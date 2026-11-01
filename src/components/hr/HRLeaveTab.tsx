@@ -9,6 +9,8 @@ import {
   Clock,
   ShieldAlert,
   GraduationCap,
+  ShieldCheck,
+  UserCheck,
 } from 'lucide-react'
 import { Card, StatusBadge, Avatar, Field } from '@/components/preone/ui'
 import { DataTable, Column } from '@/components/preone/DataTable'
@@ -51,6 +53,7 @@ export function HRLeaveTab({
     startDate: new Date().toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
     reason: '',
+    isHalfDay: false,
   })
   const [submittingLeave, setSubmittingLeave] = useState(false)
 
@@ -69,12 +72,20 @@ export function HRLeaveTab({
 
   const handleConfirmApply = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!applyForm.staffProfileId || !applyForm.reason.trim()) return
+    if (!applyForm.reason.trim()) return
     setSubmittingLeave(true)
     try {
       if (onApplyLeave) {
         await onApplyLeave(applyForm)
         setApplyModalOpen(false)
+        setApplyForm({
+          staffProfileId: '',
+          leaveTypeId: '',
+          startDate: new Date().toISOString().split('T')[0],
+          endDate: new Date().toISOString().split('T')[0],
+          reason: '',
+          isHalfDay: false,
+        })
       }
     } finally {
       setSubmittingLeave(false)
@@ -88,20 +99,26 @@ export function HRLeaveTab({
         key: 'employee',
         header: 'Employee',
         sortable: true,
-        render: (row) => (
-          <div className="flex items-center gap-2.5 py-1">
-            <Avatar name={row.staffProfile.user.fullName} size="md" />
-            <div>
-              <div className="font-semibold text-foreground leading-tight text-sm">
-                {row.staffProfile.user.fullName}
-              </div>
-              <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                <span className="font-mono">{row.staffProfile.employeeCode}</span>
-                <span>• {row.staffProfile.branch?.name || 'Main Campus'}</span>
+        render: (row) => {
+          const isPrincipal = row.staffProfile.designation?.toLowerCase().includes('principal')
+          return (
+            <div className="flex items-center gap-2.5 py-1">
+              <Avatar name={row.staffProfile.user.fullName} size="md" />
+              <div>
+                <div className="font-semibold text-foreground leading-tight text-sm flex items-center gap-1.5">
+                  <span>{row.staffProfile.user.fullName}</span>
+                  {isPrincipal && (
+                    <span className="badge b-warning text-[10px] px-1.5 py-0 font-medium">Principal</span>
+                  )}
+                </div>
+                <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                  <span className="font-mono">{row.staffProfile.employeeCode}</span>
+                  <span>• {row.staffProfile.branch?.name || 'Main Campus'}</span>
+                </div>
               </div>
             </div>
-          </div>
-        ),
+          )
+        },
       },
       {
         key: 'leaveType',
@@ -110,7 +127,7 @@ export function HRLeaveTab({
         render: (row) => (
           <div>
             <span className="badge b-primary text-xs font-semibold px-2 py-0.5">
-              {row.leaveType.name}
+              {row.leaveType?.name || 'General Leave'}
             </span>
             <div className="text-[11px] text-muted-foreground mt-0.5 font-medium">
               {row.totalDays} day{row.totalDays > 1 ? 's' : ''} requested
@@ -138,6 +155,15 @@ export function HRLeaveTab({
         key: 'coverage',
         header: 'Classroom Coverage',
         render: (row) => {
+          const isPrincipal = row.staffProfile.designation?.toLowerCase().includes('principal')
+          if (isPrincipal) {
+            return (
+              <span className="badge b-warning text-[10px] font-semibold px-2 py-0.5 inline-flex items-center gap-1">
+                <ShieldCheck size={11} />
+                <span>Owner Route (Direct)</span>
+              </span>
+            )
+          }
           if (row.coverages && row.coverages.length > 0) {
             return (
               <span className="badge b-info text-[10px] font-semibold px-2 py-0.5 inline-flex items-center gap-1">
@@ -146,7 +172,7 @@ export function HRLeaveTab({
               </span>
             )
           }
-          return <span className="text-[11px] text-muted-foreground">General Staff</span>
+          return <span className="text-[11px] text-muted-foreground">Direct Approval</span>
         },
       },
       {
@@ -198,7 +224,7 @@ export function HRLeaveTab({
                 disabled={loadingAction}
                 onClick={() => handleOpenReject(row.id)}
                 className="btn btn-ghost btn-sm py-1 px-2 text-xs text-danger hover:bg-danger/10 flex items-center gap-1"
-                title="Reject Leave"
+                title="Decline with Reason"
               >
                 <XCircle size={13} />
                 <span>Reject</span>
@@ -213,17 +239,26 @@ export function HRLeaveTab({
 
   // Filter toolbar
   const filterToolbar = (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 flex-wrap">
       <select
-        className="select text-xs py-1.5 px-2.5 h-8 font-medium"
+        className="select !w-auto min-w-[140px] max-w-[180px] text-xs py-1.5 px-3 h-9 font-medium rounded-xl bg-background/80 border border-border/80 cursor-pointer shadow-2xs hover:border-border transition-colors focus:ring-1 focus:ring-primary/30"
         value={statusFilter}
         onChange={(e) => onStatusFilterChange(e.target.value)}
+        aria-label="Filter by leave status"
       >
         <option value="ALL">All Statuses</option>
         <option value="PENDING">Pending Review Only</option>
         <option value="APPROVED">Approved Leaves</option>
         <option value="REJECTED">Rejected Leaves</option>
       </select>
+      <button
+        type="button"
+        onClick={() => setApplyModalOpen(true)}
+        className="btn btn-primary btn-sm h-9 px-3.5 text-xs flex items-center gap-1.5 rounded-xl shadow-xs"
+      >
+        <Plus size={14} />
+        <span>Apply for Leave</span>
+      </button>
     </div>
   )
 
@@ -299,6 +334,100 @@ export function HRLeaveTab({
         showExport
         exportFileName="preone-staff-leaves"
       />
+
+      {/* ── Apply Leave Modal (Self-Service & Routed) ── */}
+      <Modal
+        open={applyModalOpen}
+        onClose={() => setApplyModalOpen(false)}
+        title="Apply for Leave (Self-Service)"
+        subtitle="Submit a full-day or half-day leave request with automated approval routing"
+        icon={<CalendarDays size={18} />}
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <button className="btn btn-ghost" onClick={() => setApplyModalOpen(false)}>
+              Cancel
+            </button>
+            <button
+              className="btn btn-primary"
+              disabled={submittingLeave || !applyForm.reason.trim()}
+              onClick={handleConfirmApply}
+            >
+              {submittingLeave ? 'Submitting...' : 'Submit Leave Request'}
+            </button>
+          </div>
+        }
+      >
+        <form onSubmit={handleConfirmApply} className="space-y-3.5 text-xs">
+          {staffList && staffList.length > 0 && (
+            <Field label="Staff Member">
+              <select
+                className="select text-xs w-full"
+                value={applyForm.staffProfileId}
+                onChange={(e) => setApplyForm({ ...applyForm, staffProfileId: e.target.value })}
+              >
+                <option value="">Current Authenticated User (Self)</option>
+                {staffList.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.employeeCode}) {s.designation ? `— ${s.designation}` : ''}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Start Date" required>
+              <input
+                type="date"
+                className="input text-xs w-full"
+                value={applyForm.startDate}
+                onChange={(e) =>
+                  setApplyForm({
+                    ...applyForm,
+                    startDate: e.target.value,
+                    endDate: applyForm.endDate < e.target.value ? e.target.value : applyForm.endDate,
+                  })
+                }
+                required
+              />
+            </Field>
+            <Field label="End Date" required>
+              <input
+                type="date"
+                className="input text-xs w-full"
+                value={applyForm.endDate}
+                min={applyForm.startDate}
+                onChange={(e) => setApplyForm({ ...applyForm, endDate: e.target.value })}
+                required
+              />
+            </Field>
+          </div>
+
+          <div className="p-2.5 rounded-lg border border-border/60 bg-muted/20 flex items-center justify-between">
+            <div>
+              <div className="font-semibold text-foreground">Half-Day Leave</div>
+              <div className="text-[11px] text-muted-foreground">Counts as 0.5 day for morning or afternoon absence</div>
+            </div>
+            <input
+              type="checkbox"
+              className="toggle"
+              checked={applyForm.isHalfDay}
+              onChange={(e) => setApplyForm({ ...applyForm, isHalfDay: e.target.checked })}
+            />
+          </div>
+
+          <Field label="Reason for Leave" required helper="Explain why leave is required. Personal leave details are kept confidential.">
+            <textarea
+              className="textarea text-xs w-full min-h-[70px]"
+              rows={2}
+              value={applyForm.reason}
+              onChange={(e) => setApplyForm({ ...applyForm, reason: e.target.value })}
+              placeholder="e.g. Urgent family matter / doctor appointment"
+              required
+            />
+          </Field>
+        </form>
+      </Modal>
 
       {/* ── Rejection Modal ── */}
       <Modal

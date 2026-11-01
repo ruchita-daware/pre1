@@ -78,7 +78,7 @@ export class TemplateService {
 
     // Parse and filter by status in JSON content if provided
     let items = rows.map((r) => {
-      const def = (r.content as unknown as TemplateDefinition) || {}
+      const def = TemplateService.normalizeDefinition(r.content, r.type as DocumentType)
       return {
         id: r.id,
         tenantId: r.tenantId,
@@ -111,6 +111,58 @@ export class TemplateService {
   }
 
   /**
+   * Safely normalize raw JSON content into a complete TemplateDefinition.
+   */
+  static normalizeDefinition(content: any, docType: DocumentType): TemplateDefinition {
+    const raw = content && typeof content === 'object' ? content : {}
+    const defaultPageSize: PageFormat = String(docType || '').includes('ID_CARD')
+      ? 'ID_CARD_PORTRAIT'
+      : String(docType || '').includes('RECEIPT')
+      ? 'RECEIPT_THERMAL'
+      : 'A4_PORTRAIT'
+
+    const pageSize = (raw.pageSize && PAGE_DIMENSIONS[raw.pageSize as PageFormat])
+      ? (raw.pageSize as PageFormat)
+      : defaultPageSize
+    const dim = PAGE_DIMENSIONS[pageSize] || PAGE_DIMENSIONS.A4_PORTRAIT
+
+    const widthMm = typeof raw.widthMm === 'number' && raw.widthMm > 0 ? raw.widthMm : dim.widthMm
+    const heightMm = typeof raw.heightMm === 'number' && raw.heightMm > 0 ? raw.heightMm : dim.heightMm
+
+    const rawElements = Array.isArray(raw.elements) ? raw.elements : []
+    const elements: TemplateElement[] = rawElements.map((el: any, idx: number) => ({
+      id: el.id || `elem-${idx + 1}`,
+      type: el.type || 'text',
+      name: el.name || el.id || `Element ${idx + 1}`,
+      x: typeof el.x === 'number' ? el.x : 10,
+      y: typeof el.y === 'number' ? el.y : 10,
+      width: typeof el.width === 'number' ? el.width : 50,
+      height: typeof el.height === 'number' ? el.height : 15,
+      zIndex: typeof el.zIndex === 'number' ? el.zIndex : idx + 1,
+      content: typeof el.content === 'string' ? el.content : typeof el.text === 'string' ? el.text : '',
+      fieldBinding: el.fieldBinding,
+      styles: el.styles || el.style || {},
+      locked: Boolean(el.locked),
+    }))
+
+    return {
+      version: typeof raw.version === 'number' ? raw.version : 1,
+      status: raw.status === 'PUBLISHED' ? 'PUBLISHED' : 'DRAFT',
+      documentType: raw.documentType || docType || 'GENERAL_LETTER',
+      pageSize,
+      orientation: raw.orientation || (widthMm > heightMm ? 'landscape' : 'portrait'),
+      widthMm,
+      heightMm,
+      backgroundColor: raw.backgroundColor || '#FFFFFF',
+      elements,
+      marginsMm: raw.marginsMm || { top: 10, right: 10, bottom: 10, left: 10 },
+      publishedAt: raw.publishedAt,
+      publishedBy: raw.publishedBy,
+      description: raw.description,
+    }
+  }
+
+  /**
    * Get template by ID with tenant isolation.
    */
   static async getTemplateById(tenantId: string, id: string) {
@@ -120,7 +172,7 @@ export class TemplateService {
 
     if (!row) return null
 
-    const def = row.content as unknown as TemplateDefinition
+    const def = TemplateService.normalizeDefinition(row.content, row.type as DocumentType)
 
     return {
       id: row.id,

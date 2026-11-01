@@ -1,10 +1,23 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
 import { HelpCircle, X, Sparkles, Smile, Lightbulb, Moon, Eye, FileText, AlertTriangle, ShieldCheck, Lock } from 'lucide-react'
-import { PreOMascot3D, type PreOReaction, type ModelStatus } from './PreOMascot3D'
+import type { PreOReaction, ModelStatus } from './PreOMascot3D'
 import './preone-buddy-live.css'
+
+const PreOMascot3D = dynamic(
+  () => import('./PreOMascot3D').then((m) => m.PreOMascot3D),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full flex items-center justify-center">
+        <div className="w-10 h-10 rounded-full border-2 border-violet-300 border-t-transparent animate-spin" />
+      </div>
+    ),
+  }
+)
 
 export type BuddyReaction = 'welcome' | 'happy' | 'explore' | 'oops' | 'thinking' | 'sleep'
 export type Reaction = BuddyReaction

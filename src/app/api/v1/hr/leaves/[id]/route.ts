@@ -27,7 +27,9 @@ async function _PATCH(req: NextRequest, { params }: { params: Promise<{ id: stri
         id: session.uid,
         name: session.name,
         role: session.role,
-      },
+        roles: session.roles,
+        branchId: session.branchId,
+      } as any,
       rejectionReason
     )
 

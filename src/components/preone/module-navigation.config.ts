@@ -154,6 +154,20 @@ export const FEES_NAVIGATION_CONFIG: ModuleNavigationItem[] = [
     tooltip: 'Configured academic fee templates and rules',
   },
   {
+    id: 'GATEWAY',
+    label: 'Payment Gateway',
+    href: '/app/setup/payment-gateway',
+    icon: CreditCard,
+    tooltip: 'Configure online payment gateways (Razorpay, Cashfree, PayU)',
+  },
+  {
+    id: 'RECEIPT_TEMPLATES',
+    label: 'Receipt Templates',
+    href: '/app/setup/receipt-templates',
+    icon: FileText,
+    tooltip: 'Design official preschool fee receipt templates and paper formats',
+  },
+  {
     id: 'SCHEDULES',
     label: 'Student Dues & Schedules',
     icon: Calendar,
@@ -479,29 +493,40 @@ export const AUDIT_CATEGORY_CONFIG: ModuleNavigationItem[] = [
 ]
 
 /**
- * 9. HR & WORKFORCE MODULE CONFIGURATION
+ * 9. HR & WORKFORCE MODULE CONFIGURATION (PRE1-HR-PRESCHOOL-SIMPLIFICATION-REDESIGN-001)
+ * Clean 6-Section Preschool HR Architecture with direct pending badge routing
  */
 export function getHrNavConfig(options?: { pendingRequestsCount?: number }): ModuleNavigationItem[] {
   return [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, tooltip: 'Workforce snapshot & KPIs' },
-    { id: 'employees', label: 'Employees', icon: Users, tooltip: 'Staff profiles & directory' },
-    { id: 'attendance', label: 'Attendance', icon: CalendarCheck, tooltip: 'Daily roll call & punches' },
-    { id: 'leave', label: 'Leave', icon: CalendarDays, tooltip: 'Balances & approvals' },
-    { id: 'schedule', label: 'Staff Schedule', icon: CalendarRange, tooltip: 'Timetables & classrooms' },
-    { id: 'payroll', label: 'Payroll', icon: CreditCard, tooltip: 'Cycles, PF/ESI & payouts' },
-    { id: 'performance', label: 'Performance', icon: Award, tooltip: 'Appraisals & reviews' },
-    { id: 'training', label: 'Training', icon: ShieldCheck, tooltip: 'POSH, safety & ECCE' },
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard, tooltip: "Today's staff operations, roll call & pending actions" },
+    { id: 'staff', label: 'Staff', icon: Users, tooltip: 'Educator & staff directory, onboarding, profiles' },
+    { id: 'attendance', label: 'Attendance', icon: CalendarCheck, tooltip: 'Daily attendance, check-ins & punch corrections' },
     {
-      id: 'requests',
-      label: 'Requests',
-      icon: Inbox,
+      id: 'leave',
+      label: 'Leave',
+      icon: CalendarDays,
       badge: options?.pendingRequestsCount || undefined,
       badgeVariant: 'warning',
-      tooltip: 'Unified approvals inbox',
+      tooltip: 'Leave requests, classroom coverage & balances',
     },
-    { id: 'reports', label: 'Reports', icon: FileBarChart, tooltip: 'Analytics & compliance' },
+    { id: 'payroll', label: 'Payroll', icon: CreditCard, tooltip: 'Monthly cycles, salary calculations & disbursement' },
+    { id: 'reports', label: 'Reports', icon: FileBarChart, tooltip: 'Staff, attendance, leave & payroll reports' },
   ]
 }
+
+/** Legacy HR tab items preserved for routing backwards-compatibility & deep link testing */
+export const LEGACY_HR_NAV_ITEMS = [
+  { id: 'dashboard' },
+  { id: 'employees' },
+  { id: 'attendance' },
+  { id: 'leave' },
+  { id: 'schedule' },
+  { id: 'payroll' },
+  { id: 'performance' },
+  { id: 'training' },
+  { id: 'requests' },
+  { id: 'reports' },
+]
 
 /**
  * 10. SETTINGS MODULE CONFIGURATION

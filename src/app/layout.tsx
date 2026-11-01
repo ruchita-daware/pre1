@@ -37,24 +37,38 @@ export default function RootLayout({
     <html lang="en" data-theme="light" suppressHydrationWarning>
       <head>
         <meta name="theme-color" content="#F7F8FC" id="app-theme-color-meta" />
-        {/* Critical Font Preloads (Poppins 600 headings & Nunito 400 body) */}
-        <link
-          rel="preload"
-          href="/fonts/poppins-latin-600-normal.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
-        <link
-          rel="preload"
-          href="/fonts/poppins-devanagari-600-normal.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
+        {/* Critical Preschool-First Font Preloads (Nunito Primary + Noto Sans Devanagari Regional) */}
         <link
           rel="preload"
           href="/fonts/nunito-latin-400-normal.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="preload"
+          href="/fonts/nunito-latin-600-normal.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="preload"
+          href="/fonts/nunito-latin-700-normal.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="preload"
+          href="/fonts/noto-sans-devanagari-devanagari-400-normal.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="preload"
+          href="/fonts/noto-sans-devanagari-devanagari-600-normal.woff2"
           as="font"
           type="font/woff2"
           crossOrigin="anonymous"

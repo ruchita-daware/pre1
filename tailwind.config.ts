@@ -5,9 +5,6 @@ const config: Config = {
     darkMode: ["class", '[data-theme="dark"]'],
     content: [
     "./src/**/*.{js,ts,jsx,tsx,mdx}",
-    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
   	extend: {
@@ -125,48 +122,52 @@ const config: Config = {
   			'premium-card-hover': 'var(--shadow-premium-card-hover, var(--shadow-card-hover))',
   		},
   		fontFamily: {
-  			display: ['var(--font-display)', 'Poppins', 'sans-serif'],
-  			heading: ['var(--font-heading)', 'Poppins', 'sans-serif'],
-  			body: ['var(--font-body)', 'Nunito', 'sans-serif'],
-  			sans: ['var(--font-body)', 'Nunito', 'sans-serif'],
-  			mono: ['var(--font-mono)', 'monospace'],
-  		},
-  		fontWeight: {
-  			normal: '400',
-  			regular: '400',
-  			medium: '500',
-  			semibold: '600',
-  			bold: '700',
-  		},
-  		fontSize: {
-  			// Canonical PreOne Typography Scale
-  			'type-display': ['clamp(32px, 3.5vw + 12px, 44px)', { lineHeight: '1.15', letterSpacing: '-0.025em', fontWeight: '700' }],
-  			'page-title': ['clamp(26px, 1.2vw + 22px, 34px)', { lineHeight: '1.2', letterSpacing: '-0.02em', fontWeight: '600' }],
-  			'section-title': ['20px', { lineHeight: '1.3', letterSpacing: '-0.015em', fontWeight: '600' }],
-  			'card-title': ['16px', { lineHeight: '1.35', letterSpacing: '-0.01em', fontWeight: '600' }],
-  			'body-copy': ['15px', { lineHeight: '1.6', fontWeight: '400' }],
-  			'body-copy-sm': ['14px', { lineHeight: '1.5', fontWeight: '400' }],
-  			'field-label': ['13px', { lineHeight: '1.4', fontWeight: '500' }],
-  			'meta-copy': ['12px', { lineHeight: '1.4', fontWeight: '400' }],
-  			'data-copy': ['13.5px', { lineHeight: '1.5', fontWeight: '400' }],
+			display: ['var(--font-display)', 'Nunito', 'sans-serif'],
+			heading: ['var(--font-heading)', 'Nunito', 'sans-serif'],
+			body: ['var(--font-body)', 'Nunito', 'sans-serif'],
+			sans: ['var(--font-body)', 'Nunito', 'sans-serif'],
+			regional: ['var(--font-regional)', 'Noto Sans Devanagari', 'sans-serif'],
+			mono: ['var(--font-mono)', 'monospace'],
+		},
+		fontWeight: {
+			normal: '400',
+			regular: '400',
+			medium: '500',
+			semibold: '600',
+			bold: '700',
+			extrabold: '800',
+		},
+		fontSize: {
+			// Canonical PreOne Preschool-First Typography Scale
+			'type-display': ['clamp(32px, 3.2vw + 10px, 44px)', { lineHeight: '1.15', letterSpacing: '-0.025em', fontWeight: '800' }],
+			'page-title': ['clamp(26px, 1.8vw + 12px, 32px)', { lineHeight: '1.25', letterSpacing: '-0.02em', fontWeight: '700' }],
+			'section-title': ['clamp(20px, 1vw + 14px, 24px)', { lineHeight: '1.30', letterSpacing: '-0.015em', fontWeight: '700' }],
+			'card-title': ['16px', { lineHeight: '1.40', letterSpacing: '-0.01em', fontWeight: '600' }],
+			'body-copy': ['15px', { lineHeight: '1.60', fontWeight: '400' }],
+			'body-copy-sm': ['14px', { lineHeight: '1.50', fontWeight: '400' }],
+			'field-label': ['13px', { lineHeight: '1.40', fontWeight: '600' }],
+			'meta-copy': ['12px', { lineHeight: '1.45', fontWeight: '400' }],
+			'data-copy': ['13.5px', { lineHeight: '1.50', fontWeight: '400' }],
 
-  			// Canonical t-* Scale Mappings
-  			't-display': ['clamp(32px, 3.5vw + 12px, 44px)', { lineHeight: '1.15', letterSpacing: '-0.025em', fontWeight: '700' }],
-  			't-h1': ['clamp(26px, 1.2vw + 22px, 34px)', { lineHeight: '1.2', letterSpacing: '-0.02em', fontWeight: '600' }],
-  			't-h2': ['20px', { lineHeight: '1.3', letterSpacing: '-0.015em', fontWeight: '600' }],
-  			't-h3': ['18px', { lineHeight: '1.3', letterSpacing: '-0.015em', fontWeight: '600' }],
-  			't-h4': ['16px', { lineHeight: '1.35', letterSpacing: '-0.01em', fontWeight: '600' }],
-  			't-body-lg': ['16px', { lineHeight: '1.6', fontWeight: '400' }],
-  			't-body': ['15px', { lineHeight: '1.6', fontWeight: '400' }],
-  			't-body-sm': ['14px', { lineHeight: '1.5', fontWeight: '400' }],
-  			't-caption': ['12px', { lineHeight: '1.4', fontWeight: '400' }],
-  			't-label': ['13px', { lineHeight: '1.4', letterSpacing: '0.02em', fontWeight: '500' }],
-  			't-btn': ['14px', { lineHeight: '1.4', letterSpacing: '0', fontWeight: '600' }],
-  			't-kpi': ['clamp(28px, 2.5vw + 16px, 36px)', { lineHeight: '1.1', letterSpacing: '-0.02em', fontWeight: '700' }],
-  			't-data': ['13.5px', { lineHeight: '1.5', fontWeight: '400' }]
-  		}
-  	}
-  },
+			// Canonical t-* Scale Mappings (§4 & §11)
+			't-display': ['clamp(32px, 3.2vw + 10px, 44px)', { lineHeight: '1.15', letterSpacing: '-0.025em', fontWeight: '800' }],
+			't-h1': ['clamp(26px, 1.8vw + 12px, 32px)', { lineHeight: '1.25', letterSpacing: '-0.02em', fontWeight: '700' }],
+			't-h2': ['clamp(20px, 1vw + 14px, 24px)', { lineHeight: '1.30', letterSpacing: '-0.015em', fontWeight: '700' }],
+			't-h3': ['20px', { lineHeight: '1.35', letterSpacing: '-0.015em', fontWeight: '700' }],
+			't-h4': ['18px', { lineHeight: '1.40', letterSpacing: '-0.01em', fontWeight: '600' }],
+			't-h5': ['16px', { lineHeight: '1.40', letterSpacing: '-0.01em', fontWeight: '600' }],
+			't-body-lg': ['16px', { lineHeight: '1.65', fontWeight: '400' }],
+			't-body': ['15px', { lineHeight: '1.60', fontWeight: '400' }],
+			't-body-sm': ['14px', { lineHeight: '1.50', fontWeight: '400' }],
+			't-caption': ['12px', { lineHeight: '1.45', fontWeight: '400' }],
+			't-label': ['13px', { lineHeight: '1.40', letterSpacing: '0.01em', fontWeight: '600' }],
+			't-btn': ['14px', { lineHeight: '1.40', letterSpacing: '0', fontWeight: '700' }],
+			't-overline': ['11px', { lineHeight: '1.30', letterSpacing: '0.08em', fontWeight: '700' }],
+			't-kpi': ['clamp(28px, 2.5vw + 16px, 36px)', { lineHeight: '1.10', letterSpacing: '-0.02em', fontWeight: '700' }],
+			't-data': ['13.5px', { lineHeight: '1.50', fontWeight: '400' }]
+		}
+	},
+},
   plugins: [tailwindcssAnimate],
 };
 export default config;

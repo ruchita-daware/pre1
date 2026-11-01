@@ -967,7 +967,7 @@ function FamilyUsersPageContent() {
             {activeTab === 'PARENTS' ? (
               <>
                 <KpiTile
-                  label={t('users.registeredParents') || 'Registered Parents'}
+                  label={t('users.totalParents') || t('users.registeredParents') || 'Registered Parents'}
                   value={kpiValues.totalParents}
                   icon={<User />}
                   iconClass="ic-blue"

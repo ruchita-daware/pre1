@@ -14,8 +14,21 @@ async function _GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams
     const exportParam = sp.get('export')
     const cycleId = sp.get('cycleId')
+    const requestedBranchId = sp.get('branchId') || undefined
+
+    const authorizedBranches = await getAuthorizedBranchIds(session)
 
     if (exportParam === 'true' && cycleId) {
+      const cycle = await db.payrollCycle.findFirst({
+        where: { id: cycleId, tenantId: session.tenantId },
+        select: { id: true, branchId: true },
+      })
+      if (!cycle) return Errors.notFound('Payroll cycle')
+      if (cycle.branchId) {
+        const branchCheck = await requireBranchAccess(session, cycle.branchId)
+        if (branchCheck) return branchCheck
+      }
+
       const csv = await PayrollService.generateBankPayoutFile(session.tenantId, cycleId)
       return new Response(csv, {
         status: 200,
@@ -26,11 +39,34 @@ async function _GET(req: NextRequest) {
       })
     }
 
+    if (requestedBranchId) {
+      const branchCheck = await requireBranchAccess(session, requestedBranchId)
+      if (branchCheck) return branchCheck
+    }
+
+    if (authorizedBranches !== null && authorizedBranches.length === 0) {
+      return ok([])
+    }
+
+    const branchFilter = requestedBranchId
+      ? { OR: [{ branchId: requestedBranchId }, { branchId: null }] }
+      : authorizedBranches !== null
+      ? { OR: [{ branchId: { in: authorizedBranches } }, { branchId: null }] }
+      : {}
+
+    const payslipFilter = authorizedBranches !== null
+      ? { staffProfile: { branchId: { in: authorizedBranches }, deletedAt: null } }
+      : {}
+
     const cycles = await db.payrollCycle.findMany({
-      where: { tenantId: session.tenantId },
+      where: {
+        tenantId: session.tenantId,
+        ...branchFilter,
+      },
       include: {
         branch: { select: { id: true, name: true } },
         payslips: {
+          where: payslipFilter,
           include: {
             staffProfile: {
               include: { user: { select: { id: true, fullName: true, email: true } } },
@@ -54,7 +90,20 @@ async function _POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { action = 'CALCULATE', month, year, branchId, cycleId, paymentReference } = body
+    const { action = 'CALCULATE', month, year, cycleId, paymentReference } = body
+    let targetBranchId = body.branchId
+
+    const authorizedBranches = await getAuthorizedBranchIds(session)
+    if (authorizedBranches !== null) {
+      if (!targetBranchId) {
+        targetBranchId = authorizedBranches[0]
+      }
+      const branchCheck = await requireBranchAccess(session, targetBranchId)
+      if (branchCheck) return branchCheck
+    } else if (targetBranchId) {
+      const branchCheck = await requireBranchAccess(session, targetBranchId)
+      if (branchCheck) return branchCheck
+    }
 
     if (cycleId) {
       const cycle = await db.payrollCycle.findFirst({
@@ -66,10 +115,6 @@ async function _POST(req: NextRequest) {
         const branchCheck = await requireBranchAccess(session, cycle.branchId)
         if (branchCheck) return branchCheck
       }
-    }
-    if (branchId) {
-      const branchCheck = await requireBranchAccess(session, branchId)
-      if (branchCheck) return branchCheck
     }
 
     if (action === 'EXPORT_BANK_FILE') {
@@ -102,7 +147,7 @@ async function _POST(req: NextRequest) {
       session.tenantId,
       Number(month),
       Number(year),
-      branchId || null,
+      targetBranchId || null,
       {
         id: session.uid,
         name: session.name,

@@ -30,8 +30,9 @@ export type StepKey =
   | 'health_settings'
   | 'daily_operations'
   | 'observation'
-  // Phase 4 — Business Rules (4)
+  // Phase 4 — Business Rules (5)
   | 'fees_setup'
+  | 'payment_gateway'
   | 'templates'
   | 'communication'
   | 'promotion'
@@ -153,6 +154,16 @@ export const SETUP_STEPS: StepDef[] = [
     description: 'Complete fee structure governance: tuition, deposits, frequencies, fee schedules, receipts and payments per program and campus.',
   },
   {
+    key: 'payment_gateway',
+    label: 'Payment Gateway',
+    phase: 'BUSINESS_RULES',
+    scope: 'TENANT',
+    applicability: 'RECOMMENDED',
+    deps: ['fees_setup'],
+    icon: 'CreditCard',
+    description: 'Configure online payment gateways (Razorpay, Cashfree, PayU), sandbox/live credentials, and webhook settlement for automated preschool fee collections.',
+  },
+  {
     key: 'templates',
     label: 'Templates',
     phase: 'BUSINESS_RULES',
@@ -205,4 +216,8 @@ export const LEGACY_KEY_MAP: Record<string, StepKey> = {
   operating_config: 'daily_operations',
   admission_config: 'daily_operations',
   student_parent: 'daily_operations',
+  'payment-gateway': 'payment_gateway',
+  'payment_gateway': 'payment_gateway',
+  'receipt-templates': 'templates',
+  'receipt_templates': 'templates',
 }

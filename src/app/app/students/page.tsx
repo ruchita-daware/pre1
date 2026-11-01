@@ -274,28 +274,51 @@ export default function StudentsPage() {
     }
   }
 
-  // Load Setup Master Dropdowns
+  // Load Setup Master Dropdowns (Resilient with Promise.allSettled)
   useEffect(() => {
+    let active = true
+
     async function loadMasters() {
       try {
-        const [bRes, sRes, pRes, cRes] = await Promise.all([
-          fetch('/api/v1/branches'),
-          fetch('/api/v1/academic-years'),
-          fetch('/api/v1/programs'),
-          fetch('/api/v1/classrooms'),
+        const [bRes, sRes, pRes, cRes] = await Promise.allSettled([
+          fetch('/api/v1/branches')
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
+          fetch('/api/v1/academic-years')
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
+          fetch('/api/v1/programs')
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
+          fetch('/api/v1/classrooms')
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
         ])
-        const [bJson, sJson, pJson, cJson] = await Promise.all([
-          bRes.json(), sRes.json(), pRes.json(), cRes.json()
-        ])
-        if (bJson.success && Array.isArray(bJson.data)) setBranches(bJson.data)
-        if (sJson.success && Array.isArray(sJson.data)) setSessions(sJson.data)
-        if (pJson.success && Array.isArray(pJson.data)) setPrograms(pJson.data)
-        if (cJson.success && Array.isArray(cJson.data)) setClassrooms(cJson.data)
-      } catch (err) {
-        console.error('Failed to load setup context masters:', err)
+
+        if (!active) return
+
+        if (bRes.status === 'fulfilled' && bRes.value?.success && Array.isArray(bRes.value.data)) {
+          setBranches(bRes.value.data)
+        }
+        if (sRes.status === 'fulfilled' && sRes.value?.success && Array.isArray(sRes.value.data)) {
+          setSessions(sRes.value.data)
+        }
+        if (pRes.status === 'fulfilled' && pRes.value?.success && Array.isArray(pRes.value.data)) {
+          setPrograms(pRes.value.data)
+        }
+        if (cRes.status === 'fulfilled' && cRes.value?.success && Array.isArray(cRes.value.data)) {
+          setClassrooms(cRes.value.data)
+        }
+      } catch {
+        // Silently ignore any master loading errors
       }
     }
+
     loadMasters()
+
+    return () => {
+      active = false
+    }
   }, [])
 
   // Load KPI Dashboard Stats
@@ -304,11 +327,12 @@ export default function StudentsPage() {
       const params = new URLSearchParams()
       if (branchFilter !== 'ALL') params.set('branchId', branchFilter)
       if (sessionFilter !== 'ALL') params.set('academicSessionId', sessionFilter)
-      const res = await fetch(`/api/v1/students/dashboard?${params}`)
-      const json = await res.json()
-      if (json.success) setStats(json.data)
-    } catch (err) {
-      console.error('Failed to load stats:', err)
+      const res = await fetch(`/api/v1/students/dashboard?${params}`).catch(() => null)
+      if (!res || !res.ok) return
+      const json = await res.json().catch(() => null)
+      if (json?.success) setStats(json.data)
+    } catch {
+      // Silently ignore stats loading failures
     }
   }, [branchFilter, sessionFilter])
 
@@ -325,23 +349,32 @@ export default function StudentsPage() {
       if (statusFilter !== 'ALL') params.set('status', statusFilter)
 
       const [sRes, cRes] = await Promise.all([
-        fetch(`/api/v1/students?${params}`),
-        fetch('/api/v1/classrooms'),
+        fetch(`/api/v1/students?${params}`).catch(() => null),
+        fetch('/api/v1/classrooms').catch(() => null),
       ])
-      const sJson = await sRes.json()
-      const cJson = await cRes.json()
-      if (sJson.success) {
-        setRows(sJson.data)
-      } else {
+      if (sRes && sRes.ok) {
+        const sJson = await sRes.json().catch(() => null)
+        if (sJson?.success) {
+          setRows(sJson.data)
+        } else {
+          setRows(null)
+          setLoadError(sJson?.error?.message || 'Unable to load students')
+        }
+      } else if (sRes) {
         setRows(null)
-        setLoadError(sJson.error?.message || 'Unable to load students')
+        setLoadError('Unable to load students')
       }
-      if (cJson.success) setClassrooms(cJson.data)
+      if (cRes && cRes.ok) {
+        const cJson = await cRes.json().catch(() => null)
+        if (cJson?.success) setClassrooms(cJson.data)
+      }
     } catch (err: any) {
-      console.error('Failed to load students:', err)
-      setRows(null)
-      setLoadError(err.message || 'Unable to load students')
-      toast.error('Failed to load students', err.message)
+      if (err.name !== 'AbortError') {
+        console.warn('Failed to load students:', err)
+        setRows(null)
+        setLoadError(err.message || 'Unable to load students')
+        toast.error('Failed to load students', err.message)
+      }
     } finally {
       setLoading(false)
     }
@@ -1319,11 +1352,18 @@ export default function StudentsPage() {
                     icon: <UserRound size={15} />,
                     onClick: () => router.push(`/app/students/${s.id}`),
                   },
-                  ...(canWriteStudents ? [{
-                    label: 'Assign Classroom',
-                    icon: <ArrowRightLeft size={15} />,
-                    onClick: () => openBulkClass([s.id]),
-                  }] : []),
+                  ...(canWriteStudents ? [
+                    {
+                      label: 'Assign Classroom',
+                      icon: <ArrowRightLeft size={15} />,
+                      onClick: () => openBulkClass([s.id]),
+                    },
+                    {
+                      label: 'Promote to Next Year',
+                      icon: <GraduationCap size={15} />,
+                      onClick: () => router.push(`/app/students/${s.id}?tab=academic&promote=true`),
+                    },
+                  ] : []),
                 ]}
                 footer={
                   rows ? (

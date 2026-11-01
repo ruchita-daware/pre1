@@ -1,7 +1,7 @@
 'use client'
 
-import FeesPage from '../fees/page'
+import { FinanceConsole } from '@/components/finance/FinanceConsole'
 
 export default function FinancePage() {
-  return <FeesPage />
+  return <FinanceConsole />
 }

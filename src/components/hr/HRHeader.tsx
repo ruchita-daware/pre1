@@ -56,43 +56,47 @@ export function HRHeader({
   canApprove,
   onOpenProcessPayroll,
 }: HRHeaderProps) {
-  // Render contextual action buttons per active tab
+  // Render contextual action buttons per active section
   const renderContextualActions = () => {
     switch (activeTab) {
+      case 'overview':
       case 'dashboard':
         return (
           <>
             <button
-              onClick={() => onTabChange('requests')}
+              onClick={() => onTabChange('leave')}
               className="btn btn-ghost btn-sm h-9 px-3 gap-1.5 text-xs font-semibold rounded-xl border border-border/80 hover:bg-muted/50"
             >
               <Inbox size={14} className="text-orange-500" />
-              <span>View Requests</span>
+              <span>Pending Leaves</span>
               {pendingRequestsCount > 0 && (
                 <span className="badge b-warning text-[10px] px-1.5 py-0 font-bold ml-0.5">
                   {pendingRequestsCount}
                 </span>
               )}
             </button>
-            <button
-              onClick={() => onTabChange('payroll')}
-              className="btn btn-ghost btn-sm h-9 px-3 gap-1.5 text-xs font-semibold rounded-xl border border-border/80 hover:bg-muted/50"
-            >
-              <CreditCard size={14} className="text-primary" />
-              <span>Payroll</span>
-            </button>
+            {canPayroll && onOpenProcessPayroll && (
+              <button
+                onClick={onOpenProcessPayroll}
+                className="btn btn-ghost btn-sm h-9 px-3 gap-1.5 text-xs font-semibold rounded-xl border border-border/80 hover:bg-muted/50"
+              >
+                <CreditCard size={14} className="text-primary" />
+                <span>Process Payroll</span>
+              </button>
+            )}
             {canWrite && onOpenOnboard && (
               <button
                 onClick={onOpenOnboard}
                 className="btn btn-primary btn-sm h-9 px-3.5 gap-1.5 text-xs font-semibold rounded-xl shadow-xs"
               >
                 <Plus size={14} />
-                <span>Add Employee</span>
+                <span>Add Staff</span>
               </button>
             )}
           </>
         )
 
+      case 'staff':
       case 'employees':
         return (
           canWrite && onOpenOnboard && (
@@ -101,7 +105,7 @@ export function HRHeader({
               className="btn btn-primary btn-sm h-9 px-3.5 gap-1.5 text-xs font-semibold rounded-xl shadow-xs"
             >
               <Plus size={14} />
-              <span>Add Employee</span>
+              <span>Add Staff</span>
             </button>
           )
         )
@@ -110,11 +114,11 @@ export function HRHeader({
         return (
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             <button
-              onClick={() => onTabChange('schedule')}
+              onClick={onRefresh}
               className="btn btn-ghost btn-sm h-9 px-3 gap-1.5 text-xs font-semibold rounded-xl border border-border/80 hover:bg-muted/50"
             >
-              <CalendarRange size={14} className="text-indigo-500" />
-              <span>View Roster</span>
+              <RefreshCw size={13} className={busy ? 'animate-spin' : ''} />
+              <span>Refresh Log</span>
             </button>
           </div>
         )
@@ -122,22 +126,11 @@ export function HRHeader({
       case 'leave':
         return (
           <button
-            onClick={() => onTabChange('requests')}
+            onClick={onRefresh}
             className="btn btn-ghost btn-sm h-9 px-3 gap-1.5 text-xs font-semibold rounded-xl border border-border/80 hover:bg-muted/50"
           >
             <CheckCircle2 size={14} className="text-emerald-500" />
-            <span>Review Requests</span>
-          </button>
-        )
-
-      case 'schedule':
-        return (
-          <button
-            onClick={() => onTabChange('employees')}
-            className="btn btn-ghost btn-sm h-9 px-3 gap-1.5 text-xs font-semibold rounded-xl border border-border/80 hover:bg-muted/50"
-          >
-            <Users size={14} className="text-primary" />
-            <span>Staff Directory</span>
+            <span>Refresh Requests</span>
           </button>
         )
 
@@ -154,28 +147,6 @@ export function HRHeader({
           )
         )
 
-      case 'training':
-        return (
-          <button
-            onClick={() => onTabChange('reports')}
-            className="btn btn-ghost btn-sm h-9 px-3 gap-1.5 text-xs font-semibold rounded-xl border border-border/80 hover:bg-muted/50"
-          >
-            <FileText size={14} className="text-cyan-500" />
-            <span>Compliance Report</span>
-          </button>
-        )
-
-      case 'requests':
-        return (
-          <button
-            onClick={() => onTabChange('leave')}
-            className="btn btn-ghost btn-sm h-9 px-3 gap-1.5 text-xs font-semibold rounded-xl border border-border/80 hover:bg-muted/50"
-          >
-            <CalendarDays size={14} className="text-amber-500" />
-            <span>Leave Balances</span>
-          </button>
-        )
-
       case 'reports':
         return (
           <button
@@ -183,7 +154,7 @@ export function HRHeader({
             className="btn btn-ghost btn-sm h-9 px-3 gap-1.5 text-xs font-semibold rounded-xl border border-border/80 hover:bg-muted/50"
           >
             <RefreshCw size={13} className={busy ? 'animate-spin' : ''} />
-            <span>Refresh Analytics</span>
+            <span>Refresh Reports</span>
           </button>
         )
 
@@ -232,7 +203,7 @@ export function HRHeader({
                 value={searchQuery}
                 onChange={(e) => {
                   onSearchChange(e.target.value)
-                  if (activeTab !== 'employees') onTabChange('employees')
+                  if (activeTab !== 'staff' && activeTab !== 'employees') onTabChange('staff')
                 }}
               />
             </div>

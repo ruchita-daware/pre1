@@ -13,6 +13,7 @@ interface EditStaffModalProps {
   branches: BranchOption[]
   onSave: (payload: any) => Promise<void>
   loading?: boolean
+  canManageSensitive?: boolean
 }
 
 function toDateInput(val: any): string {
@@ -33,6 +34,7 @@ export function EditStaffModal({
   branches,
   onSave,
   loading,
+  canManageSensitive = true,
 }: EditStaffModalProps) {
   const [activeTab, setActiveTab] = useState<'employment' | 'personal' | 'statutory' | 'salary'>('employment')
   const [form, setForm] = useState<any>(null)
@@ -79,7 +81,18 @@ export function EditStaffModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    await onSave(form)
+    const payload = { ...form }
+    if (!canManageSensitive) {
+      delete payload.basicSalary
+      delete payload.hra
+      delete payload.specialAllowance
+      delete payload.salary
+      delete payload.panNumber
+      delete payload.aadhaarNumber
+      delete payload.uanNumber
+      delete payload.esiNumber
+    }
+    await onSave(payload)
   }
 
   return (
@@ -140,7 +153,7 @@ export function EditStaffModal({
               activeTab === 'statutory' ? 'bg-primary text-primary-foreground font-semibold' : 'hover:bg-muted text-muted-foreground'
             }`}
           >
-            <Shield size={14} /> Statutory & KYC
+            <Shield size={14} /> Statutory & KYC {!canManageSensitive && <Lock size={11} className="opacity-70" />}
           </button>
           <button
             type="button"
@@ -149,7 +162,7 @@ export function EditStaffModal({
               activeTab === 'salary' ? 'bg-primary text-primary-foreground font-semibold' : 'hover:bg-muted text-muted-foreground'
             }`}
           >
-            <DollarSign size={14} /> Compensation
+            <DollarSign size={14} /> Compensation {!canManageSensitive && <Lock size={11} className="opacity-70" />}
           </button>
         </div>
 
@@ -376,89 +389,117 @@ export function EditStaffModal({
           {/* TAB 3: STATUTORY & KYC */}
           {activeTab === 'statutory' && (
             <div className="space-y-4">
-              <div className="p-3 bg-muted/40 rounded-lg border border-border/60 text-xs text-muted-foreground flex items-center gap-2">
-                <Shield size={16} className="text-primary shrink-0" />
-                <span>
-                  All statutory IDs are strictly validated and encrypted at rest with tenant-isolated AES-256-GCM.
-                </span>
-              </div>
+              {!canManageSensitive ? (
+                <div className="p-4 bg-muted/30 rounded-lg border border-border/60 text-center space-y-2">
+                  <div className="flex justify-center">
+                    <Lock size={20} className="text-muted-foreground" />
+                  </div>
+                  <div className="font-semibold text-foreground">Statutory KYC Restricted</div>
+                  <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                    Modification of PAN, Aadhaar, UAN, and ESI numbers is strictly restricted to School Owners and authorized HR administrators.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="p-3 bg-muted/40 rounded-lg border border-border/60 text-xs text-muted-foreground flex items-center gap-2">
+                    <Shield size={16} className="text-primary shrink-0" />
+                    <span>
+                      All statutory IDs are strictly validated and encrypted at rest with tenant-isolated AES-256-GCM.
+                    </span>
+                  </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="PAN Number (10 alphanumeric)">
-                  <input
-                    className="input text-xs w-full font-mono uppercase"
-                    value={form.panNumber}
-                    placeholder="ABCDE1234F"
-                    maxLength={10}
-                    onChange={(e) => setForm({ ...form, panNumber: e.target.value.toUpperCase() })}
-                  />
-                </Field>
-                <Field label="Aadhaar Number (12 digits)">
-                  <input
-                    className="input text-xs w-full font-mono"
-                    value={form.aadhaarNumber}
-                    placeholder="12 digit Aadhaar number"
-                    maxLength={14}
-                    onChange={(e) => setForm({ ...form, aadhaarNumber: e.target.value })}
-                  />
-                </Field>
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Field label="PAN Number (10 alphanumeric)">
+                      <input
+                        className="input text-xs w-full font-mono uppercase"
+                        value={form.panNumber}
+                        placeholder="ABCDE1234F"
+                        maxLength={10}
+                        onChange={(e) => setForm({ ...form, panNumber: e.target.value.toUpperCase() })}
+                      />
+                    </Field>
+                    <Field label="Aadhaar Number (12 digits)">
+                      <input
+                        className="input text-xs w-full font-mono"
+                        value={form.aadhaarNumber}
+                        placeholder="12 digit Aadhaar number"
+                        maxLength={14}
+                        onChange={(e) => setForm({ ...form, aadhaarNumber: e.target.value })}
+                      />
+                    </Field>
+                  </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Universal Account Number (UAN - 12 digits)">
-                  <input
-                    className="input text-xs w-full font-mono"
-                    value={form.uanNumber}
-                    placeholder="12 digit UAN"
-                    maxLength={12}
-                    onChange={(e) => setForm({ ...form, uanNumber: e.target.value })}
-                  />
-                </Field>
-                <Field label="ESI Number (17 digits)">
-                  <input
-                    className="input text-xs w-full font-mono"
-                    value={form.esiNumber}
-                    placeholder="17 digit ESI number"
-                    maxLength={17}
-                    onChange={(e) => setForm({ ...form, esiNumber: e.target.value })}
-                  />
-                </Field>
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Field label="Universal Account Number (UAN - 12 digits)">
+                      <input
+                        className="input text-xs w-full font-mono"
+                        value={form.uanNumber}
+                        placeholder="12 digit UAN"
+                        maxLength={12}
+                        onChange={(e) => setForm({ ...form, uanNumber: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="ESI Number (17 digits)">
+                      <input
+                        className="input text-xs w-full font-mono"
+                        value={form.esiNumber}
+                        placeholder="17 digit ESI number"
+                        maxLength={17}
+                        onChange={(e) => setForm({ ...form, esiNumber: e.target.value })}
+                      />
+                    </Field>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
           {/* TAB 4: SALARY */}
           {activeTab === 'salary' && (
             <div className="space-y-4">
-              <h4 className="font-semibold text-foreground border-b border-border/60 pb-1 mb-2.5">
-                Salary Structure (Monthly Base)
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <Field label="Basic Salary (₹)" required>
-                  <input
-                    type="number"
-                    className="input text-xs w-full font-mono"
-                    value={form.basicSalary}
-                    onChange={(e) => setForm({ ...form, basicSalary: parseFloat(e.target.value) || 0 })}
-                  />
-                </Field>
-                <Field label="HRA (₹)">
-                  <input
-                    type="number"
-                    className="input text-xs w-full font-mono"
-                    value={form.hra}
-                    onChange={(e) => setForm({ ...form, hra: parseFloat(e.target.value) || 0 })}
-                  />
-                </Field>
-                <Field label="Special Allowance (₹)">
-                  <input
-                    type="number"
-                    className="input text-xs w-full font-mono"
-                    value={form.specialAllowance}
-                    onChange={(e) => setForm({ ...form, specialAllowance: parseFloat(e.target.value) || 0 })}
-                  />
-                </Field>
-              </div>
+              {!canManageSensitive ? (
+                <div className="p-4 bg-muted/30 rounded-lg border border-border/60 text-center space-y-2">
+                  <div className="flex justify-center">
+                    <Lock size={20} className="text-muted-foreground" />
+                  </div>
+                  <div className="font-semibold text-foreground">Salary Structure Restricted</div>
+                  <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                    Compensation revision and salary structure configuration is restricted to School Owners and authorized HR administrators.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <h4 className="font-semibold text-foreground border-b border-border/60 pb-1 mb-2.5">
+                    Salary Structure (Monthly Base)
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <Field label="Basic Salary (₹)" required>
+                      <input
+                        type="number"
+                        className="input text-xs w-full font-mono"
+                        value={form.basicSalary}
+                        onChange={(e) => setForm({ ...form, basicSalary: parseFloat(e.target.value) || 0 })}
+                      />
+                    </Field>
+                    <Field label="HRA (₹)">
+                      <input
+                        type="number"
+                        className="input text-xs w-full font-mono"
+                        value={form.hra}
+                        onChange={(e) => setForm({ ...form, hra: parseFloat(e.target.value) || 0 })}
+                      />
+                    </Field>
+                    <Field label="Special Allowance (₹)">
+                      <input
+                        type="number"
+                        className="input text-xs w-full font-mono"
+                        value={form.specialAllowance}
+                        onChange={(e) => setForm({ ...form, specialAllowance: parseFloat(e.target.value) || 0 })}
+                      />
+                    </Field>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </form>

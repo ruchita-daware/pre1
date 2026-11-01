@@ -27,12 +27,321 @@ export interface SemanticThemeTokens {
   accentGlow: string
 }
 
+export interface ModulePastelIdentity {
+  defaultBg: string
+  hoverBg: string
+  accent: string
+  text: string
+  bg: string
+  titleText: string
+  darkBg: string
+  darkHoverBg: string
+  darkAccent: string
+  darkTitleText: string
+}
+
 export interface HomeModule extends NavItem {
   description: string
   tileSize: TileSize
   semanticTheme: SemanticTheme
   quickActions: QuickAction[]
   animation?: string
+  pastelIdentity?: ModulePastelIdentity
+}
+
+/**
+ * PreOne Soft Pastel Module Identity Tokens (Phase 2 & 3 - Color Enforcement)
+ *
+ * Each primary module has:
+ * - A visible light pastel default background in resting state (defaultBg)
+ * - A distinctly stronger pastel background on hover/interaction (hoverBg)
+ * - A dedicated module accent color for border, halo & focus (accent)
+ * - A WCAG-compliant high-contrast title color (text)
+ */
+export const MODULE_PASTEL_TOKENS: Record<string, ModulePastelIdentity> = {
+  dashboard: {
+    defaultBg: '#F1F6FF',
+    hoverBg: '#E3EEFF',
+    accent: '#3977D5',
+    text: '#346DC4',
+    bg: '#F1F6FF',
+    titleText: '#346DC4',
+    darkBg: 'rgba(57, 119, 213, 0.16)',
+    darkHoverBg: 'rgba(57, 119, 213, 0.28)',
+    darkAccent: '#60A5FA',
+    darkTitleText: '#93C5FD',
+  },
+  setup: {
+    defaultBg: '#F5F0FF',
+    hoverBg: '#EAE0FF',
+    accent: '#7952C6',
+    text: '#7952C6',
+    bg: '#F5F0FF',
+    titleText: '#7952C6',
+    darkBg: 'rgba(121, 82, 198, 0.16)',
+    darkHoverBg: 'rgba(121, 82, 198, 0.28)',
+    darkAccent: '#A78BFA',
+    darkTitleText: '#C4B5FD',
+  },
+  users: {
+    defaultBg: '#FFF3F6',
+    hoverBg: '#FFE6ED',
+    accent: '#C34F73',
+    text: '#B74A6C',
+    bg: '#FFF3F6',
+    titleText: '#B74A6C',
+    darkBg: 'rgba(195, 79, 115, 0.16)',
+    darkHoverBg: 'rgba(195, 79, 115, 0.28)',
+    darkAccent: '#F472B6',
+    darkTitleText: '#FBCFE8',
+  },
+  admissions: {
+    defaultBg: '#EFFAF4',
+    hoverBg: '#DFF5E9',
+    accent: '#269B69',
+    text: '#1F7F56',
+    bg: '#EFFAF4',
+    titleText: '#1F7F56',
+    darkBg: 'rgba(38, 155, 105, 0.16)',
+    darkHoverBg: 'rgba(38, 155, 105, 0.28)',
+    darkAccent: '#34D399',
+    darkTitleText: '#A7F3D0',
+  },
+  students: {
+    defaultBg: '#FFF2F5',
+    hoverBg: '#FFE5EC',
+    accent: '#C34F73',
+    text: '#B74A6C',
+    bg: '#FFF2F5',
+    titleText: '#B74A6C',
+    darkBg: 'rgba(195, 79, 115, 0.16)',
+    darkHoverBg: 'rgba(195, 79, 115, 0.28)',
+    darkAccent: '#F472B6',
+    darkTitleText: '#FBCFE8',
+  },
+  'daily-diary': {
+    defaultBg: '#F0FAFF',
+    hoverBg: '#E1F5FF',
+    accent: '#278DBB',
+    text: '#21769D',
+    bg: '#F0FAFF',
+    titleText: '#21769D',
+    darkBg: 'rgba(39, 141, 187, 0.16)',
+    darkHoverBg: 'rgba(39, 141, 187, 0.28)',
+    darkAccent: '#38BDF8',
+    darkTitleText: '#BAE6FD',
+  },
+  finance: {
+    defaultBg: '#FFF8ED',
+    hoverBg: '#FFF0D8',
+    accent: '#C47A20',
+    text: '#9D621A',
+    bg: '#FFF8ED',
+    titleText: '#9D621A',
+    darkBg: 'rgba(196, 122, 32, 0.16)',
+    darkHoverBg: 'rgba(196, 122, 32, 0.28)',
+    darkAccent: '#FBBF24',
+    darkTitleText: '#FDE68A',
+  },
+  fees: {
+    defaultBg: '#FFF8ED',
+    hoverBg: '#FFF0D8',
+    accent: '#C47A20',
+    text: '#9D621A',
+    bg: '#FFF8ED',
+    titleText: '#9D621A',
+    darkBg: 'rgba(196, 122, 32, 0.16)',
+    darkHoverBg: 'rgba(196, 122, 32, 0.28)',
+    darkAccent: '#FBBF24',
+    darkTitleText: '#FDE68A',
+  },
+  transport: {
+    defaultBg: '#EFF9F7',
+    hoverBg: '#DDF3EE',
+    accent: '#258C7B',
+    text: '#217B6C',
+    bg: '#EFF9F7',
+    titleText: '#217B6C',
+    darkBg: 'rgba(37, 140, 123, 0.16)',
+    darkHoverBg: 'rgba(37, 140, 123, 0.28)',
+    darkAccent: '#2DD4BF',
+    darkTitleText: '#99F6E4',
+  },
+  inventory: {
+    defaultBg: '#FFF8EF',
+    hoverBg: '#FFF0DB',
+    accent: '#C58A35',
+    text: '#926627',
+    bg: '#FFF8EF',
+    titleText: '#926627',
+    darkBg: 'rgba(197, 138, 53, 0.16)',
+    darkHoverBg: 'rgba(197, 138, 53, 0.28)',
+    darkAccent: '#FBBF24',
+    darkTitleText: '#FDE68A',
+  },
+  learning: {
+    defaultBg: '#FFF4EF',
+    hoverBg: '#FFE8DE',
+    accent: '#D76D46',
+    text: '#AC5738',
+    bg: '#FFF4EF',
+    titleText: '#AC5738',
+    darkBg: 'rgba(215, 109, 70, 0.16)',
+    darkHoverBg: 'rgba(215, 109, 70, 0.28)',
+    darkAccent: '#FB923C',
+    darkTitleText: '#FED7AA',
+  },
+  'preo-learning': {
+    defaultBg: '#FFF4EF',
+    hoverBg: '#FFE8DE',
+    accent: '#D76D46',
+    text: '#AC5738',
+    bg: '#FFF4EF',
+    titleText: '#AC5738',
+    darkBg: 'rgba(215, 109, 70, 0.16)',
+    darkHoverBg: 'rgba(215, 109, 70, 0.28)',
+    darkAccent: '#FB923C',
+    darkTitleText: '#FED7AA',
+  },
+  preo_learning: {
+    defaultBg: '#FFF4EF',
+    hoverBg: '#FFE8DE',
+    accent: '#D76D46',
+    text: '#AC5738',
+    bg: '#FFF4EF',
+    titleText: '#AC5738',
+    darkBg: 'rgba(215, 109, 70, 0.16)',
+    darkHoverBg: 'rgba(215, 109, 70, 0.28)',
+    darkAccent: '#FB923C',
+    darkTitleText: '#FED7AA',
+  },
+  hr: {
+    defaultBg: '#F5F2FF',
+    hoverBg: '#EAE3FF',
+    accent: '#7759B8',
+    text: '#7759B8',
+    bg: '#F5F2FF',
+    titleText: '#7759B8',
+    darkBg: 'rgba(119, 89, 184, 0.16)',
+    darkHoverBg: 'rgba(119, 89, 184, 0.28)',
+    darkAccent: '#A78BFA',
+    darkTitleText: '#DDD6FE',
+  },
+  reports: {
+    defaultBg: '#F1F6FF',
+    hoverBg: '#E3EEFF',
+    accent: '#3977D5',
+    text: '#346DC4',
+    bg: '#F1F6FF',
+    titleText: '#346DC4',
+    darkBg: 'rgba(57, 119, 213, 0.16)',
+    darkHoverBg: 'rgba(57, 119, 213, 0.28)',
+    darkAccent: '#60A5FA',
+    darkTitleText: '#93C5FD',
+  },
+  reports_analytics: {
+    defaultBg: '#F1F6FF',
+    hoverBg: '#E3EEFF',
+    accent: '#3977D5',
+    text: '#346DC4',
+    bg: '#F1F6FF',
+    titleText: '#346DC4',
+    darkBg: 'rgba(57, 119, 213, 0.16)',
+    darkHoverBg: 'rgba(57, 119, 213, 0.28)',
+    darkAccent: '#60A5FA',
+    darkTitleText: '#93C5FD',
+  },
+  communication: {
+    defaultBg: '#FFF3F7',
+    hoverBg: '#FFE5EF',
+    accent: '#C44F82',
+    text: '#B44978',
+    bg: '#FFF3F7',
+    titleText: '#B44978',
+    darkBg: 'rgba(196, 79, 130, 0.16)',
+    darkHoverBg: 'rgba(196, 79, 130, 0.28)',
+    darkAccent: '#F472B6',
+    darkTitleText: '#FBCFE8',
+  },
+  announcements: {
+    defaultBg: '#FFF3F7',
+    hoverBg: '#FFE5EF',
+    accent: '#C44F82',
+    text: '#B44978',
+    bg: '#FFF3F7',
+    titleText: '#B44978',
+    darkBg: 'rgba(196, 79, 130, 0.16)',
+    darkHoverBg: 'rgba(196, 79, 130, 0.28)',
+    darkAccent: '#F472B6',
+    darkTitleText: '#FBCFE8',
+  },
+  settings: {
+    defaultBg: '#F3F5F8',
+    hoverBg: '#E8EDF4',
+    accent: '#64748B',
+    text: '#606F85',
+    bg: '#F3F5F8',
+    titleText: '#606F85',
+    darkBg: 'rgba(100, 116, 139, 0.18)',
+    darkHoverBg: 'rgba(100, 116, 139, 0.30)',
+    darkAccent: '#94A3B8',
+    darkTitleText: '#CBD5E1',
+  },
+  audit: {
+    defaultBg: '#F4F1FF',
+    hoverBg: '#EAE4FF',
+    accent: '#6953B4',
+    text: '#6953B4',
+    bg: '#F4F1FF',
+    titleText: '#6953B4',
+    darkBg: 'rgba(105, 83, 180, 0.16)',
+    darkHoverBg: 'rgba(105, 83, 180, 0.28)',
+    darkAccent: '#A78BFA',
+    darkTitleText: '#C4B5FD',
+  },
+  audit_logs: {
+    defaultBg: '#F4F1FF',
+    hoverBg: '#EAE4FF',
+    accent: '#6953B4',
+    text: '#6953B4',
+    bg: '#F4F1FF',
+    titleText: '#6953B4',
+    darkBg: 'rgba(105, 83, 180, 0.16)',
+    darkHoverBg: 'rgba(105, 83, 180, 0.28)',
+    darkAccent: '#A78BFA',
+    darkTitleText: '#C4B5FD',
+  },
+  platform: {
+    defaultBg: '#F1F6FF',
+    hoverBg: '#E3EEFF',
+    accent: '#3977D5',
+    text: '#346DC4',
+    bg: '#F1F6FF',
+    titleText: '#346DC4',
+    darkBg: 'rgba(57, 119, 213, 0.16)',
+    darkHoverBg: 'rgba(57, 119, 213, 0.28)',
+    darkAccent: '#60A5FA',
+    darkTitleText: '#93C5FD',
+  },
+}
+
+export function getModulePastelTokens(key: string): ModulePastelIdentity {
+  const normalizedKey = key.toLowerCase().replace(/_/g, '-')
+  return (
+    MODULE_PASTEL_TOKENS[normalizedKey] ||
+    MODULE_PASTEL_TOKENS[key] || {
+      defaultBg: '#F1F6FF',
+      hoverBg: '#E3EEFF',
+      accent: '#3977D5',
+      text: '#346DC4',
+      bg: '#F1F6FF',
+      titleText: '#346DC4',
+      darkBg: 'rgba(57, 119, 213, 0.16)',
+      darkHoverBg: 'rgba(57, 119, 213, 0.28)',
+      darkAccent: '#60A5FA',
+      darkTitleText: '#93C5FD',
+    }
+  )
 }
 
 export const SEMANTIC_THEME_TOKENS: Record<SemanticTheme, SemanticThemeTokens> = {
@@ -282,6 +591,7 @@ export function homeModules(roleOrRoles: Role | Role[]): HomeModule[] {
       semanticTheme: meta.semanticTheme ?? 'lavender',
       animation: meta.animation,
       quickActions: qas,
+      pastelIdentity: getModulePastelTokens(n.key),
     }
   })
 }

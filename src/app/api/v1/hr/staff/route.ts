@@ -22,10 +22,26 @@ export const GET = withApi(async (req: NextRequest) => {
   const employmentType = sp.get('employmentType') || undefined
   const status = sp.get('status') || undefined
 
+  if (branchId) {
+    const branchCheck = await requireBranchAccess(session, branchId)
+    if (branchCheck) return branchCheck
+  }
+
+  const authorizedBranches = await getAuthorizedBranchIds(session)
+  if (authorizedBranches !== null && authorizedBranches.length === 0) {
+    return ok([])
+  }
+
+  const branchFilter = branchId
+    ? { branchId }
+    : authorizedBranches !== null
+    ? { branchId: { in: authorizedBranches } }
+    : {}
+
   const whereClause: any = {
     tenantId: session.tenantId,
     deletedAt: null,
-    ...(branchId ? { branchId } : {}),
+    ...branchFilter,
     ...(designation ? { designation } : {}),
     ...(department ? { department } : {}),
     ...(employmentType ? { employmentType: employmentType as any } : {}),
@@ -108,15 +124,28 @@ export const POST = withApi(async (req: NextRequest) => {
   }
 
   const body = await req.json()
+  const targetBranchId = body.branchId || session.branchId || null
+  if (targetBranchId) {
+    const branchCheck = await requireBranchAccess(session, targetBranchId)
+    if (branchCheck) return branchCheck
+  } else {
+    const authorizedBranches = await getAuthorizedBranchIds(session)
+    if (authorizedBranches !== null) {
+      throw errPermission('Branch selection is required for staff creation within your assigned branch')
+    }
+  }
+
   const staff = await StaffService.createStaff(
     {
       ...body,
+      branchId: targetBranchId,
       tenantId: session.tenantId,
     },
     {
       id: session.uid,
       name: session.name,
       role: session.role,
+      branchId: session.branchId,
     }
   )
 

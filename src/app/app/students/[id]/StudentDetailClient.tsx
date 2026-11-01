@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -300,7 +300,24 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
   // Promotion State
   const [promoteSessionId, setPromoteSessionId] = useState('')
   const [promoteClassroomId, setPromoteClassroomId] = useState('')
-  const [promoteReason, setPromoteReason] = useState('Session progression')
+  const [promoteOutcome, setPromoteOutcome] = useState<'PROMOTED' | 'CONTINUE_CURRENT_LEVEL' | 'GRADUATED'>('PROMOTED')
+  const [promoteReason, setPromoteReason] = useState('Annual session progression')
+
+  // Find promotion or next year allocation
+  const nextSessionAllocation = useMemo(() => {
+    if (!history || history.length === 0) return null
+    const currentSessionId = academic?.session?.id
+    return history.find(
+      (a: any) =>
+        (a.sessionId && a.sessionId !== currentSessionId && (a.status === 'ACTIVE' || a.status === 'PROMOTED')) ||
+        (a.status === 'PROMOTED')
+    ) || null
+  }, [history, academic?.session?.id])
+
+  const targetSessionClassrooms = useMemo(() => {
+    if (!promoteSessionId) return classrooms
+    return classrooms.filter((c: any) => !c.academicSessionId || c.academicSessionId === promoteSessionId)
+  }, [classrooms, promoteSessionId])
 
   // Cancel Transport State
   const [cancelTransportReason, setCancelTransportReason] = useState('Parent requested cancellation')
@@ -685,8 +702,12 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
   // 7. ACADEMIC PROMOTION
   const handlePromote = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!promoteSessionId || !promoteClassroomId) {
-      toast.error('Validation error', 'Target session and classroom are required')
+    if (!promoteSessionId) {
+      toast.error('Validation error', 'Target session is required')
+      return
+    }
+    if (promoteOutcome !== 'GRADUATED' && !promoteClassroomId) {
+      toast.error('Validation error', 'Target classroom is required')
       return
     }
 
@@ -698,15 +719,23 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           targetAcademicSessionId: promoteSessionId,
-          destinationClassroomId: promoteClassroomId,
+          targetClassroomId: promoteOutcome === 'GRADUATED' ? undefined : promoteClassroomId,
+          destinationClassroomId: promoteOutcome === 'GRADUATED' ? undefined : promoteClassroomId,
           targetProgramType: targetClass?.programType,
+          outcome: promoteOutcome,
           reason: promoteReason,
         }),
       })
       const json = await res.json()
       if (json.success) {
-        toast.success('Promoted', 'Student advanced to next academic session')
+        toast.success(
+          promoteOutcome === 'GRADUATED' ? 'Student Graduated' : 'Promotion Confirmed',
+          promoteOutcome === 'GRADUATED'
+            ? 'Student transitioned to Alumni / Graduated status'
+            : `Student successfully allocated to ${targetClass?.name || 'next class'} for the new session`
+        )
         setPromoteOpen(false)
+        await loadHistory()
         router.refresh()
       } else {
         toast.error('Promotion failed', json.error?.message || 'Could not promote student')
@@ -1086,6 +1115,42 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
                     <span>Educator: {academic.classroom.primaryTeacher.fullName}</span>
                   </span>
                 )}
+
+                {/* ── NEXT YEAR PROMOTION STATUS PILL ── */}
+                {nextSessionAllocation ? (
+                  <span
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-semibold border border-emerald-200/80 dark:border-emerald-800/60 shadow-xs cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+                    title={`Allocated for ${nextSessionAllocation.sessionName || 'next year'}. Click to edit.`}
+                    onClick={() => {
+                      if (nextSessionAllocation.sessionId) setPromoteSessionId(nextSessionAllocation.sessionId)
+                      if (nextSessionAllocation.classroomId) setPromoteClassroomId(nextSessionAllocation.classroomId)
+                      setPromoteOpen(true)
+                    }}
+                  >
+                    <GraduationCap size={13} className="text-emerald-600 dark:text-emerald-400" />
+                    <span>Next Year: {nextSessionAllocation.classroomName || nextSessionAllocation.classroom?.name} ({nextSessionAllocation.sessionName || 'Upcoming'})</span>
+                    <span className="px-1.5 py-0.2 rounded text-[10px] bg-emerald-200 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 uppercase font-bold tracking-wider">Promoted</span>
+                  </span>
+                ) : student?.status === 'GRADUATED' ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-semibold border border-purple-200/80 dark:border-purple-800/60 shadow-xs">
+                    <Award size={13} className="text-purple-600 dark:text-purple-400" />
+                    <span>Status: ECE Alumni / Graduated</span>
+                  </span>
+                ) : (
+                  <span
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 font-medium border border-amber-200/80 dark:border-amber-800/60 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+                    title="Not yet allocated to next academic session. Click to promote."
+                    onClick={() => {
+                      const upcoming = sessions.find((s: any) => !s.isCurrent && s.status !== 'CLOSED')
+                      if (upcoming) setPromoteSessionId(upcoming.id)
+                      setPromoteOpen(true)
+                    }}
+                  >
+                    <Clock3 size={12} className="text-amber-500" />
+                    <span>Next Year: Pending Promotion</span>
+                    <span className="px-1.5 py-0.2 rounded text-[10px] bg-amber-200 dark:bg-amber-900 text-amber-800 dark:text-amber-200 font-bold uppercase tracking-wider">Action Needed</span>
+                  </span>
+                )}
               </div>
 
               {/* Demographics row */}
@@ -1220,6 +1285,21 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
                 >
                   <Edit3 size={13} />
                   <span>Edit Profile</span>
+                </button>
+              )}
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const upcoming = sessions.find((s: any) => !s.isCurrent && s.status !== 'CLOSED')
+                    if (upcoming && !promoteSessionId) setPromoteSessionId(upcoming.id)
+                    setPromoteOpen(true)
+                  }}
+                  className="h-10 px-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/50 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs shrink-0"
+                  title="Promote or allocate student for the next academic year"
+                >
+                  <GraduationCap size={14} />
+                  <span>{nextSessionAllocation ? 'Edit Promotion' : 'Promote Student'}</span>
                 </button>
               )}
               {canEdit && (
@@ -2184,11 +2264,15 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
                   <span>Campus Transfer</span>
                 </button>
                 <button
-                  onClick={() => setPromoteOpen(true)}
-                  className="px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/50 hover:bg-purple-100 dark:hover:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-200 text-xs font-semibold flex items-center gap-1.5"
+                  onClick={() => {
+                    const upcoming = sessions.find((s: any) => !s.isCurrent && s.status !== 'CLOSED')
+                    if (upcoming && !promoteSessionId) setPromoteSessionId(upcoming.id)
+                    setPromoteOpen(true)
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 text-xs font-semibold flex items-center gap-1.5"
                 >
                   <GraduationCap size={14} />
-                  <span>Promote Session</span>
+                  <span>{nextSessionAllocation ? 'Edit Promotion' : 'Promote to Next Year'}</span>
                 </button>
               </div>
             </div>
@@ -4049,11 +4133,27 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
       <Modal
         open={promoteOpen}
         onClose={() => setPromoteOpen(false)}
-        title="Promote to Next Academic Session"
-        subtitle="Annual cohort progression preserving past session allocation history"
+        title={nextSessionAllocation ? "Edit Academic Promotion" : "Promote Student to Next Academic Session"}
+        subtitle="Individual student cohort progression preserving historical academic records"
         icon={<GraduationCap size={20} />}
       >
         <form onSubmit={handlePromote} className="space-y-4">
+          {/* Current Placement Summary Card */}
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 text-xs space-y-1">
+            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Current Placement</div>
+            <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              <School size={14} className="text-purple-600" />
+              <span>{academic?.classroom ? `${academic.classroom.name} (${enumLabel(academic.classroom.programType)})` : 'Unassigned Section'}</span>
+              <span>•</span>
+              <span>{academic?.session?.name || 'Current Session'}</span>
+            </div>
+            {student?.dob && (
+              <div className="text-slate-500 text-[11px]">
+                Age: {childAge} • Born {fmtDate(student.dob)}
+              </div>
+            )}
+          </div>
+
           <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Target Academic Session *</label>
             <select
@@ -4063,35 +4163,95 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
               onChange={(e) => setPromoteSessionId(e.target.value)}
             >
               <option value="" disabled>Select next academic session...</option>
-              {sessions.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Promoted Section *</label>
-            <select
-              className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20"
-              required
-              value={promoteClassroomId}
-              onChange={(e) => setPromoteClassroomId(e.target.value)}
-            >
-              <option value="" disabled>Select classroom...</option>
-              {classrooms.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} — {enumLabel(c.programType)} (Cap: {c.capacity})
+              {sessions.map((s: any) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} {s.isCurrent ? '(Current)' : s.status ? `(${s.status})` : ''}
                 </option>
               ))}
             </select>
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Promotion Reason / Notes</label>
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Progression Decision *</label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setPromoteOutcome('PROMOTED')}
+                className={`p-2.5 rounded-xl border text-left text-xs font-semibold transition-all ${
+                  promoteOutcome === 'PROMOTED'
+                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 ring-2 ring-emerald-500/20'
+                    : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-bold">
+                  <GraduationCap size={14} className="text-emerald-600" />
+                  <span>Promote</span>
+                </div>
+                <div className="text-[10px] text-slate-500 font-normal mt-0.5">Advance to next grade</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPromoteOutcome('CONTINUE_CURRENT_LEVEL')}
+                className={`p-2.5 rounded-xl border text-left text-xs font-semibold transition-all ${
+                  promoteOutcome === 'CONTINUE_CURRENT_LEVEL'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/50 text-blue-800 dark:text-blue-200 ring-2 ring-blue-500/20'
+                    : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-bold">
+                  <RotateCw size={14} className="text-blue-600" />
+                  <span>Continue</span>
+                </div>
+                <div className="text-[10px] text-slate-500 font-normal mt-0.5">Consolidate milestones</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPromoteOutcome('GRADUATED')}
+                className={`p-2.5 rounded-xl border text-left text-xs font-semibold transition-all ${
+                  promoteOutcome === 'GRADUATED'
+                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-950/50 text-purple-800 dark:text-purple-200 ring-2 ring-purple-500/20'
+                    : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-bold">
+                  <Award size={14} className="text-purple-600" />
+                  <span>Graduate</span>
+                </div>
+                <div className="text-[10px] text-slate-500 font-normal mt-0.5">Alumni exit (Sr. KG)</div>
+              </button>
+            </div>
+          </div>
+
+          {promoteOutcome !== 'GRADUATED' && (
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                {promoteOutcome === 'PROMOTED' ? 'Promoted Target Section *' : 'Section for Next Session *'}
+              </label>
+              <select
+                className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                required
+                value={promoteClassroomId}
+                onChange={(e) => setPromoteClassroomId(e.target.value)}
+              >
+                <option value="" disabled>Select target classroom section...</option>
+                {targetSessionClassrooms.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} — {enumLabel(c.programType)} (Capacity: {c.capacity})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Promotion Reason / Remarks</label>
             <input
               className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20"
               value={promoteReason}
               onChange={(e) => setPromoteReason(e.target.value)}
+              placeholder="e.g. Annual advancement to LKG based on milestone completion"
             />
           </div>
 
@@ -4106,9 +4266,14 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
             <button
               type="submit"
               disabled={busy}
-              className="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm disabled:opacity-50"
+              className={`px-4 py-2 rounded-xl text-xs font-semibold text-white shadow-sm disabled:opacity-50 flex items-center gap-1.5 ${
+                promoteOutcome === 'GRADUATED'
+                  ? 'bg-purple-600 hover:bg-purple-700'
+                  : 'bg-emerald-600 hover:bg-emerald-700'
+              }`}
             >
-              {busy ? 'Promoting...' : 'Confirm Promotion'}
+              <GraduationCap size={14} />
+              <span>{busy ? 'Processing...' : promoteOutcome === 'GRADUATED' ? 'Confirm Graduation' : 'Confirm Promotion'}</span>
             </button>
           </div>
         </form>

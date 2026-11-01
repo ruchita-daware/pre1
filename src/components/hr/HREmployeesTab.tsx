@@ -1,10 +1,15 @@
 'use client'
 
-import React, { useMemo } from 'react'
-import { Eye, Pencil, Plus, Users, PhoneCall, Mail, GraduationCap } from 'lucide-react'
+import React, { useMemo, useState } from 'react'
+import { Eye, Pencil, Plus, Users, PhoneCall, Mail, GraduationCap, ShieldCheck, CalendarRange, Award } from 'lucide-react'
 import { Avatar, StatusBadge, IconButton } from '@/components/preone/ui'
 import { DataTable, Column } from '@/components/preone/DataTable'
+import { HRScheduleTab } from './HRScheduleTab'
+import { HRTrainingTab } from './HRTrainingTab'
+import { HRPerformanceTab } from './HRPerformanceTab'
 import type { StaffListItem, BranchOption } from './types'
+
+export type StaffSubView = 'directory' | 'schedule' | 'compliance' | 'performance'
 
 interface HREmployeesTabProps {
   staffList: StaffListItem[] | null
@@ -21,6 +26,8 @@ interface HREmployeesTabProps {
   onEditStaff: (staff: StaffListItem) => void
   onOpenOnboard: () => void
   canWrite?: boolean
+  subView?: StaffSubView
+  onSubViewChange?: (v: StaffSubView) => void
 }
 
 export function HREmployeesTab({
@@ -38,7 +45,12 @@ export function HREmployeesTab({
   onEditStaff,
   onOpenOnboard,
   canWrite,
+  subView: controlledSubView,
+  onSubViewChange,
 }: HREmployeesTabProps) {
+  const [internalSubView, setInternalSubView] = useState<StaffSubView>('directory')
+  const currentSubView = controlledSubView || internalSubView
+  const setSubView = onSubViewChange || setInternalSubView
   // Columns definition matching section 7 & 40
   const columns = useMemo<Column<StaffListItem>[]>(
     () => [
@@ -170,12 +182,13 @@ export function HREmployeesTab({
 
   // Filter toolbar
   const filterToolbar = (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex items-center gap-2 flex-wrap">
       {/* Branch Selector */}
       <select
-        className="select text-xs py-1.5 px-3 h-9 font-medium rounded-xl bg-background/80 border border-border/80"
+        className="select !w-auto min-w-[130px] max-w-[180px] text-xs py-1.5 px-3 h-9 font-medium rounded-xl bg-background/80 border border-border/80 cursor-pointer shadow-2xs hover:border-border transition-colors focus:ring-1 focus:ring-primary/30"
         value={branchFilter}
         onChange={(e) => onBranchFilterChange(e.target.value)}
+        aria-label="Filter by campus"
       >
         <option value="ALL">All Campuses</option>
         {branches.map((b) => (
@@ -187,9 +200,10 @@ export function HREmployeesTab({
 
       {/* Status Filter */}
       <select
-        className="select text-xs py-1.5 px-3 h-9 font-medium rounded-xl bg-background/80 border border-border/80"
+        className="select !w-auto min-w-[120px] max-w-[160px] text-xs py-1.5 px-3 h-9 font-medium rounded-xl bg-background/80 border border-border/80 cursor-pointer shadow-2xs hover:border-border transition-colors focus:ring-1 focus:ring-primary/30"
         value={statusFilter}
         onChange={(e) => onStatusFilterChange(e.target.value)}
+        aria-label="Filter by status"
       >
         <option value="ALL">All Statuses</option>
         <option value="ACTIVE">Active Staff</option>
@@ -199,9 +213,10 @@ export function HREmployeesTab({
 
       {/* Department Filter */}
       <select
-        className="select text-xs py-1.5 px-3 h-9 font-medium rounded-xl bg-background/80 border border-border/80"
+        className="select !w-auto min-w-[130px] max-w-[180px] text-xs py-1.5 px-3 h-9 font-medium rounded-xl bg-background/80 border border-border/80 cursor-pointer shadow-2xs hover:border-border transition-colors focus:ring-1 focus:ring-primary/30"
         value={departmentFilter}
         onChange={(e) => onDepartmentFilterChange(e.target.value)}
+        aria-label="Filter by department"
       >
         <option value="ALL">All Departments</option>
         <option value="Academics">Academics</option>
@@ -215,41 +230,110 @@ export function HREmployeesTab({
 
   return (
     <div className="space-y-4">
-      <DataTable
-        columns={columns}
-        data={staffList}
-        loading={staffList === null}
-        onRowClick={(row) => onViewStaff(row.id)}
-        searchPlaceholder="Search employees by name, code, contact, role..."
-        searchValue={searchQuery}
-        onSearch={onSearchQueryChange}
-        filters={filterToolbar}
-        toolbarActions={
-          canWrite ? (
-            <button
-              onClick={onOpenOnboard}
-              className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm"
-            >
-              <Plus size={14} />
-              <span>Add Employee</span>
-            </button>
-          ) : undefined
-        }
-        emptyTitle="No Employees Found"
-        emptyMessage="No employee records match your search or filter criteria."
-        emptyIcon={<Users size={36} className="text-muted-foreground opacity-50" />}
-        emptyAction={
-          canWrite ? (
-            <button onClick={onOpenOnboard} className="btn btn-primary btn-sm mt-2">
-              <Plus size={14} /> Onboard First Employee
-            </button>
-          ) : undefined
-        }
-        paginate
-        defaultPageSize={15}
-        showExport
-        exportFileName="preone-employees-directory"
-      />
+      {/* ── Sub-View Bar for Specialized Tasks ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-1 border-b border-border/60">
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-muted/40 border border-border/60">
+          <button
+            type="button"
+            onClick={() => setSubView('directory')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              currentSubView === 'directory'
+                ? 'bg-card text-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Users size={13} />
+            <span>Staff Directory</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSubView('schedule')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              currentSubView === 'schedule'
+                ? 'bg-card text-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <CalendarRange size={13} />
+            <span>Classroom Allocations</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSubView('compliance')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              currentSubView === 'compliance'
+                ? 'bg-card text-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <ShieldCheck size={13} />
+            <span>Compliance & Safety</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSubView('performance')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              currentSubView === 'performance'
+                ? 'bg-card text-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Award size={13} />
+            <span>Appraisals & Reviews</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── Active View Content ── */}
+      {currentSubView === 'directory' && (
+        <DataTable
+          columns={columns}
+          data={staffList}
+          loading={staffList === null}
+          onRowClick={(row) => onViewStaff(row.id)}
+          searchPlaceholder="Search employees by name, code, contact, role..."
+          searchValue={searchQuery}
+          onSearch={onSearchQueryChange}
+          filters={filterToolbar}
+          toolbarActions={
+            canWrite ? (
+              <button
+                onClick={onOpenOnboard}
+                className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm"
+              >
+                <Plus size={14} />
+                <span>Add Staff</span>
+              </button>
+            ) : undefined
+          }
+          emptyTitle="No Employees Found"
+          emptyMessage="No employee records match your search or filter criteria."
+          emptyIcon={<Users size={36} className="text-muted-foreground opacity-50" />}
+          emptyAction={
+            canWrite ? (
+              <button onClick={onOpenOnboard} className="btn btn-primary btn-sm mt-2">
+                <Plus size={14} /> Onboard First Employee
+              </button>
+            ) : undefined
+          }
+          paginate
+          defaultPageSize={15}
+          showExport
+          exportFileName="preone-employees-directory"
+        />
+      )}
+
+      {currentSubView === 'schedule' && (
+        <HRScheduleTab branchFilter={branchFilter} />
+      )}
+
+      {currentSubView === 'compliance' && (
+        <HRTrainingTab canWrite={canWrite} />
+      )}
+
+      {currentSubView === 'performance' && (
+        <HRPerformanceTab canWrite={canWrite} />
+      )}
     </div>
   )
 }

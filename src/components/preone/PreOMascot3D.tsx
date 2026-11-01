@@ -321,11 +321,15 @@ export function PreOMascot3D({
     )
 
     // Animation Loop
-    const clock = new THREE.Clock()
+    const startTime = performance.now()
+    let lastTime = startTime
     const animate = () => {
       reqIdRef.current = requestAnimationFrame(animate)
 
-      const delta = clock.getDelta()
+      const now = performance.now()
+      const delta = Math.min((now - lastTime) / 1000, 0.1)
+      const elapsed = (now - startTime) / 1000
+      lastTime = now
       if (!isVisibleRef.current || document.hidden) return
 
       if (mixerRef.current) {
@@ -338,14 +342,14 @@ export function PreOMascot3D({
         const targetX = interactive && isHoveredRef.current ? mouseTargetRef.current.y * 0.22 : 0
         const targetY = interactive && isHoveredRef.current
           ? mouseTargetRef.current.x * 0.38
-          : (autoRotate ? Math.sin(clock.getElapsedTime() * 0.7) * 0.12 : 0)
+          : (autoRotate ? Math.sin(elapsed * 0.7) * 0.12 : 0)
 
         mouseCurrentRef.current.x += (targetX - mouseCurrentRef.current.x) * 0.08
         mouseCurrentRef.current.y += (targetY - mouseCurrentRef.current.y) * 0.08
 
         root.rotation.x = mouseCurrentRef.current.x
         root.rotation.y = mouseCurrentRef.current.y
-        root.position.y = Math.sin(clock.getElapsedTime() * 1.6) * 0.028
+        root.position.y = Math.sin(elapsed * 1.6) * 0.028
       }
 
       if (rendererRef.current && sceneRef.current && cameraRef.current) {

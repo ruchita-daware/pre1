@@ -306,7 +306,7 @@ export function DailyReportPublishModal({
                 />
               </div>
 
-              <div className="max-h-[58vh] overflow-y-auto space-y-2 pr-1">
+              <div className="max-h-56 sm:max-h-72 lg:max-h-[58vh] overflow-y-auto space-y-2 pr-1">
                 {filteredReports.map((r) => {
                   const isSelected = selectedStudentId === r.studentId
                   return (
@@ -620,12 +620,12 @@ export function DailyReportPublishModal({
         )}
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between gap-3 pt-3 border-t border-border/60">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-border/60">
           <button
             type="button"
             onClick={onClose}
             disabled={publishing}
-            className="btn btn-sm btn-ghost"
+            className="btn btn-sm btn-ghost w-full sm:w-auto justify-center"
           >
             Close
           </button>
@@ -635,10 +635,10 @@ export function DailyReportPublishModal({
               type="button"
               onClick={() => setShowConfirm(true)}
               disabled={publishing || readyReports.length === 0}
-              className="btn btn-sm btn-primary min-w-[240px] font-bold flex items-center justify-center gap-2 shadow-sm"
+              className="btn btn-sm btn-primary w-full sm:w-auto min-w-[200px] font-bold flex items-center justify-center gap-2 shadow-sm"
             >
               <Send className="w-4 h-4" />
-              <span>Publish Daily Reports to Parents ({readyReports.length} Ready)</span>
+              <span>Publish Reports ({readyReports.length} Ready)</span>
             </button>
           )}
         </div>

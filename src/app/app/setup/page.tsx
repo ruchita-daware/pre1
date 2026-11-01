@@ -9,7 +9,7 @@ import {
   CheckCircle2, AlertTriangle, Lock, ChevronRight, PlayCircle,
   ClipboardCheck, LayoutList, ArrowRight, History, Sparkles, Edit3, Plus,
   Sliders, Activity, Check, RefreshCw, Layers, ExternalLink, AlertCircle, Info,
-  Globe, Copy,
+  Globe, Copy, CreditCard,
 } from 'lucide-react'
 import {
   PageHead, Skeleton, EmptyState, StatusBadge,
@@ -33,7 +33,7 @@ const ICONS: Record<string, React.ComponentType<{ size?: number | string; classN
   School, Building2, Palette, Blocks, DoorOpen, Clock, ShieldCheck, Users,
   CalendarRange, LayoutGrid, GraduationCap, BookOpen, CalendarDays, IndianRupee,
   ClipboardList, HeartHandshake, Sun, Cross, Megaphone, FileText, Upload,
-  ClipboardCheck, ArrowRight, Globe, Copy,
+  ClipboardCheck, ArrowRight, Globe, Copy, CreditCard,
 }
 
 interface StepRow {

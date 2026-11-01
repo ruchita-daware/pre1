@@ -10,6 +10,7 @@ export interface ApplyLeaveInput {
   startDate: string | Date
   endDate: string | Date
   reason: string
+  isHalfDay?: boolean
 }
 
 export class LeaveService {
@@ -72,7 +73,7 @@ export class LeaveService {
    * Apply for leave with overlap and balance validation
    */
   static async applyLeave(input: ApplyLeaveInput) {
-    const { tenantId, staffProfileId, leaveTypeId, startDate, endDate, reason } = input
+    const { tenantId, staffProfileId, leaveTypeId, startDate, endDate, reason, isHalfDay } = input
 
     const start = new Date(startDate)
     const end = new Date(endDate)
@@ -80,9 +81,14 @@ export class LeaveService {
       throw new Error('End date cannot be earlier than start date')
     }
 
-    // Calculate business/calendar days (minimum 1 day)
-    const diffTime = Math.abs(end.getTime() - start.getTime())
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
+    // Calculate business/calendar days (supports half-day)
+    let diffDays = 1
+    if (isHalfDay) {
+      diffDays = 0.5
+    } else {
+      const diffTime = Math.abs(end.getTime() - start.getTime())
+      diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
+    }
 
     // 1. Check for overlapping approved or pending leave requests
     const overlap = await db.leaveRequest.findFirst({
@@ -171,6 +177,36 @@ export class LeaveService {
     if (!leave) throw new Error('Leave request not found')
     if (leave.status !== 'PENDING') throw new Error(`Leave request is already ${leave.status}`)
 
+    // 1. Self-approval guard: Nobody may approve or reject their own leave
+    if (leave.staffProfile.userId === actor.id) {
+      throw new Error('Self-approval forbidden: Cannot approve or reject your own leave request.')
+    }
+
+    // 2. Mandatory Principal Rule: Principal leave requests must ALWAYS route directly to Owner
+    const applicantMembership = await db.tenantUser.findFirst({
+      where: { tenantId, userId: leave.staffProfile.userId, deletedAt: null },
+    })
+    const isPrincipal =
+      applicantMembership?.role === 'PRINCIPAL' ||
+      applicantMembership?.roles?.includes('PRINCIPAL') ||
+      leave.staffProfile.designation?.toLowerCase().includes('principal')
+
+    const isOwner =
+      ['OWNER', 'PLATFORM_ADMIN', 'SUPER_ADMIN'].includes(actor.role) ||
+      Boolean((actor as any).roles?.some((r: string) => ['OWNER', 'PLATFORM_ADMIN'].includes(r)))
+
+    if (isPrincipal && !isOwner) {
+      throw new Error('Mandatory Policy: Principal leave requests can only be approved by the School Owner.')
+    }
+
+    // 3. Branch Isolation Guard for non-owner approvers
+    const actorBranchId = (actor as any).branchId
+    if (!isOwner && actorBranchId && leave.staffProfile.branchId) {
+      if (leave.staffProfile.branchId !== actorBranchId) {
+        throw new Error('Forbidden: Cannot action leave requests for staff assigned to another campus branch')
+      }
+    }
+
     const start = new Date(leave.startDate)
     const fiscalYear = start.getMonth() >= 3 ? start.getFullYear() : start.getFullYear() - 1
     const balance = await db.leaveBalance.findUnique({
@@ -245,9 +281,10 @@ export class LeaveService {
         })
       }
 
-      // Mark Staff Attendance as ON_LEAVE for these dates
+      // Mark Staff Attendance as ON_LEAVE (or HALF_DAY) for these dates
       const curr = new Date(leave.startDate)
       const endD = new Date(leave.endDate)
+      const attendanceStatus = leave.totalDays === 0.5 ? 'HALF_DAY' : 'ON_LEAVE'
       while (curr <= endD) {
         const dateCopy = new Date(curr)
         await tx.attendanceStaff.upsert({
@@ -262,15 +299,15 @@ export class LeaveService {
             branchId: leave.staffProfile.branchId || '',
             staffProfileId: leave.staffProfileId,
             date: dateCopy,
-            status: 'ON_LEAVE',
+            status: attendanceStatus,
             source: 'MANUAL',
-            notes: `Approved leave: ${leave.leaveType.name}`,
+            notes: `Approved leave: ${leave.leaveType.name}${leave.totalDays === 0.5 ? ' (Half-Day)' : ''}`,
             markedById: actor.id,
             markedByName: actor.name,
           },
           update: {
-            status: 'ON_LEAVE',
-            notes: `Approved leave: ${leave.leaveType.name}`,
+            status: attendanceStatus,
+            notes: `Approved leave: ${leave.leaveType.name}${leave.totalDays === 0.5 ? ' (Half-Day)' : ''}`,
             markedById: actor.id,
             markedByName: actor.name,
           },

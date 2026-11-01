@@ -535,7 +535,7 @@ export function QuickLogModal({
     >
       <div className="space-y-4 max-h-[85vh] overflow-y-auto pr-1">
         {/* Type Selector Bar */}
-        <div className="grid grid-cols-3 sm:grid-cols-7 gap-1.5">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-1.5">
           {quickTypes.map((qt) => {
             const Icon = qt.icon
             const isSelected = activeType === qt.type
@@ -558,7 +558,7 @@ export function QuickLogModal({
         </div>
 
         {/* Attendance Shortcut Notice */}
-        <div className="bg-primary/5 border border-primary/20 rounded-xl p-2.5 flex items-center justify-between text-xs">
+        <div className="bg-primary/5 border border-primary/20 rounded-xl p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2">
             <CalendarCheck className="w-4 h-4 text-primary shrink-0" />
             <span className="text-foreground/90 font-medium">
@@ -571,7 +571,7 @@ export function QuickLogModal({
               onClose()
               if (onOpenFastRollCall) onOpenFastRollCall()
             }}
-            className="btn btn-xs btn-primary shrink-0 flex items-center gap-1 shadow-none"
+            className="btn btn-xs btn-primary shrink-0 flex items-center justify-center gap-1 shadow-none w-full sm:w-auto"
           >
             <UserCheck className="w-3.5 h-3.5" />
             Fast Roll Call
@@ -580,7 +580,7 @@ export function QuickLogModal({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Universal Header: Event Time & Classroom info */}
-          <div className="flex items-center gap-3 bg-muted/30 p-2.5 rounded-lg border border-border/40 text-xs">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 bg-muted/30 p-2.5 rounded-lg border border-border/40 text-xs">
             <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
             <span className="font-medium text-foreground/80">Event Time:</span>
             <input
@@ -592,7 +592,7 @@ export function QuickLogModal({
               }}
               className="px-2 py-1 bg-background border border-border rounded text-xs focus:ring-1 focus:ring-primary outline-none"
             />
-            <span className="text-muted-foreground ml-auto hidden sm:inline">
+            <span className="text-muted-foreground sm:ml-auto text-[11px] sm:text-xs">
               Classroom: <strong className="text-foreground">{classroomName}</strong> • Date: {dateStr}
             </span>
           </div>
@@ -1131,7 +1131,7 @@ export function QuickLogModal({
                               : 'hover:bg-muted/30'
                           }`}
                         >
-                          <div className="flex items-center justify-between p-2 sm:px-3 gap-2">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2 sm:px-3 gap-2">
                             {/* Checkbox + Student Avatar + Info */}
                             <div className="flex items-center gap-2.5 min-w-0">
                               <input
@@ -1185,7 +1185,7 @@ export function QuickLogModal({
                             </div>
 
                             {/* Status Selector + Exception indicator */}
-                            <div className="flex items-center gap-1.5 shrink-0">
+                            <div className="flex items-center justify-between sm:justify-end gap-1.5 shrink-0 w-full sm:w-auto pt-1 sm:pt-0 border-t sm:border-t-0 border-border/30">
                               {/* Exception badge and Restore Default button */}
                               {isException && (
                                 <div className="flex items-center gap-1">
@@ -1328,19 +1328,19 @@ export function QuickLogModal({
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border/60">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-3 border-t border-border/60">
             <button
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="btn btn-sm btn-ghost"
+              className="btn btn-sm btn-ghost w-full sm:w-auto justify-center"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting || (isBulkType && selectedCount === 0)}
-              className="btn btn-sm btn-primary min-w-[170px] font-semibold flex items-center justify-center gap-2 shadow-sm"
+              className="btn btn-sm btn-primary w-full sm:w-auto min-w-[170px] font-semibold flex items-center justify-center gap-2 shadow-sm"
             >
               {submitting ? (
                 <>
