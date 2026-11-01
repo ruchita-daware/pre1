@@ -15,7 +15,8 @@ async function _GET(req: NextRequest) {
 
   try {
     const { searchParams } = new URL(req.url)
-    const status = searchParams.get('status') || undefined
+    const statusParam = searchParams.get('status') || undefined
+    const status = statusParam === 'ALL' ? undefined : statusParam
     const subjectType = (searchParams.get('type') as SubjectType) || undefined
     const programId = searchParams.get('programId') || undefined
     const classroomId = searchParams.get('classroomId') || undefined

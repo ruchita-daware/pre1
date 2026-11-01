@@ -4101,8 +4101,9 @@ function EditSubjectModal({ item, onClose, onDone, api, toast }: { item: Dict; o
   const [busy, setBusy] = useState(false)
   const [programs, setPrograms] = useState<Dict[]>([])
   const initialProgramIds = useMemo(() => {
-    if (Array.isArray(item.programSubjects)) {
-      return item.programSubjects.map((ps: any) => String(ps.programId))
+    const list = item.programMappings || item.programSubjects
+    if (Array.isArray(list)) {
+      return list.map((ps: any) => String(ps.programId))
     }
     return []
   }, [item])
@@ -4157,14 +4158,14 @@ function EditSubjectModal({ item, onClose, onDone, api, toast }: { item: Dict; o
           </div>
           <div className="field"><label>Short Name</label><input className="input" name="shortName" defaultValue={String(item.shortName || '')} /></div>
           <div className="field"><label>Subject Type <span className="req">*</span></label>
-            <select className="select" name="subjectType" defaultValue={String(item.type || 'CORE')} required>
+            <select className="select" name="subjectType" defaultValue={String(item.subjectType || item.type || 'CORE')} required>
               <option value="CORE">CORE — Core Learning Area</option>
               <option value="OPTIONAL">OPTIONAL — Optional / Elective</option>
               <option value="ACTIVITY">ACTIVITY — Co-curricular / Activity</option>
             </select>
           </div>
           <div className="field"><label>Status</label>
-            <select className="select" name="status" defaultValue={item.active ? 'ACTIVE' : 'INACTIVE'}>
+            <select className="select" name="status" defaultValue={item.status || (item.active ? 'ACTIVE' : 'INACTIVE') || 'ACTIVE'}>
               <option value="ACTIVE">ACTIVE</option>
               <option value="INACTIVE">INACTIVE</option>
             </select>

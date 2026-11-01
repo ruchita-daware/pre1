@@ -50,7 +50,7 @@ export class SubjectService {
       where: {
         tenantId,
         deletedAt: null,
-        ...(filter?.status ? { status: filter.status } : {}),
+        ...(filter?.status && filter.status !== 'ALL' ? { status: filter.status } : {}),
         ...(filter?.subjectType ? { subjectType: filter.subjectType } : {}),
         ...(targetProgramId
           ? {
@@ -101,7 +101,8 @@ export class SubjectService {
     const role = session.role
     const roles = session.roles || [role]
     const isAdmin = roles.some((r) => ['OWNER', 'PRINCIPAL', 'COORDINATOR', 'PLATFORM_ADMIN', 'ADMIN'].includes(r))
-    const activeStatus = filter?.status || 'ACTIVE'
+    const statusFilter = filter?.status && filter.status !== 'ALL' ? filter.status : undefined
+    const activeStatus = statusFilter || (isAdmin ? undefined : 'ACTIVE')
 
     // 1. If Admin/Owner: Full access to configured active subjects for the tenant
     if (isAdmin) {
@@ -330,7 +331,7 @@ export class SubjectService {
     })
 
     if (existing) {
-      if (existing.deletedAt) {
+      if (existing.deletedAt || existing.status === 'INACTIVE') {
         // Reactivate soft-deleted subject
         return await db.$transaction(async (tx) => {
           const updated = await tx.subject.update({
