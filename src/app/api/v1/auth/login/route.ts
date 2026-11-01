@@ -94,8 +94,9 @@ export const POST = withApi(
       }
 
       const cleanSchoolCode = schoolCode?.trim().toUpperCase()
+      const loginDigits = loginId.replace(/\D/g, '')
 
-      // Find user by either email or username (case-insensitive for resilience)
+      // Find user by either email, username, or phone (case-insensitive & resilient)
       let user: any = null
       try {
         user = await db.user.findFirst({
@@ -103,6 +104,8 @@ export const POST = withApi(
             OR: [
               { email: { equals: loginId, mode: 'insensitive' } },
               { username: { equals: loginId, mode: 'insensitive' } },
+              { phone: { equals: loginId, mode: 'insensitive' } },
+              ...(loginDigits.length >= 7 ? [{ phone: { contains: loginDigits } }] : []),
             ],
           },
           include: {
@@ -113,9 +116,12 @@ export const POST = withApi(
           },
         })
 
-        // Resilient alias mapping for demo accounts (e.g. owner, meera.iyer, owner.sunshine)
+        // Resilient alias mapping for demo accounts (e.g. demo1, owner, meera.iyer, owner.sunshine)
         if (!user) {
           const demoAliasMap: Record<string, string> = {
+            'demo1': 'owner@sunshine.demo',
+            'demo': 'owner@sunshine.demo',
+            'demo1.sunshine': 'owner@sunshine.demo',
             'owner': 'owner@sunshine.demo',
             'owner.sunshine': 'owner@sunshine.demo',
             'meera.iyer': 'owner@sunshine.demo',
@@ -132,7 +138,7 @@ export const POST = withApi(
             'reception.sunshine': 'reception@sunshine.demo',
             'divya.nair': 'reception@sunshine.demo',
           }
-          const targetEmail = demoAliasMap[loginId]
+          const targetEmail = demoAliasMap[loginId.toLowerCase()]
           if (targetEmail) {
             user = await db.user.findFirst({
               where: { email: { equals: targetEmail, mode: 'insensitive' } },
