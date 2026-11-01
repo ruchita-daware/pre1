@@ -325,7 +325,7 @@ export default function SetupStepPage() {
     return <EmptyState icon={<AlertTriangle size={40} />} title="Unknown setup step" message={`No setup step "${stepKey}" exists.`} />
   }
   if (status === null) {
-    return <><PageHead title={def.label} sub={stepKey === 'school_profile' ? undefined : def.description} /><div className="card"><div style={{ padding: 16 }}><Skeleton h={200} /></div></div></>
+    return <><PageHead title={def.label} sub={stepKey === 'school_profile' || stepKey === 'branch' ? undefined : def.description} /><div className="card"><div style={{ padding: 16 }}><Skeleton h={200} /></div></div></>
   }
 
   const isOptional = def.applicability !== 'MANDATORY'
@@ -351,7 +351,7 @@ export default function SetupStepPage() {
           </div>
         }
         sub={
-          stepKey === 'school_profile'
+          stepKey === 'school_profile' || stepKey === 'branch'
             ? undefined
             : stepScope === 'TENANT'
             ? `${def.description} (🌐 School-Wide: applies to all branches)`
@@ -386,7 +386,7 @@ export default function SetupStepPage() {
       />
 
       {/* status strip */}
-      {stepKey !== 'school_profile' && (
+      {stepKey !== 'school_profile' && stepKey !== 'branch' && (
         <div className="card" style={{ marginBottom: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <span className={`badge ${statusBadgeCls[displayStatus]}`}>{displayStatus}</span>
           {me?.applicability !== 'MANDATORY' && <span className="badge b-neutral">{me?.applicability}</span>}

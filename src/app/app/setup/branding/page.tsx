@@ -109,32 +109,6 @@ export default function BrandingPage() {
     return evaluateColorContrast(primaryColor, accentColor)
   }, [primaryColor, accentColor, isPrimaryValid, isAccentValid])
 
-  // 3. Branding Status Indicator
-  const brandingStatus = useMemo(() => {
-    const hasLogo = Boolean(logoUrl)
-    const hasCustomColor = isPrimaryCustom || isAccentCustom
-
-    if (hasLogo && hasCustomColor) {
-      return {
-        label: 'Branding configured',
-        cls: 'b-success',
-        desc: 'Custom school identity and colors are active across all portals.',
-      }
-    }
-    if (hasLogo || hasCustomColor) {
-      return {
-        label: 'Branding partially configured',
-        cls: 'b-warning',
-        desc: 'Some visual identity elements are configured with PreOne defaults.',
-      }
-    }
-    return {
-      label: 'Branding not configured',
-      cls: 'b-neutral',
-      desc: 'Using standard PreOne visual identity and theme defaults.',
-    }
-  }, [logoUrl, isPrimaryCustom, isAccentCustom])
-
   // 4. Logo File Upload Handler
   const handleLogoFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -339,7 +313,6 @@ export default function BrandingPage() {
             <SetupScopeBadge scope="TENANT" size="md" />
           </div>
         }
-        sub="Personalize themes, school colors, ambient navigation glow, and institutional logo (applies to all branches)."
         actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button
@@ -373,67 +346,6 @@ export default function BrandingPage() {
         }
       />
 
-      {/* ── Branding Status Card (Modern Pill / Stat Overview) ── */}
-      <div
-        className="card"
-        style={{
-          padding: '16px 20px',
-          marginBottom: 24,
-          background: 'var(--card, #fff)',
-          borderRadius: 14,
-          border: '1px solid var(--border-subtle)',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span className={`badge ${brandingStatus.cls}`} style={{ fontSize: 12, padding: '4px 10px', fontWeight: 700 }}>
-              {brandingStatus.label}
-            </span>
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              {brandingStatus.desc}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 12, color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 500 }}>
-              <ImageIcon size={13} style={{ color: logoUrl ? 'var(--color-success, #10b981)' : 'var(--text-muted)' }} />
-              Logo: <strong style={{ color: 'var(--text-primary)' }}>{logoUrl ? 'Configured' : 'Default Mark'}</strong>
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 500 }}>
-              <span
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: '50%',
-                  background: primaryColor,
-                  border: '1px solid rgba(0,0,0,0.1)',
-                  display: 'inline-block',
-                }}
-              />
-              Primary: <strong style={{ color: 'var(--text-primary)' }}>{primaryColor}</strong>
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 500 }}>
-              <span
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: '50%',
-                  background: accentColor,
-                  border: '1px solid rgba(0,0,0,0.1)',
-                  display: 'inline-block',
-                }}
-              />
-              Accent: <strong style={{ color: 'var(--text-primary)' }}>{accentColor}</strong>
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 500 }}>
-              <Sparkles size={13} style={{ color: glowConfig.enabled ? 'var(--color-success, #10b981)' : 'var(--text-muted)' }} />
-              Glow: <strong style={{ color: 'var(--text-primary)' }}>{glowConfig.enabled ? 'ON' : 'OFF'}</strong>
-            </span>
-          </div>
-        </div>
-      </div>
-
       {/* ── Main Workspace Form (Single Clean Column) ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
@@ -445,9 +357,6 @@ export default function BrandingPage() {
                 <Palette size={16} /> 1. Brand Colors
               </h3>
             </div>
-            <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-              Primary color applies to navigation and major buttons; accent color applies to highlights and badges across portals.
-            </p>
           </div>
 
           {/* Contrast Warning Banner if present */}
@@ -667,9 +576,6 @@ export default function BrandingPage() {
                 {glowConfig.enabled ? 'Glow: ON' : 'Glow: OFF'}
               </button>
             </div>
-            <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-              Configure the ambient outer glow and 1px gradient accent border on the floating bottom navigation dock.
-            </p>
           </div>
 
           {glowConfig.enabled && (
@@ -809,9 +715,6 @@ export default function BrandingPage() {
                 </span>
               )}
             </div>
-            <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-              Official institutional crest displayed on Login, Application Forms, Admission Dossiers, and Home Launcher.
-            </p>
           </div>
 
           <input
@@ -925,18 +828,6 @@ export default function BrandingPage() {
               </button>
             </div>
           )}
-
-          <div style={{ marginTop: 14 }}>
-            <input
-              className="input text-xs"
-              placeholder="Or enter direct durable logo URL (https://.../logo.png)"
-              value={logoUrl || ''}
-              onChange={(e) => setLogoUrl(e.target.value.trim() || null)}
-            />
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-              Accepted formats: PNG, JPG, WebP, SVG. Max file size: 2MB. Stored durably in centralized cloud storage.
-            </div>
-          </div>
         </div>
 
       </div>
