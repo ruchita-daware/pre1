@@ -5,7 +5,7 @@ import {
   School, Building2, Palette, Blocks, DoorOpen, Clock, ShieldCheck, Users,
   CalendarRange, LayoutGrid, GraduationCap, BookOpen, CalendarDays, IndianRupee,
   ClipboardList, HeartHandshake, Sun, Cross, Megaphone, FileText, Upload,
-  Rocket, CheckCircle2, AlertTriangle, Lock, ChevronRight, PlayCircle,
+  CheckCircle2, AlertTriangle, Lock, ChevronRight, PlayCircle,
   ClipboardCheck, LayoutList, ArrowRight, History, Sparkles, Edit3, Plus,
   Sliders, Activity, Check, RefreshCw, Layers, ExternalLink, AlertCircle, Info,
   Globe, Copy,
@@ -158,7 +158,6 @@ export default function SetupPage() {
   const [validationOpen, setValidationOpen] = useState(false)
   const [deps, setDeps] = useState<DepsPayload | null>(null)
   const [depOpen, setDepOpen] = useState(false)
-  const [goLiveOpen, setGoLiveOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
   // Step filter in Tab 2
@@ -328,29 +327,6 @@ export default function SetupPage() {
     } catch (e: any) {
       setValidating(false)
       toast.error('Validation error', e?.message || 'Server error')
-    }
-  }
-
-  const goLive = async () => {
-    setBusy(true)
-    try {
-      const res = await fetch('/api/v1/setup/go-live', { method: 'POST' })
-      const j = await res.json()
-      setBusy(false)
-      if (j.success) {
-        toast.success('Preschool is LIVE', 'Operational dashboard is now primary')
-        setGoLiveOpen(false)
-        load()
-      } else {
-        toast.error('Go-live blocked', j.error?.message)
-        if (j.error?.code === 'SETUP_001') {
-          setGoLiveOpen(false)
-          runValidation()
-        }
-      }
-    } catch (e: any) {
-      setBusy(false)
-      toast.error('Go-live failed', e?.message || 'Server error')
     }
   }
 
@@ -546,11 +522,6 @@ export default function SetupPage() {
             <button className="btn btn-outline" onClick={() => { setDepOpen(true); if (!deps) loadDeps() }}>
               <LayoutList size={14} /> Dependency Graph
             </button>
-            {status.status !== 'LIVE' && mandatoryLeft === 0 && (
-              <button className="btn btn-primary" onClick={() => setGoLiveOpen(true)}>
-                <Rocket size={14} /> Launch Preschool (Go Live)
-              </button>
-            )}
           </div>
         }
       />
@@ -1472,34 +1443,7 @@ export default function SetupPage() {
         )}
       </Modal>
 
-      {/* 11. GO-LIVE CONFIRMATION MODAL */}
-      <Modal open={goLiveOpen} onClose={() => setGoLiveOpen(false)} title="Launch Preschool (Go Live)" icon={<Rocket size={22} />} iconClass="ic-violet">
-        <div style={{ fontSize: 13.5, lineHeight: 1.6 }}>
-          <p style={{ marginBottom: 12 }}>
-            This officially transitions the preschool to <b>LIVE</b> in production and activates the full operational dashboard as the default landing environment.
-          </p>
-          <div style={{ padding: '12px 14px', background: 'var(--bg-subtle)', border: '1px solid var(--border-subtle)', borderRadius: 8, marginBottom: 16 }}>
-            <div style={{ fontWeight: 600, marginBottom: 6 }}>Readiness Confirmation Checklist:</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
-              <div>✓ Mandatory Foundation & Academic Steps Verified</div>
-              <div>✓ Classrooms, Programs & Fee Plans Active</div>
-              <div>✓ Primary Teachers Assigned & Staff Branch Scoped</div>
-              <div>✓ Operational Settings & Attendance Rules Ready</div>
-            </div>
-          </div>
-          <p className="t-caption">
-            Note: All master records, fee schedules, and academic settings remain 100% editable anytime after launch.
-          </p>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
-          <button className="btn btn-ghost" onClick={() => setGoLiveOpen(false)}>Cancel</button>
-          <button className="btn btn-primary" onClick={goLive} disabled={busy}>
-            <Rocket size={15} /> {busy ? 'Launching…' : 'Confirm & Launch Preschool'}
-          </button>
-        </div>
-      </Modal>
-
-      {/* 12. COPY BRANCH SETUP MODAL */}
+      {/* 11. COPY BRANCH SETUP MODAL */}
       <CopyBranchSetupModal
         open={copyModalOpen}
         onClose={() => setCopyModalOpen(false)}

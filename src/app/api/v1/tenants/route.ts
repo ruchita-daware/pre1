@@ -192,7 +192,7 @@ async function _POST(req: NextRequest) {
     // M00: initialize the setup state machine — wizard pre-configured the foundation,
     // remaining steps evaluate against real data on first status read
     await db.schoolSetup.create({
-      data: { tenantId: tenant.id, status: 'IN_PROGRESS', startedAt: new Date() },
+      data: { tenantId: tenant.id, status: 'LIVE', startedAt: new Date(), goLiveAt: new Date() },
     })
     await db.schoolSetupStep.createMany({
       data: SETUP_STEPS.map((s) => ({ tenantId: tenant.id, stepKey: s.key, applicability: s.applicability })),

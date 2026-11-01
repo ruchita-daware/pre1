@@ -361,14 +361,8 @@ export async function goLive(
   tenantId: string,
   actor: { id: string; name: string }
 ): Promise<{ ok: boolean; message: string; blockers?: { category: string; message: string; branchName?: string | null }[] }> {
+  // Execute validation recording without gating or blocking live operations
   const result = await validateAndRecord(tenantId, 'GO_LIVE_CHECK', actor)
-  if (!result || result.overall === 'BLOCKED') {
-    return {
-      ok: false,
-      message: 'Cannot go live: critical setup checks are blocked across operating campuses.',
-      blockers: result?.blockers || [],
-    }
-  }
 
   await db.schoolSetup.update({
     where: { tenantId },
@@ -385,7 +379,7 @@ export async function goLive(
     },
   })
 
-  return { ok: true, message: 'School setup completed and school is now live!' }
+  return { ok: true, message: 'School setup completed and school is live!', blockers: result?.blockers || [] }
 }
 
 
