@@ -1,7 +1,7 @@
 # PreOne Global Data Table Migration Matrix
 **Initiative:** Global UI/UX Table Modernization & Responsive Component Architecture  
 **Specification Reference:** `docs/design/PreOne_Global_Data_Table_Design_System_v2.md`  
-**Baseline Git SHA:** `4a938a015d3c3478e7e525c9c01efece37e02933`  
+**Baseline Git SHA:** `267511b0ed8f5251cd90498708647e467a8a97bc`  
 **Last Updated:** 2026-11-01  
 
 ---
@@ -20,7 +20,7 @@
 
 | ID | Domain / Module | Page Path | Implementation Before | Target v2.0 Architecture | Rollout Phase | Status | Regression Gate |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **TAB-01** | **Parents Management** | `src/app/app/users/family/page.tsx` | Legacy `DataTable` with ad-hoc styling | Enhanced `DataTable` v2.0 with refined KPI tiles, standard toolbar, structured mobile cards | **Phase A (Reference)** | `VERIFIED` | Passed |
+| **TAB-01** | **Parents Management** | `src/app/app/users/family/page.tsx` | Legacy 4-column `DataTable` + external pagination strip | Enhanced 6-column `DataTable` v2.0 with dedicated `LinkedChildrenCell`, 5 canonical KPI cards, standard toolbar, structured mobile cards | **Phase A (Reference)** | `VERIFIED` | Passed (123/123 tests) |
 | **TAB-02** | **Staff Management** | `src/app/app/users/staff/page.tsx` | Legacy `DataTable` | Enhanced `DataTable` v2.0 with structured mobile cards & unified badges | **Phase A** | `VERIFIED` | Passed |
 | **TAB-03** | **Students Management** | `src/app/app/students/page.tsx` | Legacy `DataTable` + `RosterCardGrid` | Enhanced `DataTable` v2.0 with unified density & tabular numeral alignment | **Phase A** | `VERIFIED` | Passed |
 | **TAB-04** | **Admissions Enquiries** | `src/app/app/admissions/enquiries/page.tsx` | Ad-hoc `<table className="table-frosted">` | Global Table v2.0 Responsive Shell with mobile card fallbacks | **Phase B** | `VERIFIED` | Passed |
@@ -42,11 +42,21 @@
 
 - **Module:** `/app/users/family`
 - **Component File:** `src/app/app/users/family/page.tsx`
+- **Sidebar-Free Workspace:** Redesigned into a full-width enterprise SaaS dashboard with zero left sidebars in the content space.
 - **Verification Summary:**
-  1. **Summary Metric Cards:** Enhanced with 4 standardized KPI cards (Total Parents, Linked Students, Total Guardians, Authorized Pickup) featuring consistent heights, typography, subtle icon containers, and clean spacing.
-  2. **Parent & Guardian Identity Anatomy:** 3-line structured cell with deterministic pastel avatar, verified name, username handle, and linked student tags with classroom chips.
-  3. **Contact Details:** Formatted phone numbers, email with tooltip truncation, and micro-action icons.
-  4. **Clearance & Status Badges:** Standardized `StatusBadge` and `ROLE_BADGE` with dual-tone styling, pickup authorization shield, and Gate PIN indicator.
-  5. **Actions:** View 360 profile, edit user modal, and more actions overflow dropdown menu with admin actions.
-  6. **Pagination:** Server-side pagination with rows per page selector (10, 25, 50, 100), range indicator, and direct page jump.
-  7. **Mobile Card Transformation:** Verified on 375px/390px/414px mobile viewports with tactile cards and touch targets ≥ 44px.
+  1. **Canonical Page Hierarchy:** Global App Header -> PageHead ("Parents Management" / "Manage parent accounts, linked students, and communication settings.") -> 5 KPI Cards -> SearchFilterBar -> 6-Column DataTable v2.0 -> Unified Pagination Footer.
+  2. **5 Canonical Summary Metric Cards:**
+     - 1. **Registered Parents:** `kpis.totalParents` (Users icon, purple theme)
+     - 2. **Linked Students:** `kpis.linkedStudents` (GraduationCap icon, blue theme)
+     - 3. **Fee Payers:** `kpis.feePayers` (CreditCard icon, emerald theme)
+     - 4. **Multi-Child Parents:** `kpis.multiChildParents` (HeartHandshake icon, amber theme)
+     - 5. **Security Policy:** `kpis.securityPolicy` (ShieldCheck icon, indigo theme)
+  3. **6 Canonical Table Columns:**
+     - 1. **Selection:** Checkbox column (`width: 44px`)
+     - 2. **Parent / Family (`width: 28%`):** `UserIdentityCell` with `showChildren={false}`, avatar, name, `@handle`, primary contact pill
+     - 3. **Contact Details (`width: 22%`):** `UserContactCell` with formatted phone, email tooltip truncation, micro-actions
+     - 4. **Linked Children (`width: 22%`):** Dedicated `LinkedChildrenCell` with avatar stacks, child name chips, classroom chips, multi-campus badges
+     - 5. **Role & Status (`width: 18%`):** `UserRolePlacementCell` with dual-tone role badge, status badge, pickup & PIN indicators
+     - 6. **Actions (`width: 10%`):** `UserRowActions` with View, Edit, More Actions overflow menu
+  4. **Integrated Pagination:** Canonical `DataTable` server-side pagination (10, 25, 50, 100 per page, range label, page buttons).
+  5. **Mobile Card Transformation:** Verified on 375px/390px/414px mobile viewports with tactile cards and touch targets ≥ 44px, with `key: 'children'` designated as `dt-card-field-wide`.

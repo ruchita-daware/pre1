@@ -9,6 +9,7 @@ import type { ConfigDomain, Prisma } from '@prisma/client'
 const VALID_DOMAINS: ConfigDomain[] = [
   'OPERATING', 'ADMISSION', 'STUDENT_PARENT', 'FINANCE', 'DAILY_OPERATIONS',
   'HEALTH_SAFETY', 'COMMUNICATION', 'DOCUMENT_TEMPLATES', 'CURRICULUM', 'BRANDING',
+  'INVENTORY', 'MOOD_ENVIRONMENT', 'PROMOTION',
 ]
 
 import { isValidHexColor, getEffectiveBranding, resetThemeSettings, invalidateBrandingCache } from '@/lib/branding-service'

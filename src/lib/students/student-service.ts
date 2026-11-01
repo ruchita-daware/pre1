@@ -2306,6 +2306,23 @@ export class StudentService {
   }
 
   /**
+   * Terminal preschool program graduation
+   */
+  static async graduateStudent(
+    ctx: ScopeContext,
+    studentId: string,
+    input: { graduationDate?: string; certificateNumber?: string; remarks?: string }
+  ) {
+    const scope = await this.verifyScope(ctx.tenantId, ctx.branchId, ctx.academicSessionId)
+    const { PromotionService } = await import('@/lib/promotion/promotion-service')
+    return PromotionService.graduateStudent(
+      { id: ctx.actorId, name: ctx.actorName, role: ctx.actorRole, tenantId: scope.tenantId },
+      studentId,
+      input
+    )
+  }
+
+  /**
    * Update lifecycle status with server-side validation
    */
   static async updateStatus(
@@ -2323,6 +2340,9 @@ export class StudentService {
 
     if ((newStatus as string) === 'WITHDRAWN') {
       return this.withdrawStudent(ctx, studentId, { reason: reason || 'Status changed to WITHDRAWN' })
+    }
+    if ((newStatus as string) === 'GRADUATED') {
+      return this.graduateStudent(ctx, studentId, { remarks: reason || 'Status changed to GRADUATED' })
     }
 
     const updated = await db.student.update({
