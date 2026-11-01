@@ -24,8 +24,15 @@ async function _GET(req: NextRequest) {
     const day = await dayStatus(tenantId, todayDate)
 
     // assigned sections (branch+AY scoped via classroom), never manual lists
-    const mySections = await db.classroom.findMany({
-      where: { tenantId, primaryTeacherId: session.uid, isActive: true },
+    let mySections = await db.classroom.findMany({
+      where: {
+        tenantId,
+        isActive: true,
+        OR: [
+          { primaryTeacherId: session.uid },
+          { subjectMappings: { some: { specialistTeacherId: session.uid } } },
+        ],
+      },
       include: {
         students: {
           where: { status: 'ACTIVE', deletedAt: null },
@@ -36,6 +43,22 @@ async function _GET(req: NextRequest) {
       },
       orderBy: { name: 'asc' },
     })
+
+    // Fallback: If no classroom is directly bound to teacher, load active classrooms in their campus branch
+    if (mySections.length === 0 && session.branchId) {
+      mySections = await db.classroom.findMany({
+        where: { tenantId, branchId: session.branchId, isActive: true },
+        include: {
+          students: {
+            where: { status: 'ACTIVE', deletedAt: null },
+            select: { id: true, firstName: true, lastName: true, admissionNo: true, photoUrl: true },
+            orderBy: { firstName: 'asc' },
+          },
+          _count: { select: { students: { where: { status: 'ACTIVE', deletedAt: null } } } },
+        },
+        orderBy: { name: 'asc' },
+      })
+    }
 
     const todayAttendance = await db.attendance.findMany({
       where: { tenantId, date: todayDate, classroomId: { in: mySections.map((c) => c.id) } },

@@ -1302,9 +1302,9 @@ export default function FeesPage() {
                     <th className="p-3">Campus / Class</th>
                     <th className="p-3">Fee Item & Period</th>
                     <th className="p-3">Due Date</th>
-                    <th className="p-3">Amount Due</th>
-                    <th className="p-3">Paid</th>
-                    <th className="p-3">Remaining</th>
+                    <th className="p-3 text-right">Amount Due</th>
+                    <th className="p-3 text-right">Paid</th>
+                    <th className="p-3 text-right">Remaining</th>
                     <th className="p-3">Status</th>
                     <th className="p-3 text-right">Actions</th>
                   </tr>
@@ -1341,13 +1341,13 @@ export default function FeesPage() {
                             <span>{fmtDate(sc.dueDate)}</span>
                           </div>
                         </td>
-                        <td className="p-3 font-mono tabular-nums font-medium text-slate-900 dark:text-slate-200">
+                        <td className="p-3 font-mono tabular-nums font-medium text-right text-slate-900 dark:text-slate-200">
                           {inr(parseFloat(sc.amountDueRupees || '0') * 100)}
                         </td>
-                        <td className="p-3 font-mono tabular-nums text-emerald-600 dark:text-emerald-400 font-medium">
+                        <td className="p-3 font-mono tabular-nums text-right text-emerald-600 dark:text-emerald-400 font-medium">
                           {inr(parseFloat(sc.amountPaidRupees || '0') * 100)}
                         </td>
-                        <td className="p-3 font-mono tabular-nums font-bold text-slate-900 dark:text-slate-100">
+                        <td className="p-3 font-mono tabular-nums font-bold text-right text-slate-900 dark:text-slate-100">
                           <span className={parseFloat(sc.remainingRupees || '0') > 0 ? (isOverdue ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400') : 'text-slate-500'}>
                             {inr(parseFloat(sc.remainingRupees || '0') * 100)}
                           </span>
@@ -1514,7 +1514,7 @@ export default function FeesPage() {
                     <th className="p-3">Admission No</th>
                     <th className="p-3">Payment Date</th>
                     <th className="p-3">Method</th>
-                    <th className="p-3">Amount</th>
+                    <th className="p-3 text-right">Amount</th>
                     <th className="p-3">Status</th>
                   </tr>
                 </thead>
@@ -1527,7 +1527,7 @@ export default function FeesPage() {
                       <td className="p-3 text-slate-600 dark:text-slate-400 font-mono text-xs">{p.admissionNo}</td>
                       <td className="p-3 text-slate-600 dark:text-slate-400">{fmtDate(p.paymentDate)}</td>
                       <td className="p-3 text-slate-600 dark:text-slate-400">{p.method}</td>
-                      <td className="p-3 font-mono font-bold tabular-nums text-emerald-700 dark:text-emerald-400">{inr(parseFloat(p.amountRupees) * 100)}</td>
+                      <td className="p-3 text-right font-mono font-bold tabular-nums text-emerald-700 dark:text-emerald-400">{inr(parseFloat(p.amountRupees) * 100)}</td>
                       <td className="p-3">
                         <StatusBadge status={p.status} />
                       </td>

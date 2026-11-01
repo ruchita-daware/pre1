@@ -226,7 +226,18 @@ export class StudentService {
         },
         select: { id: true },
       })
-      const roomIds = assignedRooms.map((r) => r.id)
+      let roomIds = assignedRooms.map((r) => r.id)
+      if (roomIds.length === 0 && ctx.branchId) {
+        const branchRooms = await db.classroom.findMany({
+          where: {
+            tenantId: scope.tenantId,
+            branchId: ctx.branchId,
+            isActive: true,
+          },
+          select: { id: true },
+        })
+        roomIds = branchRooms.map((r) => r.id)
+      }
       if (roomIds.length === 0) {
         return {
           data: [],
@@ -2677,7 +2688,19 @@ export class StudentService {
         },
         select: { id: true },
       })
-      baseWhere.currentClassroomId = { in: assignedRooms.map((r) => r.id) }
+      let roomIds = assignedRooms.map((r) => r.id)
+      if (roomIds.length === 0 && ctx.branchId) {
+        const branchRooms = await db.classroom.findMany({
+          where: {
+            tenantId: scope.tenantId,
+            branchId: ctx.branchId,
+            isActive: true,
+          },
+          select: { id: true },
+        })
+        roomIds = branchRooms.map((r) => r.id)
+      }
+      baseWhere.currentClassroomId = { in: roomIds }
     }
 
     const [total, active, transferred, withdrawn, classrooms, programs, recentAdmissions] = await Promise.all([

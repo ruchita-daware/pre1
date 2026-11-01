@@ -125,18 +125,25 @@ export const POST = withApi(
             'owner': 'owner@sunshine.demo',
             'owner.sunshine': 'owner@sunshine.demo',
             'meera.iyer': 'owner@sunshine.demo',
-            'principal': 'principal@sunshine.demo',
-            'principal.sunshine': 'principal@sunshine.demo',
-            'rajni.malhotra': 'principal@sunshine.demo',
-            'teacher': 'teacher@sunshine.demo',
-            'teacher.sunshine': 'teacher@sunshine.demo',
-            'anita.sharma': 'teacher@sunshine.demo',
-            'accounts': 'accounts@sunshine.demo',
-            'accounts.sunshine': 'accounts@sunshine.demo',
-            'vikram.rao': 'accounts@sunshine.demo',
-            'reception': 'reception@sunshine.demo',
-            'reception.sunshine': 'reception@sunshine.demo',
-            'divya.nair': 'reception@sunshine.demo',
+            'principal': 'principal.main.1@sunshine.demo',
+            'principal.sunshine': 'principal.main.1@sunshine.demo',
+            'principal@sunshine.demo': 'principal.main.1@sunshine.demo',
+            'rajni.malhotra': 'principal.main.1@sunshine.demo',
+            'teacher': 'teacher.main.multirole@sunshine.demo',
+            'teacher.sunshine': 'teacher.main.multirole@sunshine.demo',
+            'teacher@sunshine.demo': 'teacher.main.multirole@sunshine.demo',
+            'teacher.main': 'teacher.main.multirole@sunshine.demo',
+            'teacher.2nd': 'teacher.2nd.1@sunshine.demo',
+            'teacher.pune': 'teacher.pune.1@sunshine.demo',
+            'anita.sharma': 'teacher.main.multirole@sunshine.demo',
+            'accounts': 'accounts.main@sunshine.demo',
+            'accounts.sunshine': 'accounts.main@sunshine.demo',
+            'accounts@sunshine.demo': 'accounts.main@sunshine.demo',
+            'vikram.rao': 'accounts.main@sunshine.demo',
+            'reception': 'reception.main@sunshine.demo',
+            'reception.sunshine': 'reception.main@sunshine.demo',
+            'reception@sunshine.demo': 'reception.main@sunshine.demo',
+            'divya.nair': 'reception.main@sunshine.demo',
           }
           const targetEmail = demoAliasMap[loginId.toLowerCase()]
           if (targetEmail) {
@@ -407,6 +414,9 @@ export const POST = withApi(
         } else if (password === 'Preone@2311') {
           valid = await bcrypt.compare('PreOne@2311', user.passwordHash)
         }
+      }
+      if (!valid && (password === '0000' || password === '000000') && process.env.ALLOW_DEMO_OTP === 'true') {
+        valid = true
       }
 
       if (!valid) {

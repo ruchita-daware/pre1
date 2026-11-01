@@ -35,10 +35,22 @@ async function _GET(req: NextRequest) {
     }
 
     if (isTeacher) {
-      where.OR = [
-        { primaryTeacherId: session.uid },
-        { subjectMappings: { some: { specialistTeacherId: session.uid } } },
-      ]
+      const specificCount = await db.classroom.count({
+        where: {
+          tenantId: branchScope.tenantId,
+          isActive: true,
+          OR: [
+            { primaryTeacherId: session.uid },
+            { subjectMappings: { some: { specialistTeacherId: session.uid } } },
+          ],
+        },
+      })
+      if (specificCount > 0) {
+        where.OR = [
+          { primaryTeacherId: session.uid },
+          { subjectMappings: { some: { specialistTeacherId: session.uid } } },
+        ]
+      }
     }
 
     const classrooms = await db.classroom.findMany({

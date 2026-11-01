@@ -3136,15 +3136,25 @@ button:focus:not(:focus-visible) {
   background-color: color-mix(in srgb, var(--warning, #F59E0B) 10%, transparent);
 }
 
-/* Densities (Zen default is cozy ~56px) */
+/* Densities (Compact ~48-52px, Comfortable/Cozy ~56-64px default, Spacious ~68-76px) */
+.dtable.density-comfortable tbody td,
 .dtable.density-cozy tbody td,
+.zen-table.density-comfortable tbody td,
 .zen-table.density-cozy tbody td { padding: 14px 16px; }
+.dtable.density-comfortable thead th,
 .dtable.density-cozy thead th,
-.zen-table.density-cozy thead th { padding: 13px 16px; }
+.zen-table.density-comfortable thead th,
+.zen-table.density-cozy thead th { padding: 12px 16px; }
+
 .dtable.density-compact tbody td,
-.zen-table.density-compact tbody td { padding: 9px 14px; font-size: 13px; }
+.zen-table.density-compact tbody td { padding: 8px 12px; font-size: 12.5px; }
 .dtable.density-compact thead th,
-.zen-table.density-compact thead th { padding: 9px 14px; }
+.zen-table.density-compact thead th { padding: 8px 12px; font-size: 11px; }
+
+.dtable.density-spacious tbody td,
+.zen-table.density-spacious tbody td { padding: 18px 20px; font-size: 14px; }
+.dtable.density-spacious thead th,
+.zen-table.density-spacious thead th { padding: 15px 20px; font-size: 12px; }
 
 /* Quick Action Reveal on Row Hover */
 .zen-quick-actions,
@@ -3429,11 +3439,16 @@ tr:focus-within .dt-row-actions .kebab {
 .dt-mobile-cards { display: none; }
 
 @media (max-width: 760px) {
-  .dtable { display: none !important; }
+  .dtable-wrap:has(.dt-mobile-cards) .dtable { display: none !important; }
+  .dtable-wrap:not(:has(.dt-mobile-cards)) .dtable,
+  .dtable-scroll > table.dtable {
+    display: table;
+  }
   .dtable-scroll, .dtable-wrap, .table-workspace {
     max-width: 100%;
     min-width: 0;
     overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
   }
   .dt-mobile-cards {
     display: flex !important;

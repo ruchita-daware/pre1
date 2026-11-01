@@ -50,7 +50,6 @@ export default function UsersLauncherPage() {
       {/* Page Header */}
       <PageHead
         title={t('users.title') || 'Users'}
-        subtitle="Select a user directory to manage school accounts, credentials, and access."
       />
 
       {/* ── USER DIRECTORIES ── */}

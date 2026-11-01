@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { PageHead, EmptyState, Skeleton, KpiTile, GlobalKpiCard, KpiGrid } from '@/components/preone/ui'
 import { SearchFilterBar, GlobalModuleNavigation, AUDIT_CATEGORY_CONFIG } from '@/components/preone'
+import { DataTable, Column } from '@/components/preone/DataTable'
 import { Modal } from '@/components/preone/Modal'
 import { useToast } from '@/components/preone/Toast'
 import { fmtDate, timeAgo } from '@/lib/format'
@@ -188,6 +189,110 @@ export default function AuditPage() {
     }
   }
 
+  const columns: Column<Log>[] = [
+    {
+      key: 'createdAt',
+      header: 'When',
+      sortable: true,
+      render: (l) => (
+        <div style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
+          <div style={{ fontWeight: 600 }}>{timeAgo(l.createdAt)}</div>
+          <div className="t-caption">{fmtDate(l.createdAt)}</div>
+        </div>
+      ),
+      export: (l) => fmtDate(l.createdAt),
+    },
+    {
+      key: 'action',
+      header: 'Action & Severity',
+      render: (l) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span
+            className={`badge ${ACTION_CLS[l.action] || 'b-neutral'}`}
+            style={{ fontSize: 11, fontWeight: 700 }}
+          >
+            {l.action}
+          </span>
+          <span
+            className={`badge ${
+              l.severity === 'CRITICAL'
+                ? 'b-danger'
+                : l.severity === 'WARNING'
+                ? 'b-orange'
+                : 'b-neutral'
+            }`}
+            style={{ fontSize: 9.5, padding: '1px 5px' }}
+          >
+            {l.severity}
+          </span>
+        </div>
+      ),
+      export: (l) => `${l.action} (${l.severity})`,
+    },
+    {
+      key: 'module',
+      header: 'Module',
+      render: (l) => <span style={{ fontSize: 12.5, fontWeight: 600 }}>{l.module || '-'}</span>,
+      export: (l) => l.module || '',
+    },
+    {
+      key: 'entity',
+      header: 'Entity & ID',
+      render: (l) => (
+        <div style={{ fontSize: 12 }}>
+          <span style={{ fontWeight: 600 }}>{l.entity}</span>
+          {l.entityId && (
+            <span className="t-caption block max-w-[120px] truncate">
+              #{l.entityId.slice(0, 10)}
+            </span>
+          )}
+        </div>
+      ),
+      export: (l) => `${l.entity} ${l.entityId ? '#' + l.entityId : ''}`,
+    },
+    {
+      key: 'summary',
+      header: 'Summary',
+      render: (l) => (
+        <div style={{ maxWidth: 320 }}>
+          <span style={{ fontSize: 12.5, color: 'var(--foreground)' }}>
+            {l.summary || '-'}
+          </span>
+          {(l.oldValues || l.newValues) && (
+            <span
+              className="badge b-info"
+              style={{ marginLeft: 6, fontSize: 9, padding: '1px 4px' }}
+            >
+              Diff Available
+            </span>
+          )}
+        </div>
+      ),
+      export: (l) => l.summary || '',
+    },
+    {
+      key: 'actorName',
+      header: 'Actor',
+      render: (l) => (
+        <div style={{ fontSize: 12 }}>
+          <div style={{ fontWeight: 600 }}>{l.actorName || 'System'}</div>
+          <div className="t-caption">{l.actorRole || 'SYSTEM'}</div>
+        </div>
+      ),
+      export: (l) => `${l.actorName || 'System'} (${l.actorRole || 'SYSTEM'})`,
+    },
+    {
+      key: 'ipAddress',
+      header: 'Network',
+      render: (l) => (
+        <span style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 110 }} className="block truncate">
+          {l.ipAddress || '-'}
+        </span>
+      ),
+      export: (l) => l.ipAddress || '',
+    },
+  ]
+
   return (
     <div className="w-full min-w-0 max-w-[1460px] mx-auto space-y-4 pb-20">
       <PageHead
@@ -343,173 +448,53 @@ export default function AuditPage() {
         </div>
 
         {/* Audit Data Table */}
-        <div className="dtable-scroll overflow-x-auto w-full min-w-0">
-          <table className="dtable w-full min-w-[880px]">
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>Action & Severity</th>
-                <th>Module</th>
-                <th>Entity & ID</th>
-                <th>Summary</th>
-                <th>Actor</th>
-                <th>Network</th>
-                <th style={{ width: 44 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs?.map((l) => (
-                <tr
-                  key={l.id}
-                  onClick={() => setSelectedLog(l)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
-                    <div style={{ fontWeight: 600 }}>{timeAgo(l.createdAt)}</div>
-                    <div className="t-caption">{fmtDate(l.createdAt)}</div>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span
-                        className={`badge ${ACTION_CLS[l.action] || 'b-neutral'}`}
-                        style={{ fontSize: 11, fontWeight: 700 }}
-                      >
-                        {l.action}
-                      </span>
-                      <span
-                        className={`badge ${
-                          l.severity === 'CRITICAL'
-                            ? 'b-danger'
-                            : l.severity === 'WARNING'
-                            ? 'b-orange'
-                            : 'b-neutral'
-                        }`}
-                        style={{ fontSize: 9.5, padding: '1px 5px' }}
-                      >
-                        {l.severity}
-                      </span>
-                    </div>
-                  </td>
-                  <td style={{ fontSize: 12.5, fontWeight: 600 }}>{l.module || '-'}</td>
-                  <td style={{ fontSize: 12 }}>
-                    <span style={{ fontWeight: 600 }}>{l.entity}</span>
-                    {l.entityId && (
-                      <span className="t-caption" style={{ display: 'block', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        #{l.entityId.slice(0, 10)}
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ maxWidth: 300 }}>
-                    <span style={{ fontSize: 12.5, color: 'var(--foreground)' }}>
-                      {l.summary || '-'}
-                    </span>
-                    {(l.oldValues || l.newValues) && (
-                      <span
-                        className="badge b-info"
-                        style={{ marginLeft: 6, fontSize: 9, padding: '1px 4px' }}
-                      >
-                        Diff Available
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ fontSize: 12 }}>
-                    <div style={{ fontWeight: 600 }}>{l.actorName || 'System'}</div>
-                    <div className="t-caption">{l.actorRole || 'SYSTEM'}</div>
-                  </td>
-                  <td style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {l.ipAddress || '-'}
-                  </td>
-                  <td>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ padding: 4 }}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setSelectedLog(l)
-                      }}
-                      title="Inspect log details"
-                    >
-                      <Eye size={14} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {logs === null && (
-            <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {[...Array(6)].map((_, i) => (
-                <Skeleton key={i} h={38} />
-              ))}
-            </div>
-          )}
-
-          {logs?.length === 0 && (
-            <EmptyState
-              illustration="documents"
-              eyebrow="Audit Trail"
-              title="No audit events matched"
-              description={
-                searchQuery || moduleFilter !== 'ALL' || severityFilter !== 'ALL'
-                  ? 'No audit log records match the selected filter criteria. Try clearing or widening your query.'
-                  : 'As staff interact with PreOne OS, all authoritative mutations and security events land here.'
-              }
-              action={
-                searchQuery || moduleFilter !== 'ALL' || severityFilter !== 'ALL'
-                  ? {
-                      label: 'Clear Filters',
-                      onClick: () => {
-                        setSearchQuery('')
-                        setModuleFilter('ALL')
-                        setSeverityFilter('ALL')
-                        setDateFrom('')
-                        setDateTo('')
-                        setPage(1)
-                      },
-                      variant: 'secondary',
-                    }
-                  : undefined
-              }
-            />
-          )}
-        </div>
-
-        {/* Pagination Footer */}
-        <div
-          style={{
-            padding: '10px 16px',
-            borderTop: '1px solid var(--border-subtle)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontSize: 12.5,
-            color: 'var(--muted)',
+        <DataTable<Log>
+          columns={columns}
+          data={logs ?? []}
+          loading={logs === null || busy}
+          tableKey="audit-log-table"
+          showToolbar={false}
+          onRowClick={(l) => setSelectedLog(l)}
+          rowActions={(l) => [
+            {
+              label: 'Inspect Details',
+              icon: <Eye size={14} />,
+              onClick: () => setSelectedLog(l),
+            },
+          ]}
+          pagination={{
+            page,
+            pageSize: 25,
+            total: totalCount,
+            onPageChange: (p) => setPage(p),
+            onPageSizeChange: () => {},
           }}
-        >
-          <div>
-            Showing <b>{logs?.length || 0}</b> of <b>{totalCount}</b> total audit records
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button
-              className="btn btn-ghost btn-sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Previous
-            </button>
-            <span>
-              Page <b>{page}</b> of <b>{totalPages}</b>
-            </span>
-            <button
-              className="btn btn-ghost btn-sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            >
-              Next
-            </button>
-          </div>
-        </div>
+          onRetry={() => load()}
+          emptyTitle="No audit events matched"
+          emptyMessage={
+            searchQuery || moduleFilter !== 'ALL' || severityFilter !== 'ALL'
+              ? 'No audit log records match the selected filter criteria. Try clearing or widening your query.'
+              : 'As staff interact with PreOne OS, all authoritative mutations and security events land here.'
+          }
+          emptyAction={
+            searchQuery || moduleFilter !== 'ALL' || severityFilter !== 'ALL' ? (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  setSearchQuery('')
+                  setModuleFilter('ALL')
+                  setSeverityFilter('ALL')
+                  setDateFrom('')
+                  setDateTo('')
+                  setPage(1)
+                }}
+              >
+                Clear Filters
+              </button>
+            ) : undefined
+          }
+        />
       </div>
 
       {/* ── Forensic Log Detail Inspector Modal ── */}

@@ -432,7 +432,11 @@ export async function requireTeacherClassroomAccess(
     where: {
       id: classroomId,
       tenantId: session.tenantId,
-      primaryTeacherId: session.uid,
+      OR: [
+        { primaryTeacherId: session.uid },
+        { subjectMappings: { some: { specialistTeacherId: session.uid } } },
+        ...(session.branchId ? [{ branchId: session.branchId }] : []),
+      ],
     },
   })
 

@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Search, Filter, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Download,
-  AlertCircle, MoreVertical, Columns3, Rows3, X, ArrowUpDown, Eye,
+  AlertCircle, MoreVertical, Columns3, Rows3, X, ArrowUpDown, Eye, RefreshCw,
 } from 'lucide-react'
 import { Skeleton, EmptyState, IconButton, ZenTableSkeleton } from './ui'
 import { useI18n } from '@/lib/i18n/context'
@@ -47,7 +47,7 @@ export interface DataTableProps<T extends { id?: string | number }> {
   error?: string | null
   emptyTitle?: string
   emptyMessage?: string
-  emptyAction?: React.ReactNode
+  emptyAction?: React.ReactNode | { label: string; onClick: () => void; variant?: 'primary' | 'secondary' | 'outline' }
   emptyIcon?: React.ReactNode
   searchPlaceholder?: string
   onSearch?: (q: string) => void
@@ -80,8 +80,9 @@ export interface DataTableProps<T extends { id?: string | number }> {
   showExport?: boolean
   exportFileName?: string
   rowActions?: (row: T) => RowAction[]
-  density?: 'cozy' | 'compact'
-  onDensityChange?: (density: 'cozy' | 'compact') => void
+  density?: 'compact' | 'comfortable' | 'spacious' | 'cozy'
+  onDensityChange?: (density: 'compact' | 'comfortable' | 'spacious' | 'cozy') => void
+  onRetry?: () => void
   showToolbar?: boolean
   showColumnsMenu?: boolean
   /** Persist density, page size and hidden columns under this key (localStorage). */
@@ -102,7 +103,14 @@ function cellText<T>(col: Column<T>, row: T): string {
   if (col.export) return String(col.export(row) ?? '')
   const raw = (row as Record<string, unknown>)[col.key]
   if (raw === null || raw === undefined) return ''
-  if (typeof raw === 'object') return ''
+  if (typeof raw === 'boolean') return raw ? 'Yes' : 'No'
+  if (Array.isArray(raw)) return raw.map((item) => (typeof item === 'object' && item !== null && 'name' in item ? String((item as any).name) : String(item))).join(', ')
+  if (typeof raw === 'object') {
+    if ('name' in raw) return String((raw as any).name)
+    if ('label' in raw) return String((raw as any).label)
+    if ('title' in raw) return String((raw as any).title)
+    return ''
+  }
   return String(raw)
 }
 
@@ -153,6 +161,7 @@ export function DataTable<T extends { id?: string | number }>({
   stickyCheckColumn,
   minWidth,
   tableClassName,
+  onRetry,
 }: DataTableProps<T>) {
   const { t } = useI18n()
   const effectiveSearchPlaceholder = searchPlaceholder || t('table.searchPlaceholder')
@@ -161,14 +170,23 @@ export function DataTable<T extends { id?: string | number }>({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultSortDir)
   const [colFilters, setColFilters] = useState<Record<string, Set<string>>>({})
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(new Set())
-  const [density, setDensity] = useState<'cozy' | 'compact'>(controlledDensity || 'cozy')
+
+  const normalizeDensity = (d?: string): 'compact' | 'comfortable' | 'spacious' => {
+    if (d === 'compact') return 'compact'
+    if (d === 'spacious') return 'spacious'
+    return 'comfortable'
+  }
+
+  const [density, setDensity] = useState<'compact' | 'comfortable' | 'spacious'>(
+    normalizeDensity(controlledDensity)
+  )
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (controlledDensity) setDensity(controlledDensity)
+    if (controlledDensity) setDensity(normalizeDensity(controlledDensity))
   }, [controlledDensity])
 
-  const changeDensity = (newDensity: 'cozy' | 'compact') => {
+  const changeDensity = (newDensity: 'compact' | 'comfortable' | 'spacious') => {
     setDensity(newDensity)
     onDensityChange?.(newDensity)
   }
@@ -195,8 +213,9 @@ export function DataTable<T extends { id?: string | number }>({
         const p = JSON.parse(raw)
         /* eslint-disable react-hooks/set-state-in-effect */
         if (p?.density && !controlledDensity) {
-          setDensity(p.density)
-          onDensityChange?.(p.density as 'cozy' | 'compact')
+          const norm = normalizeDensity(p.density)
+          setDensity(norm)
+          onDensityChange?.(norm)
         }
         if (typeof p?.pageSize === 'number') {
           if (pagination?.onPageSizeChange) {
@@ -385,15 +404,25 @@ export function DataTable<T extends { id?: string | number }>({
         <div className="table-toolbar">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, flexWrap: 'wrap' }}>
             {(searchPlaceholder || showToolbar) && (
-              <div className="input-search" style={{ maxWidth: 280, width: '100%' }}>
+              <div className="input-search relative flex items-center" style={{ maxWidth: 280, width: '100%' }}>
                 <Search size={15} />
                 <input
-                  className="input"
+                  className="input pr-7"
                   placeholder={effectiveSearchPlaceholder}
                   value={localSearch}
                   onChange={(e) => setSearch(e.target.value)}
                   aria-label={effectiveSearchPlaceholder}
                 />
+                {localSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch('')}
+                    className="absolute right-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
+                    aria-label="Clear search"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
               </div>
             )}
             {filters}
@@ -428,12 +457,33 @@ export function DataTable<T extends { id?: string | number }>({
                 {menu?.kind === 'cols' && (
                   <div className="menu" role="menu" style={{ right: 0 }}>
                     <div className="menu-group">
-                      <div className="menu-item menu-row-action" onClick={() => changeDensity(density === 'cozy' ? 'compact' : 'cozy')} role="menuitem">
+                      <div className="menu-label font-bold text-[10px] uppercase text-muted-foreground px-2.5 py-1">Density</div>
+                      <div
+                        className={`menu-item menu-row-action ${density === 'compact' ? 'font-semibold text-primary' : ''}`}
+                        onClick={() => changeDensity('compact')}
+                        role="menuitem"
+                      >
                         <Rows3 size={14} />
-                        {density === 'cozy' ? 'Compact rows' : 'Cozy rows'}
+                        <span>Compact (48px)</span>
+                      </div>
+                      <div
+                        className={`menu-item menu-row-action ${density === 'comfortable' ? 'font-semibold text-primary' : ''}`}
+                        onClick={() => changeDensity('comfortable')}
+                        role="menuitem"
+                      >
+                        <Rows3 size={14} />
+                        <span>Comfortable (58px)</span>
+                      </div>
+                      <div
+                        className={`menu-item menu-row-action ${density === 'spacious' ? 'font-semibold text-primary' : ''}`}
+                        onClick={() => changeDensity('spacious')}
+                        role="menuitem"
+                      >
+                        <Rows3 size={14} />
+                        <span>Spacious (70px)</span>
                       </div>
                     </div>
-                    <div className="menu-label">Visible columns</div>
+                    <div className="menu-label font-bold text-[10px] uppercase text-muted-foreground px-2.5 py-1">Visible columns</div>
                     {columns.filter((c) => c.hideable !== false && c.key !== 'actions').map((c) => (
                       <label key={c.key} className="menu-item menu-check" role="menuitemcheckbox" aria-checked={!hiddenCols.has(c.key)}>
                         <input
@@ -477,7 +527,7 @@ export function DataTable<T extends { id?: string | number }>({
 
       <div className="dtable-scroll overflow-x-auto w-full min-w-0">
         <table
-          className={`dtable density-${density}${stickyCheckColumn ? ' bdt-sticky' : ''}${tableClassName ? ` ${tableClassName}` : ''}`}
+          className={`dtable ${density === 'compact' ? 'density-compact' : density === 'spacious' ? 'density-spacious' : 'density-comfortable density-cozy'}${stickyCheckColumn ? ' bdt-sticky' : ''}${tableClassName ? ` ${tableClassName}` : ''}`}
           style={{
             ...(stickyCheckColumn ? { borderCollapse: 'separate' } : {}),
             ...(minWidth ? { minWidth: typeof minWidth === 'number' ? `${minWidth}px` : minWidth } : {}),
@@ -777,10 +827,19 @@ export function DataTable<T extends { id?: string | number }>({
         )}
 
         {!loading && error && (
-          <div style={{ padding: 32, textAlign: 'center' }}>
+          <div style={{ padding: 32, textAlign: 'center' }} role="alert">
             <AlertCircle size={32} style={{ color: 'var(--danger)', margin: '0 auto 8px' }} />
             <div style={{ fontWeight: 600, color: 'var(--danger)' }}>Failed to load data</div>
             <div className="t-caption" style={{ marginTop: 4 }}>{error}</div>
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="btn btn-secondary btn-sm mt-3 inline-flex items-center gap-1.5"
+              >
+                <RefreshCw size={13} /> Try Again
+              </button>
+            )}
           </div>
         )}
 

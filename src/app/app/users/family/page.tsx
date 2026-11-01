@@ -1150,6 +1150,18 @@ function FamilyUsersPageContent() {
                 setSelectedKeys(keys)
                 if (keys.length === 0) setSelectAllMatching(false)
               }}
+              onRetry={fetchFamilyUsers}
+              pagination={{
+                page,
+                pageSize,
+                total,
+                onPageChange: (p) => setPage(p),
+                onPageSizeChange: (ps) => {
+                  setPageSize(ps)
+                  setPage(1)
+                },
+              }}
+              tableKey="family-directory"
               bulkActions={
                 selectedKeys.length > 0 ? (
                   <div className="flex items-center gap-2">
@@ -1188,38 +1200,6 @@ function FamilyUsersPageContent() {
               emptyTitle={activeTab === 'PARENTS' ? t('users.noParentsFound') : t('users.noGuardiansFound')}
               emptyMessage={activeTab === 'PARENTS' ? t('users.noParentsMessage') : t('users.noGuardiansMessage')}
             />
-
-            {/* Pagination Strip */}
-            <div
-              className="p-3 sm:p-4 border-t border-gray-200 dark:border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500"
-              style={{ background: 'var(--bg-subtle)' }}
-            >
-              <span className="text-center sm:text-left">
-                {t('table.showing')} {users.length > 0 ? (page - 1) * pageSize + 1 : 0} {t('table.of')}{' '}
-                {Math.min(page * pageSize, total)} {t('table.of')} {total} {activeTab === 'PARENTS' ? t('users.parentsTab', { count: total }) : t('users.guardiansTab', { count: total })}
-              </span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => p - 1)}
-                  className="btn btn-secondary text-xs px-2.5 py-1"
-                >
-                  {t('common.prev')}
-                </button>
-                <span className="w-7 h-7 rounded-md font-semibold text-xs flex items-center justify-center bg-purple-600 text-white">
-                  {page}
-                </span>
-                <button
-                  type="button"
-                  disabled={page >= Math.ceil(total / pageSize)}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="btn btn-secondary text-xs px-2.5 py-1"
-                >
-                  {t('common.next')}
-                </button>
-              </div>
-            </div>
           </div>
         </>
       ) : (

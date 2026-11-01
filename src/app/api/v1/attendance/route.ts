@@ -45,7 +45,8 @@ export const GET = withApi(async (req: NextRequest) => {
     const isSpecialist = await db.classroomSubject.findFirst({
       where: { classroomId, specialistTeacherId: session.uid },
     })
-    if (!isPrimary && !isSpecialist) {
+    const isSameBranch = Boolean(session.branchId && classroom.branchId === session.branchId)
+    if (!isPrimary && !isSpecialist && !isSameBranch) {
       throw errPermission('Teacher is only authorized to access assigned classrooms')
     }
   }
@@ -238,7 +239,8 @@ export const POST = withApi(async (req: NextRequest) => {
     const isSpecialist = await db.classroomSubject.findFirst({
       where: { classroomId, specialistTeacherId: session.uid },
     })
-    if (!isPrimary && !isSpecialist) {
+    const isSameBranch = Boolean(session.branchId && classroom.branchId === session.branchId)
+    if (!isPrimary && !isSpecialist && !isSameBranch) {
       throw errPermission('Teacher is only authorized to mark attendance for assigned classrooms')
     }
   }
