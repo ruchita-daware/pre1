@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import {
   School, Building2, Palette, Blocks, DoorOpen, Clock, ShieldCheck, Users,
   CalendarRange, LayoutGrid, GraduationCap, BookOpen, CalendarDays, IndianRupee,
@@ -150,8 +151,18 @@ const CAT_STATUS_MAP: Record<string, { cls: string; label: string }> = {
 
 export default function SetupPage() {
   const toast = useToast()
+  const searchParams = useSearchParams()
   const [status, setStatus] = useState<StatusPayload | null>(null)
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('ALL')
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search)
+      const qBranch = sp.get('branchId')
+      if (qBranch) return qBranch
+      const stored = localStorage.getItem('preone_setup_branchId')
+      if (stored) return stored
+    }
+    return 'ALL'
+  })
   const [metroFilter, setMetroFilter] = useState<'ALL' | 'MANDATORY' | 'RECOMMENDED' | 'REMAINING'>('ALL')
   const [validation, setValidation] = useState<ValidationPayload | null>(null)
   const [validating, setValidating] = useState(false)
@@ -265,6 +276,38 @@ export default function SetupPage() {
     }
   }, [selectedBranchId])
 
+  const changeBranch = useCallback((newBranchId: string) => {
+    setSelectedBranchId(newBranchId)
+    if (typeof window !== 'undefined') {
+      if (newBranchId && newBranchId !== 'ALL') {
+        localStorage.setItem('preone_setup_branchId', newBranchId)
+      } else {
+        localStorage.setItem('preone_setup_branchId', 'ALL')
+      }
+      const url = new URL(window.location.href)
+      if (newBranchId && newBranchId !== 'ALL') {
+        url.searchParams.set('branchId', newBranchId)
+      } else {
+        url.searchParams.delete('branchId')
+      }
+      window.history.replaceState({}, '', url.toString())
+    }
+    load(newBranchId)
+  }, [load])
+
+  const getStepHref = useCallback((s: StepRow) => {
+    const branchParam = selectedBranchId && selectedBranchId !== 'ALL' ? `?branchId=${encodeURIComponent(selectedBranchId)}` : ''
+    const base =
+      s.key === 'branding'
+        ? '/app/setup/branding'
+        : s.key === 'templates'
+        ? '/app/setup/templates'
+        : s.key === 'roles'
+        ? '/app/setup/roles'
+        : `/app/setup/${s.key}`
+    return `${base}${branchParam}`
+  }, [selectedBranchId])
+
   const loadHubData = useCallback(async () => {
     try {
       const [p, b, pr, y, c, o, h] = await Promise.all([
@@ -303,6 +346,16 @@ export default function SetupPage() {
     loadHubData()
     loadDeps()
   }, [load, loadHubData, loadDeps])
+
+  // Validate selected branch is authorized once branches list is loaded
+  useEffect(() => {
+    if (branches.length > 0 && selectedBranchId !== 'ALL') {
+      const isAuthorized = branches.some((b: any) => String(b.id) === selectedBranchId)
+      if (!isAuthorized) {
+        changeBranch('ALL')
+      }
+    }
+  }, [branches, selectedBranchId, changeBranch])
 
   const refreshAll = useCallback(() => {
     load()
@@ -495,10 +548,7 @@ export default function SetupPage() {
                   className="select"
                   style={{ minWidth: 150, height: 28, fontSize: 12, padding: '2px 8px' }}
                   value={selectedBranchId}
-                  onChange={(e) => {
-                    setSelectedBranchId(e.target.value)
-                    load(e.target.value)
-                  }}
+                  onChange={(e) => changeBranch(e.target.value)}
                 >
                   <option value="ALL">All Campuses (Aggregated)</option>
                   {branches.map((b: any) => (
@@ -556,8 +606,7 @@ export default function SetupPage() {
                   }}
                   onClick={() => {
                     const next = selectedBranchId === br.branchId ? 'ALL' : br.branchId
-                    setSelectedBranchId(next)
-                    load(next)
+                    changeBranch(next)
                   }}
                   title={`Click to filter setup steps for ${br.branchName}`}
                 >
@@ -716,15 +765,7 @@ export default function SetupPage() {
                 return (
                   <SetupStepTile
                     key={s.key}
-                    href={
-                      s.key === 'branding'
-                        ? '/app/setup/branding'
-                        : s.key === 'templates'
-                        ? '/app/setup/templates'
-                        : s.key === 'roles'
-                        ? '/app/setup/roles'
-                        : `/app/setup/${s.key}`
-                    }
+                    href={getStepHref(s)}
                     name={s.label}
                     status={s.status === 'BLOCKED' ? 'PENDING' : s.status}
                     icon={<Icon size={16} />}
@@ -819,15 +860,7 @@ export default function SetupPage() {
                 return (
                   <SetupStepTile
                     key={s.key}
-                    href={
-                      s.key === 'branding'
-                        ? '/app/setup/branding'
-                        : s.key === 'templates'
-                        ? '/app/setup/templates'
-                        : s.key === 'roles'
-                        ? '/app/setup/roles'
-                        : `/app/setup/${s.key}`
-                    }
+                    href={getStepHref(s)}
                     name={s.label}
                     status={s.status === 'BLOCKED' ? 'PENDING' : s.status}
                     icon={<Icon size={16} />}
@@ -882,15 +915,7 @@ export default function SetupPage() {
                       return (
                         <SetupStepTile
                           key={s.key}
-                          href={
-                            s.key === 'branding'
-                              ? '/app/setup/branding'
-                              : s.key === 'templates'
-                              ? '/app/setup/templates'
-                              : s.key === 'roles'
-                              ? '/app/setup/roles'
-                              : `/app/setup/${s.key}`
-                          }
+                          href={getStepHref(s)}
                           name={s.label}
                           status={s.status === 'BLOCKED' ? 'PENDING' : s.status}
                           icon={<Icon size={16} />}
@@ -1027,7 +1052,15 @@ export default function SetupPage() {
           }}>
             <div className="form-grid">
               <div className="field"><label>Preschool Name <span className="req">*</span></label><input className="input" name="name" defaultValue={profile.name} required /></div>
-              <div className="field"><label>School Code</label><input className="input" value={profile.code} disabled /></div>
+              <div className="field">
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Lock size={12} style={{ color: 'var(--text-muted)' }} /> School Identifier (Domain Slug)
+                </label>
+                <input className="input" value={profile.code} disabled />
+                <span className="helper" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  Permanent school domain identifier used for login URLs and tenant routing.
+                </span>
+              </div>
               <div className="field"><label>Official Email <span className="req">*</span></label><input className="input" name="email" type="email" defaultValue={profile.email} required /></div>
               <div className="field"><label>Primary Phone <span className="req">*</span></label><input className="input" name="phone" defaultValue={profile.phone} required /></div>
               <div className="field"><label>City <span className="req">*</span></label><input className="input" name="city" defaultValue={profile.city} required /></div>
@@ -1108,7 +1141,15 @@ export default function SetupPage() {
           }}>
             <div className="form-grid">
               <div className="field"><label>Branch Name <span className="req">*</span></label><input className="input" name="name" defaultValue={editingItem.name} required /></div>
-              <div className="field"><label>Code</label><input className="input" value={editingItem.code} disabled /></div>
+              <div className="field">
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Lock size={12} style={{ color: 'var(--text-muted)' }} /> Campus Code (Permanent Reference)
+                </label>
+                <input className="input" value={editingItem.code} disabled />
+                <span className="helper" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  Permanent business reference key used across invoices, student IDs, and official reports.
+                </span>
+              </div>
               <div className="field"><label>City</label><input className="input" name="city" defaultValue={editingItem.city || ''} /></div>
               <div className="field"><label>Phone</label><input className="input" name="phone" defaultValue={editingItem.phone || ''} /></div>
               <div className="field" style={{ gridColumn: '1 / -1' }}><label>Address</label><input className="input" name="address" defaultValue={editingItem.address || ''} /></div>
@@ -1193,7 +1234,15 @@ export default function SetupPage() {
           }}>
             <div className="form-grid">
               <div className="field"><label>Program Name <span className="req">*</span></label><input className="input" name="name" defaultValue={editingItem.name} required /></div>
-              <div className="field"><label>Code</label><input className="input" value={editingItem.code} disabled /></div>
+              <div className="field">
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Lock size={12} style={{ color: 'var(--text-muted)' }} /> Program Code (Permanent Reference)
+                </label>
+                <input className="input" value={editingItem.code} disabled />
+                <span className="helper" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  Permanent business code used across fee structures, curriculum tracking, and report cards.
+                </span>
+              </div>
               <div className="field"><label>Capacity (seats) <span className="req">*</span></label><input className="input" name="capacity" type="number" defaultValue={editingItem.capacity} min="1" required /></div>
               <div className="field" style={{ gridColumn: '1 / -1' }}><label>Description</label><input className="input" name="description" defaultValue={editingItem.description || ''} /></div>
               <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1388,7 +1437,15 @@ export default function SetupPage() {
           }}>
             <div className="form-grid">
               <div className="field"><label>Class Name <span className="req">*</span></label><input className="input" name="name" defaultValue={editingItem.name} required /></div>
-              <div className="field"><label>Code</label><input className="input" value={editingItem.code} disabled /></div>
+              <div className="field">
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Lock size={12} style={{ color: 'var(--text-muted)' }} /> Classroom Code (Permanent Reference)
+                </label>
+                <input className="input" value={editingItem.code} disabled />
+                <span className="helper" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  Permanent identifier used in timetables, attendance registers, and QR check-ins.
+                </span>
+              </div>
               <div className="field"><label>Linked Program</label>
                 <select className="select" name="programId" defaultValue={editingItem.programId || ''}>
                   <option value="">Select program…</option>

@@ -24,6 +24,7 @@ import {
   ArrowRight,
 } from 'lucide-react'
 import Link from 'next/link'
+import { GlobalDatePicker } from '@/components/ui/GlobalDatePicker'
 import { PipelineCard } from './PipelineCard'
 import type {
   PipelineCardData,
@@ -767,13 +768,13 @@ export function AdmissionPipelineBoard({
           <div className="space-y-4 text-xs">
             <div>
               <label className="block font-bold text-foreground mb-1">
-                Follow-up Due Date & Time *
+                Follow-up Date *
               </label>
-              <input
-                type="datetime-local"
+              <GlobalDatePicker
                 value={followUpModal.dueAt}
-                onChange={(e) => setFollowUpModal({ ...followUpModal, dueAt: e.target.value })}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40"
+                onChange={(val) => setFollowUpModal({ ...followUpModal, dueAt: val })}
+                placeholder="Select follow-up date"
+                size="sm"
               />
             </div>
 

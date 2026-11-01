@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { Users, Plus } from 'lucide-react'
 import { Modal } from '@/components/preone/Modal'
 import { Field } from '@/components/preone/ui'
+import { GlobalDatePicker } from '@/components/ui/GlobalDatePicker'
 import type { BranchOption } from './types'
 
 interface AddStaffModalProps {
@@ -190,11 +191,11 @@ export function AddStaffModal({
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Date of Joining" required>
-              <input
-                type="date"
-                className="input text-xs w-full"
+              <GlobalDatePicker
                 value={form.joiningDate}
-                onChange={(e) => setForm({ ...form, joiningDate: e.target.value })}
+                onChange={(val) => setForm({ ...form, joiningDate: val })}
+                placeholder="Select joining date"
+                size="sm"
               />
             </Field>
             <Field label="Monthly Basic Salary (₹)" required>

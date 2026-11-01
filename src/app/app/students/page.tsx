@@ -21,6 +21,7 @@ import { useI18n } from '@/lib/i18n/context'
 import { StudentRosterCardGrid } from '@/components/students/StudentRosterCardGrid'
 import { Student360Drawer } from '@/components/students/Student360Drawer'
 import { StudentGuardianQuickActions } from '@/components/students/StudentGuardianQuickActions'
+import { ParentStudentsView } from '@/components/parent/ParentStudentsView'
 
 interface StudentRow {
   id: string
@@ -136,6 +137,7 @@ export default function StudentsPage() {
   const [programs, setPrograms] = useState<ContextOption[]>([])
   const [classrooms, setClassrooms] = useState<Classroom[]>([])
   const [canWriteStudents, setCanWriteStudents] = useState(false)
+  const [isParent, setIsParent] = useState(false)
 
   // Load current user permissions
   useEffect(() => {
@@ -144,6 +146,8 @@ export default function StudentsPage() {
       .then((res) => {
         if (res.success && res.data) {
           const roles: string[] = res.data.roles && res.data.roles.length > 0 ? res.data.roles : [res.data.role]
+          const isFam = roles.some((r) => ['PARENT', 'GUARDIAN'].includes(r))
+          setIsParent(isFam)
           const writeAllowed = roles.some((r) => ['OWNER', 'PRINCIPAL', 'SUPER_ADMIN', 'PLATFORM_ADMIN'].includes(r))
           setCanWriteStudents(writeAllowed)
         }
@@ -619,6 +623,10 @@ export default function StudentsPage() {
       ),
     },
   ]
+
+  if (isParent) {
+    return <ParentStudentsView />
+  }
 
   if (loading && (!rows || rows.length === 0)) {
     return <BookPageLoader mode="page" />

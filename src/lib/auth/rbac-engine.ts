@@ -89,6 +89,18 @@ export const CAPABILITY_CATALOG: CapabilityDefinition[] = [
   // School Settings
   { id: 'settings:read', name: 'View Settings', category: 'SETTINGS', description: 'View campus details, academic sessions, and operational configurations' },
   { id: 'settings:write', name: 'Update Settings', category: 'SETTINGS', description: 'Configure school profile, academic calendar, and campus policies' },
+
+  // Parent Portal & Student-Centric Capabilities
+  { id: 'students:read-linked', name: 'View Linked Students', category: 'STUDENTS', description: 'View student profile and records strictly for parent linked children' },
+  { id: 'academics:read-linked', name: 'View Linked Student Learning', category: 'ACADEMICS', description: 'View assigned learning activities and progress for linked children' },
+  { id: 'attendance:read-linked', name: 'View Linked Student Attendance', category: 'ATTENDANCE', description: 'View attendance history and check-ins for linked children' },
+  { id: 'diary:read-linked', name: 'View Linked Student Diary', category: 'OPERATIONS', description: 'View daily timetable, care notes and updates for linked children' },
+  { id: 'milestones:read-linked', name: 'View Linked Student Milestones', category: 'ACADEMICS', description: 'View developmental progress milestones for linked children' },
+  { id: 'documents:read-linked', name: 'View Linked Student Documents', category: 'REPORTS', description: 'Download generated certificates, documents and report cards for linked children' },
+  { id: 'reports:read-linked', name: 'View Published Student Reports', category: 'REPORTS', description: 'View official report cards and published evaluations for linked children' },
+  { id: 'inventory:read-linked', name: 'View Student-Assigned Inventory', category: 'INVENTORY', description: 'View items and kits issued to linked children' },
+  { id: 'pickup:read-linked', name: 'View Pickup Authorization', category: 'OPERATIONS', description: 'View authorized pickup persons and gate PIN for linked children' },
+  { id: 'pickup:verify-linked', name: 'Verify Pickup Authorization', category: 'OPERATIONS', description: 'Confirm pickup handoff verification for linked children' },
 ]
 
 export const ALL_CAPABILITY_IDS = new Set(CAPABILITY_CATALOG.map((c) => c.id))

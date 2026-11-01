@@ -35,6 +35,7 @@ import {
   TransportIncidentSeverity,
   TransportIncidentCategory,
   TransportIncidentStatus,
+  UserStatus,
 } from '@prisma/client'
 
 export interface ScopeContext {
@@ -48,13 +49,195 @@ export interface ScopeContext {
   userAgent?: string | null
 }
 
+export interface VehicleExpiryWarning {
+  field: 'registrationExpiry' | 'insuranceExpiry' | 'fitnessExpiry' | 'permitExpiry' | 'pollutionExpiry'
+  label: string
+  expiryDate: string
+  status: 'EXPIRED' | 'EXPIRING_SOON'
+  message: string
+}
+
+export interface VehicleCustomMetadata {
+  notes?: string | null
+  displayName?: string | null
+  registrationExpiry?: string | null
+  insuranceExpiry?: string | null
+  fitnessExpiry?: string | null
+  permitExpiry?: string | null
+  pollutionExpiry?: string | null
+  documents?: Array<{
+    id?: string
+    name: string
+    type: string
+    url?: string
+    expiryDate?: string | null
+  }>
+}
+
 export interface CreateVehicleInput {
   branchId?: string | null
   registrationNumber: string
   vehicleType?: string
   capacity: number
   makeModel?: string
-  notes?: string
+  displayName?: string | null
+  registrationExpiry?: string | null
+  insuranceExpiry?: string | null
+  fitnessExpiry?: string | null
+  permitExpiry?: string | null
+  pollutionExpiry?: string | null
+  documents?: Array<{
+    id?: string
+    name: string
+    type: string
+    url?: string
+    expiryDate?: string | null
+  }>
+  notes?: string | null
+}
+
+export interface UpdateVehicleInput {
+  capacity?: number
+  status?: VehicleStatus
+  makeModel?: string | null
+  vehicleType?: string | null
+  displayName?: string | null
+  registrationExpiry?: string | null
+  insuranceExpiry?: string | null
+  fitnessExpiry?: string | null
+  permitExpiry?: string | null
+  pollutionExpiry?: string | null
+  documents?: Array<{
+    id?: string
+    name: string
+    type: string
+    url?: string
+    expiryDate?: string | null
+  }>
+  notes?: string | null
+  branchId?: string | null
+}
+
+export function parseVehicleNotes(notesStr: string | null | undefined): {
+  plainNotes: string | null
+  displayName: string | null
+  registrationExpiry: string | null
+  insuranceExpiry: string | null
+  fitnessExpiry: string | null
+  permitExpiry: string | null
+  pollutionExpiry: string | null
+  documents: Array<{ id?: string; name: string; type: string; url?: string; expiryDate?: string | null }>
+  expiryWarnings: VehicleExpiryWarning[]
+} {
+  let plainNotes: string | null = notesStr || null
+  let displayName: string | null = null
+  let registrationExpiry: string | null = null
+  let insuranceExpiry: string | null = null
+  let fitnessExpiry: string | null = null
+  let permitExpiry: string | null = null
+  let pollutionExpiry: string | null = null
+  let documents: any[] = []
+
+  if (notesStr && notesStr.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(notesStr)
+      plainNotes = parsed.notes !== undefined ? (parsed.notes || null) : null
+      displayName = parsed.displayName || null
+      registrationExpiry = parsed.registrationExpiry || null
+      insuranceExpiry = parsed.insuranceExpiry || null
+      fitnessExpiry = parsed.fitnessExpiry || null
+      permitExpiry = parsed.permitExpiry || null
+      pollutionExpiry = parsed.pollutionExpiry || null
+      documents = Array.isArray(parsed.documents) ? parsed.documents : []
+    } catch {
+      // keep plainNotes as notesStr
+    }
+  }
+
+  const now = new Date()
+  const thirtyDaysAhead = new Date()
+  thirtyDaysAhead.setDate(thirtyDaysAhead.getDate() + 30)
+
+  const warnings: VehicleExpiryWarning[] = []
+  const checkExpiry = (field: VehicleExpiryWarning['field'], label: string, dateStr: string | null) => {
+    if (!dateStr) return
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return
+    if (d < now) {
+      warnings.push({
+        field,
+        label,
+        expiryDate: dateStr,
+        status: 'EXPIRED',
+        message: `${label} expired on ${d.toISOString().split('T')[0]}`,
+      })
+    } else if (d <= thirtyDaysAhead) {
+      const daysLeft = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      warnings.push({
+        field,
+        label,
+        expiryDate: dateStr,
+        status: 'EXPIRING_SOON',
+        message: `${label} expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
+      })
+    }
+  }
+
+  checkExpiry('registrationExpiry', 'Registration Certificate', registrationExpiry)
+  checkExpiry('insuranceExpiry', 'Insurance Policy', insuranceExpiry)
+  checkExpiry('fitnessExpiry', 'Fitness Certificate', fitnessExpiry)
+  checkExpiry('permitExpiry', 'Transport Permit', permitExpiry)
+  checkExpiry('pollutionExpiry', 'Pollution Certificate (PUC)', pollutionExpiry)
+
+  return {
+    plainNotes,
+    displayName,
+    registrationExpiry,
+    insuranceExpiry,
+    fitnessExpiry,
+    permitExpiry,
+    pollutionExpiry,
+    documents,
+    expiryWarnings: warnings,
+  }
+}
+
+export function serializeVehicleNotes(
+  plainNotes: string | null | undefined,
+  metadata?: {
+    displayName?: string | null
+    registrationExpiry?: string | null
+    insuranceExpiry?: string | null
+    fitnessExpiry?: string | null
+    permitExpiry?: string | null
+    pollutionExpiry?: string | null
+    documents?: any[]
+  }
+): string | null {
+  const hasMetadata =
+    (metadata?.displayName && metadata.displayName.trim().length > 0) ||
+    metadata?.registrationExpiry ||
+    metadata?.insuranceExpiry ||
+    metadata?.fitnessExpiry ||
+    metadata?.permitExpiry ||
+    metadata?.pollutionExpiry ||
+    (metadata?.documents && metadata.documents.length > 0)
+
+  if (!hasMetadata) {
+    return plainNotes?.trim() || null
+  }
+
+  const payload: any = {}
+  if (plainNotes?.trim()) payload.notes = plainNotes.trim()
+  if (metadata?.displayName?.trim()) payload.displayName = metadata.displayName.trim()
+  if (metadata?.registrationExpiry) payload.registrationExpiry = metadata.registrationExpiry
+  if (metadata?.insuranceExpiry) payload.insuranceExpiry = metadata.insuranceExpiry
+  if (metadata?.fitnessExpiry) payload.fitnessExpiry = metadata.fitnessExpiry
+  if (metadata?.permitExpiry) payload.permitExpiry = metadata.permitExpiry
+  if (metadata?.pollutionExpiry) payload.pollutionExpiry = metadata.pollutionExpiry
+  if (metadata?.documents && metadata.documents.length > 0) payload.documents = metadata.documents
+
+  return JSON.stringify(payload)
 }
 
 export interface CreateStopInput {
@@ -225,6 +408,23 @@ export class TransportService {
   /**
    * 2. VEHICLE MANAGEMENT
    */
+  static formatVehicle(vehicle: any) {
+    if (!vehicle) return null
+    const meta = parseVehicleNotes(vehicle.notes)
+    return {
+      ...vehicle,
+      displayName: meta.displayName,
+      registrationExpiry: meta.registrationExpiry,
+      insuranceExpiry: meta.insuranceExpiry,
+      fitnessExpiry: meta.fitnessExpiry,
+      permitExpiry: meta.permitExpiry,
+      pollutionExpiry: meta.pollutionExpiry,
+      documents: meta.documents,
+      expiryWarnings: meta.expiryWarnings,
+      notes: meta.plainNotes,
+    }
+  }
+
   static async listVehicles(ctx: ScopeContext, filter?: { status?: VehicleStatus; branchId?: string; search?: string }) {
     const where: any = {
       tenantId: ctx.tenantId,
@@ -250,7 +450,7 @@ export class TransportService {
       orderBy: { createdAt: 'desc' },
     })
 
-    return vehicles
+    return vehicles.map((v) => this.formatVehicle(v))
   }
 
   static async createVehicle(ctx: ScopeContext, input: CreateVehicleInput) {
@@ -271,6 +471,16 @@ export class TransportService {
       throw new Error(`Vehicle with registration number ${regNorm} already exists in this school`)
     }
 
+    const notesToStore = serializeVehicleNotes(input.notes, {
+      displayName: input.displayName,
+      registrationExpiry: input.registrationExpiry,
+      insuranceExpiry: input.insuranceExpiry,
+      fitnessExpiry: input.fitnessExpiry,
+      permitExpiry: input.permitExpiry,
+      pollutionExpiry: input.pollutionExpiry,
+      documents: input.documents,
+    })
+
     const vehicle = await db.vehicle.create({
       data: {
         tenantId: ctx.tenantId,
@@ -279,10 +489,10 @@ export class TransportService {
         vehicleType: input.vehicleType?.trim() || 'BUS',
         capacity: input.capacity,
         makeModel: input.makeModel?.trim() || null,
-        notes: input.notes?.trim() || null,
+        notes: notesToStore,
         status: 'ACTIVE',
       },
-      include: { branch: true },
+      include: { branch: true, routes: { select: { id: true, name: true, code: true } } },
     })
 
     await recordAudit({
@@ -298,13 +508,13 @@ export class TransportService {
       summary: `Vehicle created: ${vehicle.registrationNumber} (${vehicle.capacity} seats)`,
     })
 
-    return vehicle
+    return this.formatVehicle(vehicle)
   }
 
   static async updateVehicle(
     ctx: ScopeContext,
     id: string,
-    data: { capacity?: number; status?: VehicleStatus; makeModel?: string; notes?: string; branchId?: string | null }
+    data: UpdateVehicleInput
   ) {
     const existing = await db.vehicle.findFirst({
       where: { id, tenantId: ctx.tenantId, deletedAt: null },
@@ -315,15 +525,29 @@ export class TransportService {
       throw new Error('Capacity must be greater than 0')
     }
 
+    const existingMeta = parseVehicleNotes(existing.notes)
+    const newNotes = data.notes !== undefined ? data.notes : existingMeta.plainNotes
+    const notesToStore = serializeVehicleNotes(newNotes, {
+      displayName: data.displayName !== undefined ? data.displayName : existingMeta.displayName,
+      registrationExpiry: data.registrationExpiry !== undefined ? data.registrationExpiry : existingMeta.registrationExpiry,
+      insuranceExpiry: data.insuranceExpiry !== undefined ? data.insuranceExpiry : existingMeta.insuranceExpiry,
+      fitnessExpiry: data.fitnessExpiry !== undefined ? data.fitnessExpiry : existingMeta.fitnessExpiry,
+      permitExpiry: data.permitExpiry !== undefined ? data.permitExpiry : existingMeta.permitExpiry,
+      pollutionExpiry: data.pollutionExpiry !== undefined ? data.pollutionExpiry : existingMeta.pollutionExpiry,
+      documents: data.documents !== undefined ? data.documents : existingMeta.documents,
+    })
+
     const updated = await db.vehicle.update({
       where: { id },
       data: {
         ...(data.capacity !== undefined ? { capacity: data.capacity } : {}),
         ...(data.status ? { status: data.status } : {}),
         ...(data.makeModel !== undefined ? { makeModel: data.makeModel?.trim() || null } : {}),
-        ...(data.notes !== undefined ? { notes: data.notes?.trim() || null } : {}),
+        ...(data.vehicleType !== undefined ? { vehicleType: data.vehicleType?.trim() || 'BUS' } : {}),
+        ...(notesToStore !== undefined ? { notes: notesToStore } : {}),
         ...(data.branchId !== undefined ? { branchId: data.branchId || null } : {}),
       },
+      include: { branch: true, routes: { select: { id: true, name: true, code: true } } },
     })
 
     await recordAudit({
@@ -339,7 +563,7 @@ export class TransportService {
       summary: `Vehicle updated: ${updated.registrationNumber} (Status: ${updated.status})`,
     })
 
-    return updated
+    return this.formatVehicle(updated)
   }
 
   /**
@@ -396,8 +620,8 @@ export class TransportService {
         where: { id: input.vehicleId, tenantId: ctx.tenantId, deletedAt: null },
       })
       if (!vehicle) throw new Error('Vehicle not found')
-      if (vehicle.status === 'MAINTENANCE') {
-        throw new Error('Selected vehicle is currently undergoing MAINTENANCE and cannot be assigned to a route')
+      if (vehicle.status !== 'ACTIVE') {
+        throw new Error(`Selected vehicle ${vehicle.registrationNumber} is ${vehicle.status} and cannot be assigned to an active route`)
       }
     }
 
@@ -493,8 +717,8 @@ export class TransportService {
         where: { id: data.vehicleId, tenantId: ctx.tenantId, deletedAt: null },
       })
       if (!v) throw new Error('Vehicle not found')
-      if (v.status === 'MAINTENANCE') {
-        throw new Error('Selected vehicle is currently in MAINTENANCE and cannot be assigned')
+      if (v.status !== 'ACTIVE') {
+        throw new Error(`Selected vehicle ${v.registrationNumber} is ${v.status} and cannot be assigned to an active route`)
       }
     }
 
@@ -950,6 +1174,36 @@ export class TransportService {
     const attendantId = input.attendantProfileId || route.attendantProfileId
     if (attendantId) {
       await this.validateStaffEligibility(ctx.tenantId, attendantId, 'attendant')
+    }
+
+    // Concurrency / overlapping trip check: Ensure vehicle is not already running an active trip
+    const overlappingVehicleTrip = await db.transportTrip.findFirst({
+      where: {
+        tenantId: ctx.tenantId,
+        vehicleId,
+        tripDate: dateObj,
+        status: 'IN_PROGRESS',
+        routeId: { not: routeId },
+      },
+      include: { route: true },
+    })
+    if (overlappingVehicleTrip) {
+      throw new Error(`Vehicle ${vehicle.registrationNumber} is already in use for active trip on route ${overlappingVehicleTrip.route.name}`)
+    }
+
+    // Concurrency / overlapping trip check: Ensure driver is not already running an active trip
+    const overlappingDriverTrip = await db.transportTrip.findFirst({
+      where: {
+        tenantId: ctx.tenantId,
+        driverProfileId: driverId,
+        tripDate: dateObj,
+        status: 'IN_PROGRESS',
+        routeId: { not: routeId },
+      },
+      include: { route: true },
+    })
+    if (overlappingDriverTrip) {
+      throw new Error(`Driver is currently running an active trip in progress on route ${overlappingDriverTrip.route.name}`)
     }
 
     // Check if trip already exists for this route, date and trip type
@@ -1527,12 +1781,16 @@ export class TransportService {
 
   /**
    * 11. STAFF ELIGIBILITY VALIDATION
-   * Validates active status, tenant, branch, and non-terminated HR state.
+   * Validates active status, tenant, branch, non-terminated HR state, transport designation, and license expiry.
    */
   static async validateStaffEligibility(tenantId: string, staffProfileId: string, roleType: 'driver' | 'attendant') {
     const profile = await db.staffProfile.findFirst({
       where: { id: staffProfileId, tenantId, deletedAt: null },
-      include: { user: true },
+      include: {
+        user: true,
+        tenantUser: { select: { role: true, roles: true } },
+        documents: true,
+      },
     })
 
     if (!profile) {
@@ -1543,7 +1801,447 @@ export class TransportService {
       throw new Error(`Selected staff member ${profile.user.fullName} is ${profile.status} and cannot be assigned as ${roleType}. Active staff required.`)
     }
 
+    // Role / designation check: Staff must have transport role, designation, or department
+    const des = (profile.designation || '').toLowerCase().trim()
+    const dept = (profile.department || '').toLowerCase().trim()
+    const role = profile.tenantUser?.role
+    const roles = profile.tenantUser?.roles || []
+
+    const isTransportRole = role === 'DRIVER' || role === 'ATTENDANT' || roles.includes('DRIVER') || roles.includes('ATTENDANT')
+    const transportKeywords = ['driver', 'attendant', 'conductor', 'chaperone', 'transport', 'pilot', 'bus']
+    const hasTransportKeyword = transportKeywords.some((kw) => des.includes(kw))
+    const transportDepts = ['transport', 'transportation', 'logistics', 'fleet']
+    const hasTransportDept = transportDepts.some((kw) => dept.includes(kw))
+
+    if (!isTransportRole && !hasTransportKeyword && !hasTransportDept) {
+      throw new Error(`Staff member ${profile.user.fullName} (${profile.designation || 'Staff'}) is not designated for transport operations and cannot be assigned as a ${roleType}.`)
+    }
+
+    // Check driving license validity if roleType is driver
+    if (roleType === 'driver') {
+      let licenseExpiry: Date | null = null
+      let licenseNo: string | null = null
+
+      if (profile.qualification && profile.qualification.startsWith('{')) {
+        try {
+          const q = JSON.parse(profile.qualification)
+          if (q.licenseExpiry) licenseExpiry = new Date(q.licenseExpiry)
+          if (q.licenseNumber) licenseNo = q.licenseNumber
+        } catch {}
+      }
+
+      const dlDoc = profile.documents?.find((d) => d.fileName === 'DRIVING_LICENSE' || (d.docType === 'OTHER' && d.documentNumber))
+      if (dlDoc) {
+        if (dlDoc.expiryDate) licenseExpiry = dlDoc.expiryDate
+        if (dlDoc.documentNumber) licenseNo = dlDoc.documentNumber
+      }
+
+      if (licenseExpiry && !isNaN(licenseExpiry.getTime())) {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        if (licenseExpiry < today) {
+          throw new Error(`Cannot assign driver ${profile.user.fullName}: Driving license ${licenseNo ? `(${licenseNo}) ` : ''}expired on ${licenseExpiry.toISOString().split('T')[0]}`)
+        }
+      }
+    }
+
     return profile
+  }
+
+  /**
+   * 12. DRIVER DIRECTORY & MANAGEMENT
+   */
+  static async listDrivers(ctx: ScopeContext, filter?: { branchId?: string; search?: string }) {
+    const where: any = {
+      tenantId: ctx.tenantId,
+      deletedAt: null,
+      ...(filter?.branchId || ctx.branchId ? { branchId: filter?.branchId || ctx.branchId } : {}),
+    }
+
+    const staffList = await db.staffProfile.findMany({
+      where,
+      include: {
+        user: { select: { id: true, fullName: true, phone: true, email: true, avatarUrl: true, status: true } },
+        branch: { select: { id: true, name: true, code: true } },
+        tenantUser: { select: { role: true, roles: true } },
+        documents: true,
+        drivenRoutes: {
+          where: { deletedAt: null },
+          select: { id: true, name: true, code: true, vehicle: { select: { id: true, registrationNumber: true, makeModel: true } } },
+        },
+      },
+      orderBy: { employeeCode: 'asc' },
+    })
+
+    const transportStaff = staffList.filter((s) => {
+      const des = (s.designation || '').toLowerCase().trim()
+      const dept = (s.department || '').toLowerCase().trim()
+      const role = s.tenantUser?.role
+      const roles = s.tenantUser?.roles || []
+
+      if (role === 'DRIVER' || role === 'ATTENDANT') return true
+      if (roles.includes('DRIVER') || roles.includes('ATTENDANT')) return true
+
+      const transportKeywords = ['driver', 'attendant', 'conductor', 'chaperone', 'transport', 'pilot', 'bus']
+      if (transportKeywords.some((kw) => des.includes(kw))) return true
+
+      const transportDepts = ['transport', 'transportation', 'logistics', 'fleet']
+      if (transportDepts.some((kw) => dept.includes(kw))) return true
+
+      return false
+    })
+
+    const now = new Date()
+    const thirtyDaysAhead = new Date()
+    thirtyDaysAhead.setDate(thirtyDaysAhead.getDate() + 30)
+
+    return transportStaff.map((s) => {
+      let licenseNumber: string | null = null
+      let licenseExpiry: string | null = null
+      let licenseCategory: string | null = null
+
+      if (s.qualification && s.qualification.startsWith('{')) {
+        try {
+          const q = JSON.parse(s.qualification)
+          licenseNumber = q.licenseNumber || null
+          licenseExpiry = q.licenseExpiry || null
+          licenseCategory = q.licenseCategory || null
+        } catch {}
+      }
+
+      const dlDoc = s.documents.find((d) => d.fileName === 'DRIVING_LICENSE' || (d.docType === 'OTHER' && d.documentNumber))
+      if (dlDoc) {
+        if (!licenseNumber && dlDoc.documentNumber) licenseNumber = dlDoc.documentNumber
+        if (!licenseExpiry && dlDoc.expiryDate) licenseExpiry = dlDoc.expiryDate.toISOString().split('T')[0]
+      }
+
+      let licenseStatus: 'VALID' | 'EXPIRING_SOON' | 'EXPIRED' | 'UNSPECIFIED' = 'UNSPECIFIED'
+      let licenseWarning: string | null = null
+
+      if (licenseExpiry) {
+        const d = new Date(licenseExpiry)
+        if (!isNaN(d.getTime())) {
+          if (d < now) {
+            licenseStatus = 'EXPIRED'
+            licenseWarning = `License expired on ${d.toISOString().split('T')[0]}`
+          } else if (d <= thirtyDaysAhead) {
+            licenseStatus = 'EXPIRING_SOON'
+            const days = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+            licenseWarning = `License expires in ${days} day${days === 1 ? '' : 's'}`
+          } else {
+            licenseStatus = 'VALID'
+          }
+        }
+      }
+
+      return {
+        id: s.id,
+        userId: s.userId,
+        employeeCode: s.employeeCode,
+        fullName: s.user.fullName,
+        email: s.user.email,
+        phone: s.user.phone,
+        avatarUrl: s.user.avatarUrl,
+        designation: s.designation || 'Driver',
+        department: s.department || 'Transport',
+        role: s.tenantUser?.role || 'DRIVER',
+        status: s.status,
+        userStatus: s.user.status,
+        branchId: s.branchId,
+        branchName: s.branch?.name || null,
+        emergencyContactName: s.emergencyContactName,
+        emergencyContactPhone: s.emergencyContactPhone,
+        licenseNumber,
+        licenseExpiry,
+        licenseCategory,
+        licenseStatus,
+        licenseWarning,
+        assignedRoutes: s.drivenRoutes.map((r) => ({
+          id: r.id,
+          name: r.name,
+          code: r.code,
+          vehicle: r.vehicle ? { id: r.vehicle.id, registrationNumber: r.vehicle.registrationNumber, makeModel: r.vehicle.makeModel } : null,
+        })),
+      }
+    })
+  }
+
+  static async getDriver(ctx: ScopeContext, staffProfileId: string) {
+    const drivers = await this.listDrivers(ctx)
+    return drivers.find((d) => d.id === staffProfileId) || null
+  }
+
+  static async registerDriver(
+    ctx: ScopeContext,
+    input: {
+      staffProfileId?: string
+      userId?: string
+      branchId?: string | null
+      employeeCode?: string
+      fullName?: string
+      phone?: string
+      email?: string
+      licenseNumber?: string
+      licenseExpiry?: string | null
+      licenseCategory?: string
+      emergencyContactName?: string
+      emergencyContactPhone?: string
+    }
+  ) {
+    if (input.staffProfileId) {
+      // Existing staff onboarding to transport
+      const staff = await db.staffProfile.findFirst({
+        where: { id: input.staffProfileId, tenantId: ctx.tenantId, deletedAt: null },
+        include: { user: true },
+      })
+      if (!staff) throw new Error('Staff profile not found')
+
+      const qualificationData = {
+        licenseNumber: input.licenseNumber?.trim() || null,
+        licenseExpiry: input.licenseExpiry || null,
+        licenseCategory: input.licenseCategory?.trim() || 'LMV/HMV',
+      }
+
+      const updated = await db.$transaction(async (tx) => {
+        const sp = await tx.staffProfile.update({
+          where: { id: staff.id },
+          data: {
+            designation: staff.designation && staff.designation.toLowerCase().includes('driver') ? staff.designation : 'Transport Driver',
+            department: staff.department || 'Transport',
+            qualification: JSON.stringify(qualificationData),
+            emergencyContactName: input.emergencyContactName?.trim() || staff.emergencyContactName,
+            emergencyContactPhone: input.emergencyContactPhone?.trim() || staff.emergencyContactPhone,
+            status: 'ACTIVE',
+          },
+        })
+
+        if (input.licenseNumber?.trim()) {
+          const existingDoc = await tx.staffDocument.findFirst({
+            where: { staffProfileId: staff.id, fileName: 'DRIVING_LICENSE' },
+          })
+          if (existingDoc) {
+            await tx.staffDocument.update({
+              where: { id: existingDoc.id },
+              data: {
+                documentNumber: input.licenseNumber.trim(),
+                expiryDate: input.licenseExpiry ? new Date(input.licenseExpiry) : null,
+              },
+            })
+          } else {
+            await tx.staffDocument.create({
+              data: {
+                tenantId: ctx.tenantId,
+                staffProfileId: staff.id,
+                docType: 'OTHER',
+                fileName: 'DRIVING_LICENSE',
+                fileUrl: '/documents/driving-license',
+                documentNumber: input.licenseNumber.trim(),
+                expiryDate: input.licenseExpiry ? new Date(input.licenseExpiry) : null,
+                verificationStatus: 'VERIFIED',
+              },
+            })
+          }
+        }
+
+        return sp
+      })
+
+      await recordAudit({
+        tenantId: ctx.tenantId,
+        actorId: ctx.actorId,
+        actorName: ctx.actorName,
+        actorRole: ctx.actorRole,
+        action: 'ONBOARD_DRIVER',
+        entity: 'StaffProfile',
+        entityId: updated.id,
+        module: 'TRANSPORT',
+        summary: `Staff ${staff.user.fullName} onboarded as Transport Driver`,
+      })
+
+      return this.getDriver(ctx, updated.id)
+    }
+
+    // New driver creation requires employeeCode, fullName, phone
+    if (!input.fullName || !input.fullName.trim()) throw new Error('Driver full name is required')
+    if (!input.phone || !input.phone.trim()) throw new Error('Driver phone number is required')
+    if (!input.employeeCode || !input.employeeCode.trim()) throw new Error('Driver employee code is required')
+
+    const empNorm = input.employeeCode.trim().toUpperCase()
+    const existingCode = await db.staffProfile.findUnique({
+      where: { tenantId_employeeCode: { tenantId: ctx.tenantId, employeeCode: empNorm } },
+    })
+    if (existingCode) throw new Error(`Employee code ${empNorm} is already in use`)
+
+    const driverName = input.fullName.trim()
+    const driverPhone = input.phone.trim()
+
+    const qualificationData = {
+      licenseNumber: input.licenseNumber?.trim() || null,
+      licenseExpiry: input.licenseExpiry || null,
+      licenseCategory: input.licenseCategory?.trim() || 'LMV/HMV',
+    }
+
+    const created = await db.$transaction(async (tx) => {
+      const email = input.email?.trim() || `driver.${empNorm.toLowerCase()}@school.internal`
+      const user = await tx.user.create({
+        data: {
+          fullName: driverName,
+          phone: driverPhone,
+          email,
+          passwordHash: 'DRIVER_AUTH_MANAGED',
+          status: 'ACTIVE',
+        },
+      })
+
+      await tx.tenantUser.create({
+        data: {
+          tenantId: ctx.tenantId,
+          userId: user.id,
+          role: 'DRIVER' as any,
+          roles: ['DRIVER'] as any,
+        },
+      })
+
+      const sp = await tx.staffProfile.create({
+        data: {
+          tenantId: ctx.tenantId,
+          userId: user.id,
+          branchId: input.branchId || ctx.branchId || null,
+          employeeCode: empNorm,
+          designation: 'Transport Driver',
+          department: 'Transport',
+          qualification: JSON.stringify(qualificationData),
+          emergencyContactName: input.emergencyContactName?.trim() || null,
+          emergencyContactPhone: input.emergencyContactPhone?.trim() || null,
+          status: 'ACTIVE',
+        },
+      })
+
+      if (input.licenseNumber?.trim()) {
+        await tx.staffDocument.create({
+          data: {
+            tenantId: ctx.tenantId,
+            staffProfileId: sp.id,
+            docType: 'OTHER',
+            fileName: 'DRIVING_LICENSE',
+            fileUrl: '/documents/driving-license',
+            documentNumber: input.licenseNumber.trim(),
+            expiryDate: input.licenseExpiry ? new Date(input.licenseExpiry) : null,
+            verificationStatus: 'VERIFIED',
+          },
+        })
+      }
+
+      return sp
+    })
+
+    await recordAudit({
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: 'CREATE_DRIVER',
+      entity: 'StaffProfile',
+      entityId: created.id,
+      module: 'TRANSPORT',
+      summary: `New transport driver created: ${input.fullName} (${empNorm})`,
+    })
+
+    return this.getDriver(ctx, created.id)
+  }
+
+  static async updateDriver(
+    ctx: ScopeContext,
+    staffProfileId: string,
+    input: {
+      licenseNumber?: string | null
+      licenseExpiry?: string | null
+      licenseCategory?: string | null
+      emergencyContactName?: string | null
+      emergencyContactPhone?: string | null
+      status?: UserStatus
+      branchId?: string | null
+    }
+  ) {
+    const staff = await db.staffProfile.findFirst({
+      where: { id: staffProfileId, tenantId: ctx.tenantId, deletedAt: null },
+      include: { user: true },
+    })
+    if (!staff) throw new Error('Driver staff profile not found')
+
+    let currentQ: any = {}
+    if (staff.qualification && staff.qualification.startsWith('{')) {
+      try {
+        currentQ = JSON.parse(staff.qualification)
+      } catch {}
+    }
+
+    const updatedQ = {
+      ...currentQ,
+      ...(input.licenseNumber !== undefined ? { licenseNumber: input.licenseNumber } : {}),
+      ...(input.licenseExpiry !== undefined ? { licenseExpiry: input.licenseExpiry } : {}),
+      ...(input.licenseCategory !== undefined ? { licenseCategory: input.licenseCategory } : {}),
+    }
+
+    const updated = await db.$transaction(async (tx) => {
+      const sp = await tx.staffProfile.update({
+        where: { id: staff.id },
+        data: {
+          ...(input.emergencyContactName !== undefined ? { emergencyContactName: input.emergencyContactName?.trim() || null } : {}),
+          ...(input.emergencyContactPhone !== undefined ? { emergencyContactPhone: input.emergencyContactPhone?.trim() || null } : {}),
+          ...(input.status ? { status: input.status } : {}),
+          ...(input.branchId !== undefined ? { branchId: input.branchId || null } : {}),
+          qualification: JSON.stringify(updatedQ),
+        },
+      })
+
+      if (input.licenseNumber !== undefined || input.licenseExpiry !== undefined) {
+        const existingDoc = await tx.staffDocument.findFirst({
+          where: { staffProfileId: staff.id, fileName: 'DRIVING_LICENSE' },
+        })
+        const licNo = input.licenseNumber !== undefined ? input.licenseNumber : currentQ.licenseNumber
+        const licExp = input.licenseExpiry !== undefined ? input.licenseExpiry : currentQ.licenseExpiry
+
+        if (existingDoc) {
+          await tx.staffDocument.update({
+            where: { id: existingDoc.id },
+            data: {
+              ...(licNo !== undefined ? { documentNumber: licNo } : {}),
+              ...(licExp !== undefined ? { expiryDate: licExp ? new Date(licExp) : null } : {}),
+            },
+          })
+        } else if (licNo) {
+          await tx.staffDocument.create({
+            data: {
+              tenantId: ctx.tenantId,
+              staffProfileId: staff.id,
+              docType: 'OTHER',
+              fileName: 'DRIVING_LICENSE',
+              fileUrl: '/documents/driving-license',
+              documentNumber: licNo,
+              expiryDate: licExp ? new Date(licExp) : null,
+              verificationStatus: 'VERIFIED',
+            },
+          })
+        }
+      }
+
+      return sp
+    })
+
+    await recordAudit({
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: 'UPDATE_DRIVER',
+      entity: 'StaffProfile',
+      entityId: updated.id,
+      module: 'TRANSPORT',
+      summary: `Driver profile updated for ${staff.user.fullName} (${staff.employeeCode})`,
+    })
+
+    return this.getDriver(ctx, updated.id)
   }
 
   // ── BACKWARD COMPATIBILITY ALIASES ──
@@ -1552,10 +2250,11 @@ export class TransportService {
   }
 
   static async getVehicle(ctx: ScopeContext, vehicleId: string) {
-    return db.vehicle.findFirst({
+    const v = await db.vehicle.findFirst({
       where: { id: vehicleId, tenantId: ctx.tenantId, deletedAt: null },
       include: { routes: true, branch: true },
     })
+    return v ? this.formatVehicle(v) : null
   }
 
   static async getRoutes(ctx: ScopeContext, filter?: { status?: RouteStatus; branchId?: string }) {
@@ -2122,7 +2821,7 @@ export class TransportService {
       sub: params.routeId,
       routeId: params.routeId,
       vehicleId: params.vehicleId,
-      driverId: ctx.actorId,
+      driverId: ctx.actorId || undefined,
       expiresIn: '12h',
     })
 

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { Modal } from '@/components/preone/Modal'
 import { FileText, User, Calendar, Phone, CheckCircle2, AlertCircle } from 'lucide-react'
+import { GlobalDatePicker, toDateOnlyIso } from '@/components/ui/GlobalDatePicker'
 
 export interface StartApplicationModalProps {
   open: boolean
@@ -29,14 +30,10 @@ export function StartApplicationModal({
   useEffect(() => {
     if (!open) return
 
-    // Pre-populate sensible follow-up date (tomorrow at 10:00 AM)
+    // Pre-populate sensible follow-up date (tomorrow)
     const tomorrow = new Date()
     tomorrow.setDate(tomorrow.getDate() + 1)
-    tomorrow.setHours(10, 0, 0, 0)
-    const localIso = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60000)
-      .toISOString()
-      .slice(0, 16)
-    setFollowUpDate(localIso)
+    setFollowUpDate(toDateOnlyIso(tomorrow))
     setFollowUpType('Phone Call')
     setFollowUpNotes(`Follow-up regarding admission dossier, required certificates, and enrollment confirmation.`)
     setErrorMessage('')
@@ -74,7 +71,7 @@ export function StartApplicationModal({
     }
 
     if (!followUpDate) {
-      setErrorMessage('Please specify the follow-up reminder date and time.')
+      setErrorMessage('Please specify the follow-up reminder date.')
       return
     }
 
@@ -87,7 +84,7 @@ export function StartApplicationModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           assignedStaffId,
-          followUpDate: new Date(followUpDate).toISOString(),
+          followUpDate,
           followUpType,
           followUpNotes: followUpNotes.trim(),
         }),
@@ -178,14 +175,13 @@ export function StartApplicationModal({
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
               <Calendar size={13} className="text-primary" />
-              <span>Follow-up Date & Time *</span>
+              <span>Follow-up Date *</span>
             </label>
-            <input
-              type="datetime-local"
-              required
+            <GlobalDatePicker
               value={followUpDate}
-              onChange={(e) => setFollowUpDate(e.target.value)}
-              className="input text-xs w-full h-9 rounded-xl bg-background border border-border/80 font-medium"
+              onChange={setFollowUpDate}
+              placeholder="Select follow-up date"
+              size="sm"
             />
           </div>
 

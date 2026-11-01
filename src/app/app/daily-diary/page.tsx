@@ -42,6 +42,7 @@ import { ClassroomDayStream, DayStreamData } from '@/components/daily-diary/Clas
 import { QuickLogModal, QuickLogType } from '@/components/daily-diary/QuickLogModal'
 import { VoiceObservationInput } from '@/components/daily-diary/VoiceObservationInput'
 import { RoutineReuseModal } from '@/components/daily-diary/RoutineReuseModal'
+import { ParentDailyDiaryView } from '@/components/parent/ParentDailyDiaryView'
 
 function getFormattedDayAndDate(dateStr: string) {
   if (!dateStr) return ''
@@ -204,6 +205,7 @@ export default function DailyDiaryPage() {
   const { t } = useI18n()
 
   // Context & Selection States
+  const [isParent, setIsParent] = useState(false)
   const [context, setContext] = useState<ContextData | null>(null)
   const [loadingContext, setLoadingContext] = useState(true)
 
@@ -312,6 +314,16 @@ export default function DailyDiaryPage() {
   const fetchContext = useCallback(async () => {
     try {
       setLoadingContext(true)
+      const meRes = await fetch('/api/v1/me').then((r) => r.json()).catch(() => null)
+      if (meRes?.success && meRes.data) {
+        const roles: string[] = meRes.data.roles && meRes.data.roles.length > 0 ? meRes.data.roles : [meRes.data.role]
+        if (roles.some((r) => ['PARENT', 'GUARDIAN'].includes(r))) {
+          setIsParent(true)
+          setLoadingContext(false)
+          return
+        }
+      }
+
       const res = await fetch('/api/v1/daily-diary/context')
       const json = await res.json()
 
@@ -931,6 +943,10 @@ export default function DailyDiaryPage() {
     } finally {
       setSubmittingObs(false)
     }
+  }
+
+  if (isParent) {
+    return <ParentDailyDiaryView />
   }
 
   if (loadingContext) {

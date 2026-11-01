@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { ok, Errors } from '@/lib/api'
 import { requireApi, isResponse } from '@/lib/auth-api'
 import { audit } from '@/lib/sequence'
+import { loadContext, evaluateStep } from '@/lib/setup/engine'
 
 /** PATCH /api/v1/setup/school-profile — Step 1/2: edit existing Tenant identity (writes the real Tenant row) */
 async function _PATCH(req: NextRequest) {
@@ -42,6 +43,36 @@ async function _PATCH(req: NextRequest) {
       action: 'SETUP_PROFILE_UPDATE', entity: 'Tenant', entityId: tenant.id,
       summary: `School profile updated: ${Object.keys(data).join(', ')}`,
     })
+
+    // Synchronize school_profile setup step snapshot and completion state
+    const ctx = await loadContext(session.tenantId)
+    if (ctx) {
+      const ev = evaluateStep('school_profile', ctx)
+      if (ev.satisfied) {
+        await db.schoolSetupStep.upsert({
+          where: { tenantId_stepKey: { tenantId: session.tenantId, stepKey: 'school_profile' } },
+          create: {
+            tenantId: session.tenantId,
+            stepKey: 'school_profile',
+            status: 'COMPLETE',
+            blockedReason: null,
+            completedAt: new Date(),
+            completedById: session.uid,
+            completedByName: session.name,
+            dataSnapshot: ev.snapshot as any,
+            changedAfterCompletion: false,
+            lastCheckedAt: new Date(),
+          },
+          update: {
+            status: 'COMPLETE',
+            blockedReason: null,
+            dataSnapshot: ev.snapshot as any,
+            changedAfterCompletion: false,
+            lastCheckedAt: new Date(),
+          },
+        })
+      }
+    }
     return ok({
       id: tenant.id, name: tenant.name, email: tenant.email, phone: tenant.phone,
       website: tenant.website, address: tenant.address, city: tenant.city,

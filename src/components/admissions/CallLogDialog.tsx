@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { Modal } from '@/components/preone/Modal'
 import { useToast } from '@/components/preone/Toast'
+import { GlobalDatePicker } from '@/components/ui/GlobalDatePicker'
 import {
   Phone,
   Calendar,
@@ -211,17 +212,17 @@ export function CallLogDialog({
           <div className="flex items-center justify-between">
             <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
               <Calendar size={13} className="text-primary" />
-              <span>Schedule Next Follow-up (Optional)</span>
+              <span>Next Follow-up Date (Optional)</span>
             </label>
           </div>
-          <input
-            type="datetime-local"
+          <GlobalDatePicker
             value={followUpDate}
-            onChange={(e) => {
-              setFollowUpDate(e.target.value)
-              if (e.target.value) setCreateReminder(true)
+            onChange={(val) => {
+              setFollowUpDate(val)
+              if (val) setCreateReminder(true)
             }}
-            className="input text-xs w-full h-9 rounded-xl bg-card border border-border/80"
+            placeholder="Select follow-up date"
+            size="sm"
           />
 
           {followUpDate && (

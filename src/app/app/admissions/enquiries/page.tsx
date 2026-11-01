@@ -34,6 +34,7 @@ import { PromoteStageButton } from '@/components/admissions/PromoteStageButton'
 import { CallLogDialog } from '@/components/admissions/CallLogDialog'
 import { WhatsAppTemplateModal } from '@/components/admissions/WhatsAppTemplateModal'
 import { CommunicationHistoryList } from '@/components/admissions/CommunicationHistoryList'
+import { GlobalDatePicker } from '@/components/ui/GlobalDatePicker'
 
 export default function EnquiriesPage() {
   const toast = useToast()
@@ -805,12 +806,12 @@ export default function EnquiriesPage() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-foreground">Next Follow-up Due Date & Time</label>
-            <input
-              type="datetime-local"
+            <label className="text-xs font-semibold text-foreground">Follow-up Date</label>
+            <GlobalDatePicker
               value={nextFollowUpDate}
-              onChange={(e) => setNextFollowUpDate(e.target.value)}
-              className="input text-xs w-full h-8.5 rounded-xl"
+              onChange={setNextFollowUpDate}
+              placeholder="Select follow-up date"
+              size="sm"
             />
           </div>
 

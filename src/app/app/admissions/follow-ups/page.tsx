@@ -15,6 +15,7 @@ import { Modal } from '@/components/preone/Modal'
 import { useToast } from '@/components/preone/Toast'
 import { fmtDate } from '@/lib/format'
 import { EmptyState, GlobalFilterToolbar } from '@/components/preone'
+import { GlobalDatePicker } from '@/components/ui/GlobalDatePicker'
 import { invalidateAdmissionsCounts } from '@/lib/admissions/use-admissions-counts'
 
 export default function FollowUpsPage() {
@@ -650,12 +651,12 @@ export default function FollowUpsPage() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-foreground">Next Scheduled Follow-up (Optional)</label>
-            <input
-              type="datetime-local"
+            <label className="text-xs font-semibold text-foreground">Next Follow-up Date (Optional)</label>
+            <GlobalDatePicker
               value={nextFollowUpDate}
-              onChange={(e) => setNextFollowUpDate(e.target.value)}
-              className="input text-xs h-9 w-full rounded-xl"
+              onChange={setNextFollowUpDate}
+              placeholder="Select follow-up date"
+              size="sm"
             />
           </div>
 

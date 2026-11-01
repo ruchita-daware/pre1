@@ -5,6 +5,7 @@ import { Modal } from '@/components/preone/Modal'
 import { useToast } from '@/components/preone/Toast'
 import { UserPlus, AlertTriangle, ArrowRight, Check } from 'lucide-react'
 import { ProgramSeatSelector } from '@/components/admissions/ProgramSeatSelector'
+import { GlobalDatePicker } from '@/components/ui/GlobalDatePicker'
 import { fmtDate } from '@/lib/format'
 
 export interface MinimalEnquiryModalProps {
@@ -359,11 +360,12 @@ export function MinimalEnquiryModal({
               <label className="text-xs font-semibold text-foreground">
                 Child Date of Birth <span className="text-[10px] text-muted-foreground font-normal">(Optional)</span>
               </label>
-              <input
-                type="date"
+              <GlobalDatePicker
                 value={childDob}
-                onChange={(e) => setChildDob(e.target.value)}
-                className="input text-xs w-full h-8.5 rounded-xl"
+                onChange={setChildDob}
+                maxDate={new Date()}
+                placeholder="Select date of birth"
+                size="sm"
               />
             </div>
           </div>

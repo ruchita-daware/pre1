@@ -11,6 +11,7 @@ import { useToast } from '@/components/preone/Toast'
 import { BranchOption, ClassroomOption, LOCALES } from './types'
 import { UserPhotoUpload } from './UserPhotoUpload'
 import { Input } from '@/components/ui/input'
+import { GlobalDatePicker } from '@/components/ui/GlobalDatePicker'
 import { validateFullName } from '@/lib/users/user-validation'
 
 interface AddFamilyModalProps {
@@ -920,16 +921,13 @@ export function AddFamilyModal({
                       <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
                         Date of Birth <span className="text-red-500">*</span>
                       </label>
-                      <div className="relative mt-1">
-                        <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input
-                          type="date"
-                          required
-                          value={childDOB}
-                          onChange={(e) => setChildDOB(e.target.value)}
-                          className="input w-full text-xs pl-9"
-                        />
-                      </div>
+                      <GlobalDatePicker
+                        value={childDOB}
+                        onChange={setChildDOB}
+                        maxDate={new Date()}
+                        placeholder="Select birth date"
+                        size="sm"
+                      />
                     </div>
 
                     {/* Gender */}

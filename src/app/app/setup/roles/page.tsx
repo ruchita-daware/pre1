@@ -100,7 +100,16 @@ export default function RolesSetupPage() {
   const [auditLogs, setAuditLogs] = useState<any[]>([])
 
   // Branch selector state
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('ALL')
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search)
+      const qBranch = sp.get('branchId')
+      if (qBranch) return qBranch
+      const stored = localStorage.getItem('preone_setup_branchId')
+      if (stored) return stored
+    }
+    return 'ALL'
+  })
 
   // Filters for Staff Directory
   const [searchQuery, setSearchQuery] = useState('')
@@ -389,7 +398,7 @@ export default function RolesSetupPage() {
       {/* ── Breadcrumb & Page Head ── */}
       <Breadcrumbs
         items={[
-          { label: 'Setup', href: '/app/setup' },
+          { label: 'Setup', href: selectedBranchId && selectedBranchId !== 'ALL' ? `/app/setup?branchId=${encodeURIComponent(selectedBranchId)}` : '/app/setup' },
           { label: 'Roles & Permissions' },
         ]}
       />
@@ -516,7 +525,24 @@ export default function RolesSetupPage() {
           <select
             className="select"
             value={selectedBranchId}
-            onChange={(e) => setSelectedBranchId(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value
+              setSelectedBranchId(next)
+              if (typeof window !== 'undefined') {
+                if (next && next !== 'ALL') {
+                  localStorage.setItem('preone_setup_branchId', next)
+                } else {
+                  localStorage.setItem('preone_setup_branchId', 'ALL')
+                }
+                const url = new URL(window.location.href)
+                if (next && next !== 'ALL') {
+                  url.searchParams.set('branchId', next)
+                } else {
+                  url.searchParams.delete('branchId')
+                }
+                window.history.replaceState({}, '', url.toString())
+              }
+            }}
             style={{ fontSize: 13, padding: '6px 12px', minWidth: 200 }}
           >
             <option value="ALL">All Authorized Branches ({branches.length})</option>

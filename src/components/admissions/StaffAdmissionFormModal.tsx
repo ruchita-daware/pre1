@@ -15,6 +15,7 @@ import {
   type MilestoneItem,
 } from '@/components/preone'
 import { ProgramSeatSelector } from '@/components/admissions/ProgramSeatSelector'
+import { GlobalDatePicker } from '@/components/ui/GlobalDatePicker'
 import { useAutosave } from '@/lib/forms/use-autosave'
 import { useToast } from '@/components/preone/Toast'
 import { useBranding } from '@/lib/branding-context'
@@ -962,11 +963,12 @@ export function StaffAdmissionFormModal({
                   <label className="font-semibold text-foreground flex items-center gap-1">
                     Date of Birth <span className="text-destructive">*</span>
                   </label>
-                  <input
-                    type="date"
+                  <GlobalDatePicker
                     value={childDob}
-                    onChange={(e) => setChildDob(e.target.value)}
-                    className="input h-9 text-xs w-full rounded-xl"
+                    onChange={setChildDob}
+                    maxDate={new Date()}
+                    placeholder="Select birth date"
+                    size="sm"
                   />
                 </div>
 

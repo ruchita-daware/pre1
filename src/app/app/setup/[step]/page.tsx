@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft, CheckCircle2, AlertTriangle, Plus, Lock, RotateCcw, RotateCw, Save,
   UserPlus, CalendarPlus, Trash2, Building2, Upload, Users, Settings2,
@@ -207,9 +207,23 @@ export default function SetupStepPage() {
     }).then((r) => r.json())
   }, [])
 
-  const loadStatus = useCallback(async () => {
+  const searchParams = useSearchParams()
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search)
+      const qBranch = sp.get('branchId')
+      if (qBranch) return qBranch
+      const stored = localStorage.getItem('preone_setup_branchId')
+      if (stored) return stored
+    }
+    return 'ALL'
+  })
+
+  const loadStatus = useCallback(async (bId?: string) => {
     try {
-      const j = await fetch('/api/v1/setup/status', { cache: 'no-store' }).then((r) => r.json())
+      const activeBId = bId !== undefined ? bId : selectedBranchId
+      const q = activeBId && activeBId !== 'ALL' ? `?branchId=${encodeURIComponent(activeBId)}` : ''
+      const j = await fetch(`/api/v1/setup/status${q}`, { cache: 'no-store' }).then((r) => r.json())
       if (j.success) {
         setStatus(j.data)
         setMe(j.data.steps.find((s: StepRow) => s.key === stepKey) ?? null)
@@ -217,7 +231,26 @@ export default function SetupStepPage() {
     } catch (e: any) {
       console.error('Failed to load setup status', e)
     }
-  }, [stepKey])
+  }, [stepKey, selectedBranchId])
+
+  const updateBranchContext = useCallback((newBranchId: string) => {
+    setSelectedBranchId(newBranchId)
+    if (typeof window !== 'undefined') {
+      if (newBranchId && newBranchId !== 'ALL') {
+        localStorage.setItem('preone_setup_branchId', newBranchId)
+      } else {
+        localStorage.setItem('preone_setup_branchId', 'ALL')
+      }
+      const url = new URL(window.location.href)
+      if (newBranchId && newBranchId !== 'ALL') {
+        url.searchParams.set('branchId', newBranchId)
+      } else {
+        url.searchParams.delete('branchId')
+      }
+      window.history.replaceState({}, '', url.toString())
+    }
+    loadStatus(newBranchId)
+  }, [loadStatus])
 
   const loadBody = useCallback(async () => {
     const urls: Record<string, string> = {
@@ -324,8 +357,10 @@ export default function SetupStepPage() {
   if (!def) {
     return <EmptyState icon={<AlertTriangle size={40} />} title="Unknown setup step" message={`No setup step "${stepKey}" exists.`} />
   }
+  const hideStepMeta = ['school_profile', 'branch', 'academic_year', 'programs', 'classroom'].includes(stepKey)
+
   if (status === null) {
-    return <><PageHead title={def.label} sub={stepKey === 'school_profile' || stepKey === 'branch' ? undefined : def.description} /><div className="card"><div style={{ padding: 16 }}><Skeleton h={200} /></div></div></>
+    return <><PageHead title={def.label} sub={hideStepMeta ? undefined : def.description} /><div className="card"><div style={{ padding: 16 }}><Skeleton h={200} /></div></div></>
   }
 
   const isOptional = def.applicability !== 'MANDATORY'
@@ -341,7 +376,7 @@ export default function SetupStepPage() {
       <PageHead
         breadcrumbs={[
           { label: 'Home', href: '/app' },
-          { label: 'Setup', href: '/app/setup' },
+          { label: 'Setup', href: selectedBranchId && selectedBranchId !== 'ALL' ? `/app/setup?branchId=${encodeURIComponent(selectedBranchId)}` : '/app/setup' },
           { label: def.label },
         ]}
         title={
@@ -351,7 +386,7 @@ export default function SetupStepPage() {
           </div>
         }
         sub={
-          stepKey === 'school_profile' || stepKey === 'branch'
+          hideStepMeta
             ? undefined
             : stepScope === 'TENANT'
             ? `${def.description} (🌐 School-Wide: applies to all branches)`
@@ -359,7 +394,7 @@ export default function SetupStepPage() {
         }
         actions={
           <>
-            <a className="btn btn-ghost" href="/app/setup"><ArrowLeft size={15} /> Back to Setup</a>
+            <a className="btn btn-ghost" href={selectedBranchId && selectedBranchId !== 'ALL' ? `/app/setup?branchId=${encodeURIComponent(selectedBranchId)}` : '/app/setup'}><ArrowLeft size={15} /> Back to Setup</a>
             <button
               type="button"
               className="btn btn-outline"
@@ -386,7 +421,7 @@ export default function SetupStepPage() {
       />
 
       {/* status strip */}
-      {stepKey !== 'school_profile' && stepKey !== 'branch' && (
+      {!hideStepMeta && (
         <div className="card" style={{ marginBottom: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <span className={`badge ${statusBadgeCls[displayStatus]}`}>{displayStatus}</span>
           {me?.applicability !== 'MANDATORY' && <span className="badge b-neutral">{me?.applicability}</span>}
@@ -613,7 +648,16 @@ export default function SetupStepPage() {
               </>
             )}
 
-            {kind === 'classes' && <ClassesSection rooms={list} onDone={refreshAll} onEditClass={(c) => { setEditItem(c); setEditType('class'); }} onAddClass={() => setModal('classroom')} />}
+            {kind === 'classes' && (
+              <ClassesSection
+                rooms={list}
+                onDone={refreshAll}
+                onEditClass={(c) => { setEditItem(c); setEditType('class'); }}
+                onAddClass={() => setModal('classroom')}
+                selectedBranchId={selectedBranchId}
+                onBranchChange={updateBranchContext}
+              />
+            )}
 
             {kind === 'subjects' && (
               <ProgramWiseSubjectSection
@@ -831,16 +875,36 @@ function AcademicYearsSection({
   )
 }
 
-function ClassesSection({ rooms, onDone, onEditClass, onAddClass }: { rooms: Dict[]; onDone: () => void; onEditClass: (c: Dict) => void; onAddClass: () => void }) {
+function ClassesSection({
+  rooms,
+  onDone,
+  onEditClass,
+  onAddClass,
+  selectedBranchId: parentBranchId,
+  onBranchChange,
+}: {
+  rooms: Dict[]
+  onDone: () => void
+  onEditClass: (c: Dict) => void
+  onAddClass: () => void
+  selectedBranchId?: string
+  onBranchChange?: (bId: string) => void
+}) {
   const toast = useToast()
   const [viewMode, setViewMode] = useState<'DIRECTORY' | 'IMPORT'>('DIRECTORY')
   const [programs, setPrograms] = useState<Dict[]>([])
   const [branches, setBranches] = useState<Dict[]>([])
   const [academicYears, setAcademicYears] = useState<Dict[]>([])
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('ALL')
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(parentBranchId || 'ALL')
   const [selectedProgramId, setSelectedProgramId] = useState<string>('ALL')
   const [selectedYearId, setSelectedYearId] = useState<string>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    if (parentBranchId && parentBranchId !== selectedBranchId) {
+      setSelectedBranchId(parentBranchId)
+    }
+  }, [parentBranchId])
 
   useEffect(() => {
     Promise.all([
@@ -896,6 +960,7 @@ function ClassesSection({ rooms, onDone, onEditClass, onAddClass }: { rooms: Dic
 
   const clearFilters = () => {
     setSelectedBranchId('ALL')
+    onBranchChange?.('ALL')
     setSelectedProgramId('ALL')
     setSelectedYearId('ALL')
     setSearchQuery('')
@@ -993,7 +1058,9 @@ function ClassesSection({ rooms, onDone, onEditClass, onAddClass }: { rooms: Dic
                   style={{ height: 32, fontSize: 12.5, minWidth: 150 }}
                   value={selectedBranchId}
                   onChange={(e) => {
-                    setSelectedBranchId(e.target.value)
+                    const next = e.target.value
+                    setSelectedBranchId(next)
+                    onBranchChange?.(next)
                     setSelectedProgramId('ALL')
                   }}
                 >
@@ -1061,30 +1128,47 @@ function ClassesSection({ rooms, onDone, onEditClass, onAddClass }: { rooms: Dic
             </div>
           </div>
 
-          <p className="helper" style={{ marginBottom: 10 }}>Classes and learning spaces are organized by campus, academic program, and assigned educator.</p>
           <div className="dtable-scroll"><table className="dtable">
-            <thead><tr><th>Owning Campus</th><th>Class</th><th>Linked Program</th><th>Capacity</th><th>Teacher</th><th>Students</th><th>Link Program</th><th>Actions</th></tr></thead>
-            <tbody>{filteredRooms.map((c: any) => (
-              <tr key={String(c.id)}>
-                <td><span className="badge b-primary">{c.branchName || 'Main Campus'}</span></td>
-                <td><span className="cell-strong">{c.name}</span><span className="cell-sub">{c.code}</span></td>
-                <td>{c.programName ? <span className="badge b-neutral">{c.programName}</span> : <span className="badge b-warning">not linked</span>}</td>
-                <td>{String(c.capacity)} seats</td>
-                <td>{c.teacher ?? <span className="badge b-warning">unassigned</span>}</td>
-                <td>{String(c.students ?? 0)}</td>
-                <td>
-                  <select className="select" style={{ maxWidth: 170 }} value={String(c.programId ?? '')} onChange={(e) => link(String(c.id), e.target.value)}>
-                    <option value="">— choose program —</option>
-                    {programs.map((p: any) => <option key={String(p.id)} value={String(p.id)}>{p.name}</option>)}
-                  </select>
-                </td>
-                <td>
-                  <button className="btn btn-sm btn-outline" onClick={() => onEditClass(c)} title="Edit class settings">
-                    <Edit3 size={13} /> Edit
-                  </button>
-                </td>
-              </tr>
-            ))}</tbody>
+            <thead><tr><th>Owning Campus</th><th>Class</th><th>Assigned Program</th><th>Capacity</th><th>Teacher</th><th>Students</th><th>Actions</th></tr></thead>
+            <tbody>{filteredRooms.map((c: any) => {
+              const branchPrograms = programs.filter((p: any) => {
+                if (!c.branchId) return true
+                const bm = p.branchMappings || p.branches || []
+                return bm.length === 0 || bm.some((b: any) => (b.branchId || b.id) === c.branchId && b.isActive !== false)
+              })
+              const availableProgs = branchPrograms.length > 0 ? branchPrograms : programs
+
+              return (
+                <tr key={String(c.id)}>
+                  <td><span className="badge b-primary">{c.branchName || 'Main Campus'}</span></td>
+                  <td><span className="cell-strong">{c.name}</span><span className="cell-sub">{c.code}</span></td>
+                  <td>
+                    <select
+                      className="select"
+                      style={{ maxWidth: 180, fontSize: 12.5 }}
+                      value={String(c.programId ?? '')}
+                      onChange={(e) => link(String(c.id), e.target.value)}
+                      title="Assign program to this class"
+                    >
+                      <option value="">— Not Linked (Select) —</option>
+                      {availableProgs.map((p: any) => (
+                        <option key={String(p.id)} value={String(p.id)}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>{String(c.capacity)} seats</td>
+                  <td>{c.teacher ?? <span className="badge b-warning">unassigned</span>}</td>
+                  <td>{String(c.students ?? 0)}</td>
+                  <td>
+                    <button className="btn btn-sm btn-outline" onClick={() => onEditClass(c)} title="Edit class settings">
+                      <Edit3 size={13} /> Edit
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}</tbody>
           </table></div>
           {filteredRooms.length === 0 && (
             <EmptyState
@@ -2783,7 +2867,6 @@ function ProgramModal({ onClose, onDone, api, toast }: { onClose: () => void; on
             <select className="select" name="programType" required>
               {['PLAYGROUP', 'NURSERY', 'LKG', 'UKG', 'DAYCARE'].map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
-            <div className="helper">Links the program to fee plans and canonical integrations — name and code stay custom.</div>
           </div>
           <div className="field"><label>Master Capacity <span className="req">*</span></label><input className="input" name="capacity" type="number" defaultValue={20} min="1" required /></div>
           <div className="field" style={{ gridColumn: '1 / -1' }}><label>Description</label><input className="input" name="description" /></div>
@@ -2919,9 +3002,6 @@ function ProgramCampusMappingSection({
             <Building2 size={16} style={{ marginRight: 6, verticalAlign: -2 }} />
             Campus Availability & Capacity Matrix
           </div>
-          <p className="helper" style={{ margin: '2px 0 0' }}>
-            Map master programs to operating campuses. Preschools maintain ONE program master with branch-specific allocations.
-          </p>
         </div>
       </div>
 
@@ -3179,7 +3259,15 @@ function EditBranchModal({ item, onClose, onDone, api, toast }: { item: Dict; on
       <form onSubmit={submit}>
         <div className="form-grid">
           <div className="field"><label>Branch Name <span className="req">*</span></label><input className="input" name="name" defaultValue={String(item.name || '')} required /></div>
-          <div className="field"><label>Code</label><input className="input" value={String(item.code || '')} disabled title="Branch code is permanent" /></div>
+          <div className="field">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Lock size={12} style={{ color: 'var(--text-muted)' }} /> Campus Code (Permanent Reference)
+            </label>
+            <input className="input" value={String(item.code || '')} disabled title="Campus code is a permanent reference identifier" />
+            <span className="helper" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Permanent business reference key used across invoices, student IDs, and official reports.
+            </span>
+          </div>
           <div className="field"><label>City</label><input className="input" name="city" defaultValue={String(item.city || '')} /></div>
           <div className="field"><label>Contact Phone</label><input className="input" name="phone" defaultValue={String(item.phone || '')} /></div>
           <div className="field" style={{ gridColumn: '1 / -1' }}><label>Campus Address</label><input className="input" name="address" defaultValue={String(item.address || '')} /></div>
@@ -3238,7 +3326,15 @@ function EditProgramModal({ item, onClose, onDone, api, toast }: { item: Dict; o
         )}
         <div className="form-grid">
           <div className="field"><label>Program Name <span className="req">*</span></label><input className="input" name="name" defaultValue={String(item.name || '')} required /></div>
-          <div className="field"><label>Code</label><input className="input" value={String(item.code || '')} disabled title="Program code is permanent" /></div>
+          <div className="field">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Lock size={12} style={{ color: 'var(--text-muted)' }} /> Program Code (Permanent Reference)
+            </label>
+            <input className="input" value={String(item.code || '')} disabled title="Program code is a permanent reference identifier" />
+            <span className="helper" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Permanent business code used across fee structures, curriculum tracking, and report cards.
+            </span>
+          </div>
           <div className="field"><label>Seat Capacity <span className="req">*</span></label><input className="input" name="capacity" type="number" defaultValue={Number(item.capacity || 20)} min="1" required /></div>
           <div className="field" style={{ gridColumn: '1 / -1' }}><label>Description</label><input className="input" name="description" defaultValue={String(item.description || '')} placeholder="e.g. Sensory discovery & play-based early foundation" /></div>
           <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -3369,7 +3465,15 @@ function EditClassModal({ item, onClose, onDone, api, toast }: { item: Dict; onC
         <div className="form-grid">
           <div className="field"><label>Campus Branch</label><input className="input" value={String(item.branchName || 'Main Campus')} disabled title="Campus branch is assigned upon creation" /></div>
           <div className="field"><label>Class / Section Name <span className="req">*</span></label><input className="input" name="name" defaultValue={String(item.name || '')} required /></div>
-          <div className="field"><label>Code</label><input className="input" value={String(item.code || '')} disabled title="Classroom code is permanent" /></div>
+          <div className="field">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Lock size={12} style={{ color: 'var(--text-muted)' }} /> Classroom Code (Permanent Reference)
+            </label>
+            <input className="input" value={String(item.code || '')} disabled title="Classroom code is a permanent reference identifier" />
+            <span className="helper" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Permanent identifier used in timetables, attendance registers, and QR check-ins.
+            </span>
+          </div>
           <div className="field"><label>Program Offering <span className="req">*</span></label>
             <select className="select" name="programId" defaultValue={String(item.programId || '')}>
               <option value="">Select program…</option>
@@ -3481,9 +3585,6 @@ function ClassroomModal({ onClose, onDone, api, toast }: { onClose: () => void; 
               <option value="">Select program offered at this campus…</option>
               {availablePrograms.map((p: any) => <option key={String(p.id)} value={String(p.id)}>{p.name} ({String(p.programType)})</option>)}
             </select>
-            {availablePrograms.length < programs.length && (
-              <div className="helper">Showing programs mapped to this campus. Map others in Programs step.</div>
-            )}
           </div>
           <div className="field"><label>Class Name <span className="req">*</span></label><input className="input" name="name" required placeholder="Nursery - Sunflower" /></div>
           <div className="field"><label>Seat Capacity <span className="req">*</span></label><input className="input" name="capacity" type="number" defaultValue={20} min="1" required /></div>
@@ -4045,7 +4146,15 @@ function EditSubjectModal({ item, onClose, onDone, api, toast }: { item: Dict; o
       <form onSubmit={submit}>
         <div className="form-grid">
           <div className="field"><label>Subject Name <span className="req">*</span></label><input className="input" name="name" defaultValue={String(item.name || '')} required /></div>
-          <div className="field"><label>Subject Code</label><input className="input" value={String(item.code || '')} disabled /></div>
+          <div className="field">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Lock size={12} style={{ color: 'var(--text-muted)' }} /> Subject Code (Permanent Reference)
+            </label>
+            <input className="input" value={String(item.code || '')} disabled title="Subject code is a permanent reference identifier" />
+            <span className="helper" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Permanent curriculum identifier used across lesson plans, report cards, and assessments.
+            </span>
+          </div>
           <div className="field"><label>Short Name</label><input className="input" name="shortName" defaultValue={String(item.shortName || '')} /></div>
           <div className="field"><label>Subject Type <span className="req">*</span></label>
             <select className="select" name="subjectType" defaultValue={String(item.type || 'CORE')} required>

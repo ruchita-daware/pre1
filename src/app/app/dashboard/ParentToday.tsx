@@ -15,6 +15,8 @@ import {
   ChevronRight,
   ShieldAlert,
   Loader2,
+  Bus,
+  Megaphone,
 } from 'lucide-react'
 import { PageHead, Skeleton, Avatar, EmptyState, StatusBadge } from '@/components/preone/ui'
 import { PdfViewerModal } from '@/components/preone/PdfViewerModal'
@@ -57,6 +59,8 @@ export function ParentToday({ initialChildren, initialToday }: ParentTodayProps)
   const [selectedChildForReport, setSelectedChildForReport] = useState<ChildData | null>(null)
   const [showReportModal, setShowReportModal] = useState<boolean>(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [transportInfo, setTransportInfo] = useState<any | null>(null)
+  const [recentAnnouncements, setRecentAnnouncements] = useState<any[]>([])
 
   // Request sequencing and abort management to guarantee latest-request-wins (DASH-5.1-01)
   const activeRequestIdRef = useRef<number>(0)
@@ -84,9 +88,14 @@ export function ParentToday({ initialChildren, initialToday }: ParentTodayProps)
       if (json.success && json.data) {
         setData(json.data)
         if (json.data.children.length > 0) {
-          const firstChild = json.data.children[0]
-          setSelectedChildId(firstChild.id)
-          setChildDetail(firstChild)
+          let chosen = json.data.children[0]
+          if (typeof window !== 'undefined') {
+            const saved = window.localStorage.getItem('preone:parent:selected-child-id')
+            const match = json.data.children.find((c: any) => c.id === saved)
+            if (match) chosen = match
+          }
+          setSelectedChildId(chosen.id)
+          setChildDetail(chosen)
         }
       } else {
         setLoadError(json.error?.message || 'Failed to load linked children records.')
@@ -127,11 +136,21 @@ export function ParentToday({ initialChildren, initialToday }: ParentTodayProps)
       setLoadingDocs(true)
 
       try {
-        const [rChild, rDocs] = await Promise.all([
+        const [rChild, rDocs, rTransport, rAnnounce] = await Promise.all([
           fetch(`/api/v1/parent/today?studentId=${encodeURIComponent(childId)}`, {
             signal: controller.signal,
           }).then((r) => r.json()),
           fetch(`/api/v1/parent/documents?studentId=${encodeURIComponent(childId)}`, {
+            signal: controller.signal,
+          })
+            .then((r) => r.json())
+            .catch(() => ({ success: false, data: [] })),
+          fetch('/api/v1/transport/my-children', {
+            signal: controller.signal,
+          })
+            .then((r) => r.json())
+            .catch(() => ({ success: false, data: [] })),
+          fetch('/api/v1/announcements?limit=2', {
             signal: controller.signal,
           })
             .then((r) => r.json())
@@ -153,6 +172,15 @@ export function ParentToday({ initialChildren, initialToday }: ParentTodayProps)
 
         if (rDocs.success) {
           setDocuments(rDocs.data || [])
+        }
+
+        if (rTransport.success && Array.isArray(rTransport.data)) {
+          const match = rTransport.data.find((c: any) => c.studentId === childId)
+          setTransportInfo(match || null)
+        }
+
+        if (rAnnounce.success && Array.isArray(rAnnounce.data)) {
+          setRecentAnnouncements(rAnnounce.data)
         }
       } catch (e: any) {
         // Discard aborted request errors
@@ -503,6 +531,79 @@ export function ParentToday({ initialChildren, initialToday }: ParentTodayProps)
                   >
                     Pay / view invoices
                   </Link>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Transport & Announcements Snapshot */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: 14,
+              marginTop: 16,
+              paddingTop: 14,
+              borderTop: '1px solid var(--border)',
+            }}
+          >
+            {/* Transport Summary */}
+            <div className="p-3.5 rounded-xl bg-slate-50/60 dark:bg-slate-800/30 border border-slate-200/80 dark:border-slate-800 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <b style={{ fontSize: 12.5, display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <Bus size={14} className="text-orange-500" /> Transport & Bus Route
+                </b>
+                <Link href="/app/transport" className="text-purple-600 font-semibold text-[11px] hover:underline flex items-center gap-0.5">
+                  Details <ChevronRight size={11} />
+                </Link>
+              </div>
+
+              {transportInfo?.hasRoute ? (
+                <div className="space-y-1 text-[11px]">
+                  <div className="font-semibold text-foreground text-[12px]">
+                    {transportInfo.route?.name || 'Bus Route Assigned'}
+                  </div>
+                  {transportInfo.pickupStop && (
+                    <div className="text-muted-foreground">
+                      Pickup: <b>{transportInfo.pickupStop.name}</b> ({transportInfo.pickupStop.morningPickupTime})
+                    </div>
+                  )}
+                  {transportInfo.dropStop && (
+                    <div className="text-muted-foreground">
+                      Drop: <b>{transportInfo.dropStop.name}</b> ({transportInfo.dropStop.eveningDropTime})
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground m-0">
+                  Self-commute / Parent escort configured for this child.
+                </p>
+              )}
+            </div>
+
+            {/* Recent School Announcements */}
+            <div className="p-3.5 rounded-xl bg-slate-50/60 dark:bg-slate-800/30 border border-slate-200/80 dark:border-slate-800 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <b style={{ fontSize: 12.5, display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <Megaphone size={14} className="text-purple-600" /> Recent Announcements
+                </b>
+                <Link href="/app/communication" className="text-purple-600 font-semibold text-[11px] hover:underline flex items-center gap-0.5">
+                  All circulars <ChevronRight size={11} />
+                </Link>
+              </div>
+
+              {recentAnnouncements.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground m-0">
+                  No active circulars or broadcasts for this campus today.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {recentAnnouncements.map((ann) => (
+                    <div key={ann.id} className="text-[11px] border-b border-border/40 pb-1 last:border-0 last:pb-0">
+                      <div className="font-semibold text-foreground truncate">{ann.title}</div>
+                      <div className="text-muted-foreground line-clamp-1">{ann.body}</div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

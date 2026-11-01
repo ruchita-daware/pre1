@@ -53,7 +53,21 @@ async function _POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}))
-    const { registrationNumber, vehicleType, capacity, makeModel, notes, branchId } = body
+    const {
+      registrationNumber,
+      vehicleType,
+      capacity,
+      makeModel,
+      displayName,
+      registrationExpiry,
+      insuranceExpiry,
+      fitnessExpiry,
+      permitExpiry,
+      pollutionExpiry,
+      documents,
+      notes,
+      branchId,
+    } = body
 
     if (!registrationNumber || typeof registrationNumber !== 'string' || !registrationNumber.trim()) {
       return Errors.validation('Registration number is required')
@@ -83,6 +97,13 @@ async function _POST(req: NextRequest) {
         vehicleType,
         capacity: Number(capacity),
         makeModel,
+        displayName,
+        registrationExpiry,
+        insuranceExpiry,
+        fitnessExpiry,
+        permitExpiry,
+        pollutionExpiry,
+        documents,
         notes,
       }
     )

@@ -124,7 +124,13 @@ export function TransportClient({ session }: { session: SessionProps }) {
   // 5-Group Destination Sub-Tabs
   const [childrenRoutesSubTab, setChildrenRoutesSubTab] = useState<'allocations' | 'routes'>('allocations')
   const [safetySubTab, setSafetySubTab] = useState<'authorizations' | 'incidents' | 'security_logs'>('authorizations')
-  const [fleetSettingsSubTab, setFleetSettingsSubTab] = useState<'vehicles' | 'scanner'>('vehicles')
+  const [fleetSettingsSubTab, setFleetSettingsSubTab] = useState<'vehicles' | 'drivers' | 'scanner'>('vehicles')
+
+  // Drivers Directory State
+  const [drivers, setDrivers] = useState<any[]>([])
+  const [editDriverModal, setEditDriverModal] = useState<any>(null)
+  const [registerDriverOpen, setRegisterDriverOpen] = useState(false)
+  const [driverSearch, setDriverSearch] = useState('')
 
   // Guided Multi-Step Wizard States
   const [assignStudentStep, setAssignStudentStep] = useState(1)
@@ -154,6 +160,12 @@ export function TransportClient({ session }: { session: SessionProps }) {
   const [addVehicleRegNumber, setAddVehicleRegNumber] = useState('')
   const [addVehicleType, setAddVehicleType] = useState('BUS')
   const [addVehicleMakeModel, setAddVehicleMakeModel] = useState('')
+  const [addVehicleDisplayName, setAddVehicleDisplayName] = useState('')
+  const [addVehicleRegExpiry, setAddVehicleRegExpiry] = useState('')
+  const [addVehicleInsuranceExpiry, setAddVehicleInsuranceExpiry] = useState('')
+  const [addVehicleFitnessExpiry, setAddVehicleFitnessExpiry] = useState('')
+  const [addVehiclePermitExpiry, setAddVehiclePermitExpiry] = useState('')
+  const [addVehiclePollutionExpiry, setAddVehiclePollutionExpiry] = useState('')
   const [addVehicleCapacity, setAddVehicleCapacity] = useState(20)
   const [addVehicleNotes, setAddVehicleNotes] = useState('Speed governor installed, fire extinguisher checked')
 
@@ -387,6 +399,14 @@ export function TransportClient({ session }: { session: SessionProps }) {
     } catch {}
   }, [])
 
+  const loadDrivers = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/transport/drivers')
+      const json = await res.json()
+      if (json.success) setDrivers(json.data)
+    } catch {}
+  }, [])
+
   const loadStudents = useCallback(async () => {
     try {
       const res = await fetch('/api/v1/students?pageSize=100&status=ACTIVE')
@@ -419,6 +439,7 @@ export function TransportClient({ session }: { session: SessionProps }) {
     }
     if (isAdmin) {
       loadVehicles()
+      loadDrivers()
       loadAssignments()
       loadIncidents()
       loadStaff()
@@ -864,6 +885,12 @@ export function TransportClient({ session }: { session: SessionProps }) {
     const capacity = fd.get('capacity') !== null && fd.get('capacity') !== '' ? Number(fd.get('capacity')) : addVehicleCapacity
     const makeModel = (fd.get('makeModel') as string) || addVehicleMakeModel
     const vehicleType = (fd.get('vehicleType') as string) || addVehicleType
+    const displayName = (fd.get('displayName') as string) || addVehicleDisplayName || undefined
+    const registrationExpiry = (fd.get('registrationExpiry') as string) || addVehicleRegExpiry || undefined
+    const insuranceExpiry = (fd.get('insuranceExpiry') as string) || addVehicleInsuranceExpiry || undefined
+    const fitnessExpiry = (fd.get('fitnessExpiry') as string) || addVehicleFitnessExpiry || undefined
+    const permitExpiry = (fd.get('permitExpiry') as string) || addVehiclePermitExpiry || undefined
+    const pollutionExpiry = (fd.get('pollutionExpiry') as string) || addVehiclePollutionExpiry || undefined
     const notes = (fd.get('notes') as string) || addVehicleNotes
 
     try {
@@ -875,6 +902,12 @@ export function TransportClient({ session }: { session: SessionProps }) {
           capacity,
           makeModel,
           vehicleType,
+          displayName,
+          registrationExpiry,
+          insuranceExpiry,
+          fitnessExpiry,
+          permitExpiry,
+          pollutionExpiry,
           notes,
         }),
       })
@@ -885,6 +918,12 @@ export function TransportClient({ session }: { session: SessionProps }) {
         setAddVehicleStep(1)
         setAddVehicleRegNumber('')
         setAddVehicleMakeModel('')
+        setAddVehicleDisplayName('')
+        setAddVehicleRegExpiry('')
+        setAddVehicleInsuranceExpiry('')
+        setAddVehicleFitnessExpiry('')
+        setAddVehiclePermitExpiry('')
+        setAddVehiclePollutionExpiry('')
         loadVehicles()
         loadDashboard()
       } else {
@@ -908,8 +947,14 @@ export function TransportClient({ session }: { session: SessionProps }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           capacity: Number(fd.get('capacity')),
-          makeModel: fd.get('makeModel'),
+          makeModel: fd.get('makeModel') || undefined,
+          displayName: fd.get('displayName') || undefined,
           status: fd.get('status'),
+          registrationExpiry: fd.get('registrationExpiry') || undefined,
+          insuranceExpiry: fd.get('insuranceExpiry') || undefined,
+          fitnessExpiry: fd.get('fitnessExpiry') || undefined,
+          permitExpiry: fd.get('permitExpiry') || undefined,
+          pollutionExpiry: fd.get('pollutionExpiry') || undefined,
           notes: fd.get('notes'),
         }),
       })
@@ -924,6 +969,87 @@ export function TransportClient({ session }: { session: SessionProps }) {
       }
     } catch (err: any) {
       toast.error('Error updating vehicle', err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // 2.1 Driver Actions
+  const handleUpdateDriver = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!editDriverModal) return
+    setBusy(true)
+    const fd = new FormData(e.currentTarget)
+    try {
+      const res = await fetch(`/api/v1/transport/drivers/${editDriverModal.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          licenseNumber: fd.get('licenseNumber') || null,
+          licenseExpiry: fd.get('licenseExpiry') || null,
+          licenseCategory: fd.get('licenseCategory') || null,
+          emergencyContactName: fd.get('emergencyContactName') || null,
+          emergencyContactPhone: fd.get('emergencyContactPhone') || null,
+          status: fd.get('status') || 'ACTIVE',
+        }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        toast.success('Driver profile updated successfully')
+        setEditDriverModal(null)
+        loadDrivers()
+        loadStaff()
+      } else {
+        toast.error('Failed to update driver', json.error?.message || json.error)
+      }
+    } catch (err: any) {
+      toast.error('Error updating driver', err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleRegisterDriver = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setBusy(true)
+    const fd = new FormData(e.currentTarget)
+    const staffProfileId = (fd.get('staffProfileId') as string) || undefined
+    const fullName = (fd.get('fullName') as string) || undefined
+    const phone = (fd.get('phone') as string) || undefined
+    const employeeCode = (fd.get('employeeCode') as string) || undefined
+    const licenseNumber = (fd.get('licenseNumber') as string) || undefined
+    const licenseExpiry = (fd.get('licenseExpiry') as string) || undefined
+    const licenseCategory = (fd.get('licenseCategory') as string) || undefined
+    const emergencyContactName = (fd.get('emergencyContactName') as string) || undefined
+    const emergencyContactPhone = (fd.get('emergencyContactPhone') as string) || undefined
+
+    try {
+      const res = await fetch('/api/v1/transport/drivers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          staffProfileId: staffProfileId || undefined,
+          fullName: fullName || undefined,
+          phone: phone || undefined,
+          employeeCode: employeeCode || undefined,
+          licenseNumber: licenseNumber || undefined,
+          licenseExpiry: licenseExpiry || undefined,
+          licenseCategory: licenseCategory || undefined,
+          emergencyContactName: emergencyContactName || undefined,
+          emergencyContactPhone: emergencyContactPhone || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        toast.success('Driver registered successfully')
+        setRegisterDriverOpen(false)
+        loadDrivers()
+        loadStaff()
+      } else {
+        toast.error('Failed to register driver', json.error?.message || json.error)
+      }
+    } catch (err: any) {
+      toast.error('Error registering driver', err.message)
     } finally {
       setBusy(false)
     }
@@ -1611,6 +1737,7 @@ export function TransportClient({ session }: { session: SessionProps }) {
     }
     if (isAdmin) {
       loadVehicles()
+      loadDrivers()
       loadAssignments()
       loadIncidents()
       loadStaff()
@@ -1722,6 +1849,14 @@ export function TransportClient({ session }: { session: SessionProps }) {
                     }}
                   >
                     <Plus size={15} /> Register Vehicle
+                  </button>
+                )}
+                {fleetSettingsSubTab === 'drivers' && canWrite && (
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => setRegisterDriverOpen(true)}
+                  >
+                    <UserPlus size={15} /> Onboard Driver
                   </button>
                 )}
                 {fleetSettingsSubTab === 'scanner' && (
@@ -3136,6 +3271,7 @@ export function TransportClient({ session }: { session: SessionProps }) {
           <Segmented
             options={[
               { key: 'vehicles', label: `Fleet Vehicles (${vehicles.length})` },
+              { key: 'drivers', label: `Drivers & Personnel (${drivers.length})` },
               { key: 'scanner', label: 'Gate QR / PIN Scanner' },
             ]}
             value={fleetSettingsSubTab}
@@ -3153,7 +3289,7 @@ export function TransportClient({ session }: { session: SessionProps }) {
             <div className="card-head">
               <div>
                 <div className="card-title">School Transport Fleet</div>
-                <div className="card-sub">Registration, capacity, and maintenance status</div>
+                <div className="card-sub">Registration, capacity, compliance document tracking, and maintenance status</div>
               </div>
               {canWrite && (
                 <button className="btn btn-primary btn-sm" onClick={() => setAddVehicleOpen(true)}>
@@ -3165,10 +3301,11 @@ export function TransportClient({ session }: { session: SessionProps }) {
               <table className="table" style={{ width: '100%' }}>
                 <thead>
                   <tr>
-                    <th>Registration No</th>
+                    <th>Registration & Name</th>
                     <th>Type & Make</th>
                     <th>Seating Capacity</th>
                     <th>Assigned Route</th>
+                    <th>Compliance Status</th>
                     <th>Status</th>
                     {canWrite && <th style={{ textAlign: 'right' }}>Actions</th>}
                   </tr>
@@ -3177,7 +3314,12 @@ export function TransportClient({ session }: { session: SessionProps }) {
                   {vehicles.map((v) => (
                     <tr key={v.id}>
                       <td>
-                        <b>{v.registrationNumber}</b>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <b>{v.displayName || v.registrationNumber}</b>
+                          {v.displayName && (
+                            <span className="t-caption" style={{ fontFamily: 'var(--font-mono)' }}>({v.registrationNumber})</span>
+                          )}
+                        </div>
                         {v.notes && <div className="t-caption">{v.notes}</div>}
                       </td>
                       <td>
@@ -3192,6 +3334,24 @@ export function TransportClient({ session }: { session: SessionProps }) {
                           v.routes.map((r: any) => <span key={r.id} className="badge b-neutral">{r.name}</span>)
                         ) : (
                           <span style={{ color: 'var(--c-muted)' }}>Idle / Standby</span>
+                        )}
+                      </td>
+                      <td>
+                        {v.expiryWarnings && v.expiryWarnings.length > 0 ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {v.expiryWarnings.map((w: any, idx: number) => (
+                              <span
+                                key={idx}
+                                className={`badge ${w.status === 'EXPIRED' ? 'b-danger' : 'b-warning'}`}
+                                style={{ fontSize: 10, padding: '2px 6px', display: 'inline-block' }}
+                                title={w.message}
+                              >
+                                {w.status === 'EXPIRED' ? '⚠ ' : '⏱ '}{w.label}: {w.status === 'EXPIRED' ? 'Expired' : 'Expiring Soon'}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="badge b-success" style={{ fontSize: 10 }}>All Docs Valid</span>
                         )}
                       </td>
                       <td>
@@ -3221,6 +3381,158 @@ export function TransportClient({ session }: { session: SessionProps }) {
                       )}
                     </tr>
                   ))}
+                  {vehicles.length === 0 && (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--c-muted)' }}>
+                        No vehicles found. Register your first school bus or van above.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* DESTINATION 5: FLEET DRIVERS & PERSONNEL */}
+      {/* ========================================================================= */}
+      {((tab === 'FLEET_SETTINGS' && fleetSettingsSubTab === 'drivers')) && (
+        <div style={{ marginTop: 0 }}>
+          <div className="card">
+            <div className="card-head">
+              <div>
+                <div className="card-title">Transport Drivers & Personnel Directory</div>
+                <div className="card-sub">Registered school drivers, driving license compliance, and assigned vehicles</div>
+              </div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ position: 'relative' }}>
+                  <Search size={14} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--c-muted)' }} />
+                  <input
+                    type="text"
+                    className="input"
+                    style={{ paddingLeft: 30, height: 34, width: 220, fontSize: 13 }}
+                    placeholder="Search driver by name or code..."
+                    value={driverSearch}
+                    onChange={(e) => setDriverSearch(e.target.value)}
+                  />
+                </div>
+                {canWrite && (
+                  <button className="btn btn-primary btn-sm" onClick={() => setRegisterDriverOpen(true)}>
+                    <UserPlus size={13} /> Onboard Driver
+                  </button>
+                )}
+              </div>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="table" style={{ width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th>Driver & Staff Code</th>
+                    <th>Contact & Emergency</th>
+                    <th>Driving License</th>
+                    <th>Assigned Route & Vehicle</th>
+                    <th>Status</th>
+                    {canWrite && <th style={{ textAlign: 'right' }}>Actions</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {drivers
+                    .filter((d) => {
+                      if (!driverSearch.trim()) return true
+                      const q = driverSearch.toLowerCase().trim()
+                      return (
+                        d.fullName?.toLowerCase().includes(q) ||
+                        d.employeeCode?.toLowerCase().includes(q) ||
+                        d.phone?.includes(q) ||
+                        d.licenseNumber?.toLowerCase().includes(q)
+                      )
+                    })
+                    .map((d) => (
+                      <tr key={d.id}>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{d.fullName}</div>
+                          <div className="t-caption">
+                            {d.employeeCode} • {d.designation}
+                          </div>
+                        </td>
+                        <td>
+                          <div>{d.phone || 'No phone'}</div>
+                          {d.emergencyContactPhone && (
+                            <div className="t-caption" style={{ color: 'var(--c-muted)' }}>
+                              Emerg: {d.emergencyContactName ? `${d.emergencyContactName} (${d.emergencyContactPhone})` : d.emergencyContactPhone}
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          {d.licenseNumber ? (
+                            <div>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{d.licenseNumber}</span>
+                              {d.licenseExpiry && (
+                                <div className="t-caption">Expires: {d.licenseExpiry}</div>
+                              )}
+                              {d.licenseStatus === 'EXPIRED' && (
+                                <span className="badge b-danger" style={{ fontSize: 10, marginTop: 2 }}>
+                                  Expired
+                                </span>
+                              )}
+                              {d.licenseStatus === 'EXPIRING_SOON' && (
+                                <span className="badge b-warning" style={{ fontSize: 10, marginTop: 2 }}>
+                                  Expiring Soon
+                                </span>
+                              )}
+                              {d.licenseStatus === 'VALID' && (
+                                <span className="badge b-success" style={{ fontSize: 10, marginTop: 2 }}>
+                                  Valid
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span style={{ color: 'var(--c-muted)', fontSize: 12 }}>Pending Submission</span>
+                          )}
+                        </td>
+                        <td>
+                          {d.assignedRoutes && d.assignedRoutes.length > 0 ? (
+                            d.assignedRoutes.map((r: any) => (
+                              <div key={r.id} style={{ marginBottom: 2 }}>
+                                <span className="badge b-neutral">{r.name}</span>
+                                {r.vehicle && (
+                                  <span className="t-caption" style={{ marginLeft: 6 }}>
+                                    Bus: {r.vehicle.registrationNumber}
+                                  </span>
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            <span style={{ color: 'var(--c-muted)' }}>Unassigned</span>
+                          )}
+                        </td>
+                        <td>
+                          <span className={`badge ${d.status === 'ACTIVE' ? 'b-success' : 'b-neutral'}`}>
+                            {d.status}
+                          </span>
+                        </td>
+                        {canWrite && (
+                          <td style={{ textAlign: 'right' }}>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => setEditDriverModal(d)}
+                              title="Edit Driver Information"
+                            >
+                              <Edit3 size={13} /> Edit
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  {drivers.length === 0 && (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: 24, color: 'var(--c-muted)' }}>
+                        No drivers registered yet. Use "Onboard Driver" to link staff or create driver records.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -5073,37 +5385,54 @@ export function TransportClient({ session }: { session: SessionProps }) {
           setAddVehicleStep(1)
         }}
         title="Register Vehicle"
-        subtitle="3-step guided flow: Vehicle Identity → Safety Specs → Review & Register"
+        subtitle="3-step guided flow: Vehicle Identity → Compliance & Specs → Review & Register"
         icon={<Bus size={20} />}
       >
         <form onSubmit={handleCreateVehicle}>
           <WizardStepBar
             currentStep={addVehicleStep}
             totalSteps={3}
-            steps={['Vehicle Identity', 'Capacity & Specs', 'Review & Register']}
+            steps={['Vehicle Identity', 'Capacity & Compliance', 'Review & Register']}
           />
 
           {/* Hidden inputs to guarantee FormData compatibility */}
           <input type="hidden" name="registrationNumber" value={addVehicleRegNumber} />
+          <input type="hidden" name="displayName" value={addVehicleDisplayName} />
           <input type="hidden" name="vehicleType" value={addVehicleType} />
           <input type="hidden" name="capacity" value={addVehicleCapacity} />
           <input type="hidden" name="makeModel" value={addVehicleMakeModel} />
+          <input type="hidden" name="registrationExpiry" value={addVehicleRegExpiry} />
+          <input type="hidden" name="insuranceExpiry" value={addVehicleInsuranceExpiry} />
+          <input type="hidden" name="fitnessExpiry" value={addVehicleFitnessExpiry} />
+          <input type="hidden" name="permitExpiry" value={addVehiclePermitExpiry} />
+          <input type="hidden" name="pollutionExpiry" value={addVehiclePollutionExpiry} />
           <input type="hidden" name="notes" value={addVehicleNotes} />
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {/* STEP 1: Vehicle Identity */}
             {addVehicleStep === 1 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <Field label="Registration Number" required helper="Must match RTO registration document (e.g. MH-12-AB-1234)">
-                  <input
-                    type="text"
-                    className="input"
-                    placeholder="MH-12-AB-1234"
-                    required
-                    value={addVehicleRegNumber}
-                    onChange={(e) => setAddVehicleRegNumber(e.target.value.toUpperCase())}
-                  />
-                </Field>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <Field label="Registration Number" required helper="Must match RTO registration (e.g. MH-12-AB-1234)">
+                    <input
+                      type="text"
+                      className="input"
+                      placeholder="MH-12-AB-1234"
+                      required
+                      value={addVehicleRegNumber}
+                      onChange={(e) => setAddVehicleRegNumber(e.target.value.toUpperCase())}
+                    />
+                  </Field>
+                  <Field label="Display Name / Alias (Optional)" helper="e.g. Bus 01 - North Campus">
+                    <input
+                      type="text"
+                      className="input"
+                      placeholder="e.g. Bus 01"
+                      value={addVehicleDisplayName}
+                      onChange={(e) => setAddVehicleDisplayName(e.target.value)}
+                    />
+                  </Field>
+                </div>
 
                 <Field label="Vehicle Type" required>
                   <select
@@ -5127,13 +5456,13 @@ export function TransportClient({ session }: { session: SessionProps }) {
                     disabled={!addVehicleRegNumber.trim()}
                     onClick={() => setAddVehicleStep(2)}
                   >
-                    Next: Capacity & Specs →
+                    Next: Capacity & Compliance →
                   </button>
                 </div>
               </div>
             )}
 
-            {/* STEP 2: Capacity & Safety Specs */}
+            {/* STEP 2: Capacity & Compliance Specs */}
             {addVehicleStep === 2 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -5156,6 +5485,46 @@ export function TransportClient({ session }: { session: SessionProps }) {
                       onChange={(e) => setAddVehicleMakeModel(e.target.value)}
                     />
                   </Field>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--border-default)', paddingTop: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--c-muted)', marginBottom: 8, textTransform: 'uppercase' }}>
+                    Document Expiry Dates (for automated compliance warnings)
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <Field label="Insurance Expiry Date">
+                      <input
+                        type="date"
+                        className="input"
+                        value={addVehicleInsuranceExpiry}
+                        onChange={(e) => setAddVehicleInsuranceExpiry(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Fitness Certificate Expiry">
+                      <input
+                        type="date"
+                        className="input"
+                        value={addVehicleFitnessExpiry}
+                        onChange={(e) => setAddVehicleFitnessExpiry(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Permit Expiry Date">
+                      <input
+                        type="date"
+                        className="input"
+                        value={addVehiclePermitExpiry}
+                        onChange={(e) => setAddVehiclePermitExpiry(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Pollution (PUC) Expiry">
+                      <input
+                        type="date"
+                        className="input"
+                        value={addVehiclePollutionExpiry}
+                        onChange={(e) => setAddVehiclePollutionExpiry(e.target.value)}
+                      />
+                    </Field>
+                  </div>
                 </div>
 
                 <Field label="Compliance & Safety Notes" helper="Safety equipment and regulatory approvals">
@@ -5190,7 +5559,9 @@ export function TransportClient({ session }: { session: SessionProps }) {
                 <div style={{ padding: '14px 16px', borderRadius: 12, background: 'var(--c-surface-hover, rgba(0,0,0,0.02))', border: '1px solid var(--border-default)', display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-default)', paddingBottom: 6 }}>
                     <span className="t-caption">Registration</span>
-                    <span style={{ fontWeight: 800, fontFamily: 'var(--font-mono)' }}>{addVehicleRegNumber}</span>
+                    <span style={{ fontWeight: 800, fontFamily: 'var(--font-mono)' }}>
+                      {addVehicleRegNumber} {addVehicleDisplayName ? `(${addVehicleDisplayName})` : ''}
+                    </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-default)', paddingBottom: 6 }}>
                     <span className="t-caption">Type & Model</span>
@@ -5200,6 +5571,18 @@ export function TransportClient({ session }: { session: SessionProps }) {
                     <span className="t-caption">Capacity</span>
                     <span><b>{addVehicleCapacity}</b> Passenger Seats</span>
                   </div>
+                  {addVehicleInsuranceExpiry && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-default)', paddingBottom: 6 }}>
+                      <span className="t-caption">Insurance Expiry</span>
+                      <span>{addVehicleInsuranceExpiry}</span>
+                    </div>
+                  )}
+                  {addVehicleFitnessExpiry && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-default)', paddingBottom: 6 }}>
+                      <span className="t-caption">Fitness Expiry</span>
+                      <span>{addVehicleFitnessExpiry}</span>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span className="t-caption">Notes</span>
                     <span style={{ fontStyle: 'italic', fontSize: 12 }}>{addVehicleNotes}</span>
@@ -5228,7 +5611,7 @@ export function TransportClient({ session }: { session: SessionProps }) {
       {/* ========================================================================= */}
       {/* MODAL: EDIT VEHICLE */}
       {/* ========================================================================= */}
-      <Modal open={!!editVehicleModal} onClose={() => setEditVehicleModal(null)} title="Edit Vehicle" subtitle="Update fleet specifications" icon={<Edit3 size={20} />}>
+      <Modal open={!!editVehicleModal} onClose={() => setEditVehicleModal(null)} title="Edit Vehicle" subtitle="Update fleet specifications & compliance" icon={<Edit3 size={20} />}>
         {editVehicleModal && (
           <form onSubmit={handleUpdateVehicle}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -5236,8 +5619,16 @@ export function TransportClient({ session }: { session: SessionProps }) {
                 Vehicle: <b>{editVehicleModal.registrationNumber}</b>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <Field label="Display Name / Alias">
+                  <input type="text" name="displayName" defaultValue={editVehicleModal.displayName || ''} placeholder="e.g. Bus 01 - North" className="input" />
+                </Field>
                 <Field label="Capacity (Seats)" required>
                   <input type="number" name="capacity" defaultValue={editVehicleModal.capacity} min={1} className="input" required />
+                </Field>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <Field label="Make & Model">
+                  <input type="text" name="makeModel" defaultValue={editVehicleModal.makeModel || ''} className="input" />
                 </Field>
                 <Field label="Operational Status">
                   <select name="status" className="input" defaultValue={editVehicleModal.status}>
@@ -5247,9 +5638,25 @@ export function TransportClient({ session }: { session: SessionProps }) {
                   </select>
                 </Field>
               </div>
-              <Field label="Make & Model">
-                <input type="text" name="makeModel" defaultValue={editVehicleModal.makeModel || ''} className="input" />
-              </Field>
+              <div style={{ borderTop: '1px solid var(--border-default)', paddingTop: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--c-muted)', marginBottom: 8, textTransform: 'uppercase' }}>
+                  Compliance Document Expiries
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <Field label="Insurance Expiry">
+                    <input type="date" name="insuranceExpiry" defaultValue={editVehicleModal.insuranceExpiry || ''} className="input" />
+                  </Field>
+                  <Field label="Fitness Certificate Expiry">
+                    <input type="date" name="fitnessExpiry" defaultValue={editVehicleModal.fitnessExpiry || ''} className="input" />
+                  </Field>
+                  <Field label="Permit Expiry">
+                    <input type="date" name="permitExpiry" defaultValue={editVehicleModal.permitExpiry || ''} className="input" />
+                  </Field>
+                  <Field label="Pollution (PUC) Expiry">
+                    <input type="date" name="pollutionExpiry" defaultValue={editVehicleModal.pollutionExpiry || ''} className="input" />
+                  </Field>
+                </div>
+              </div>
               <Field label="Notes">
                 <input type="text" name="notes" defaultValue={editVehicleModal.notes || ''} className="input" />
               </Field>
@@ -5260,6 +5667,119 @@ export function TransportClient({ session }: { session: SessionProps }) {
             </div>
           </form>
         )}
+      </Modal>
+
+      {/* ========================================================================= */}
+      {/* MODAL: EDIT DRIVER */}
+      {/* ========================================================================= */}
+      <Modal open={!!editDriverModal} onClose={() => setEditDriverModal(null)} title="Edit Driver Profile" subtitle="Update driver credentials and compliance" icon={<UserCheck size={20} />}>
+        {editDriverModal && (
+          <form onSubmit={handleUpdateDriver}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ padding: 10, background: 'var(--c-surface-hover)', borderRadius: 8, fontSize: 13 }}>
+                Driver: <b>{editDriverModal.fullName}</b> ({editDriverModal.employeeCode})
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <Field label="Driving License Number" helper="RTO issued DL Number">
+                  <input type="text" name="licenseNumber" defaultValue={editDriverModal.licenseNumber || ''} placeholder="MH12 20180012345" className="input" />
+                </Field>
+                <Field label="License Expiry Date">
+                  <input type="date" name="licenseExpiry" defaultValue={editDriverModal.licenseExpiry || ''} className="input" />
+                </Field>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <Field label="License Category">
+                  <input type="text" name="licenseCategory" defaultValue={editDriverModal.licenseCategory || 'HMV / Transport'} placeholder="HMV / Transport" className="input" />
+                </Field>
+                <Field label="Driver Operational Status">
+                  <select name="status" className="input" defaultValue={editDriverModal.status}>
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="INACTIVE">INACTIVE</option>
+                  </select>
+                </Field>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <Field label="Emergency Contact Name">
+                  <input type="text" name="emergencyContactName" defaultValue={editDriverModal.emergencyContactName || ''} placeholder="e.g. Spouse / Sibling" className="input" />
+                </Field>
+                <Field label="Emergency Contact Phone">
+                  <input type="tel" name="emergencyContactPhone" defaultValue={editDriverModal.emergencyContactPhone || ''} placeholder="+91 98765 43210" className="input" />
+                </Field>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+              <button type="button" className="btn btn-ghost" onClick={() => setEditDriverModal(null)}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={busy}>Save Changes</button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* ========================================================================= */}
+      {/* MODAL: ONBOARD DRIVER */}
+      {/* ========================================================================= */}
+      <Modal open={registerDriverOpen} onClose={() => setRegisterDriverOpen(false)} title="Onboard Transport Driver" subtitle="Register a new driver or designate an existing staff member" icon={<UserPlus size={20} />}>
+        <form onSubmit={handleRegisterDriver}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <Field label="Link Existing Staff Member (Optional)" helper="Select existing staff to assign as driver, or leave empty to register a new employee">
+              <select name="staffProfileId" className="input">
+                <option value="">-- Create New Driver Profile --</option>
+                {eligibleStaff.map((s) => (
+                  <option key={s.id} value={s.id}>{s.fullName} ({s.designation} · {s.employeeCode})</option>
+                ))}
+              </select>
+            </Field>
+
+            <div style={{ borderTop: '1px solid var(--border-default)', paddingTop: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--c-muted)', marginBottom: 8, textTransform: 'uppercase' }}>
+                New Driver Personal Details (Required if not linking existing staff)
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <Field label="Full Name">
+                  <input type="text" name="fullName" placeholder="e.g. Ramesh Kumar" className="input" />
+                </Field>
+                <Field label="Contact Phone">
+                  <input type="tel" name="phone" placeholder="+91 98765 43210" className="input" />
+                </Field>
+              </div>
+              <Field label="Staff Employee Code">
+                <input type="text" name="employeeCode" placeholder="DRV-001" className="input" />
+              </Field>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border-default)', paddingTop: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--c-muted)', marginBottom: 8, textTransform: 'uppercase' }}>
+                Driving License & Compliance
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <Field label="Driving License Number">
+                  <input type="text" name="licenseNumber" placeholder="MH12 20190054321" className="input" />
+                </Field>
+                <Field label="License Expiry Date">
+                  <input type="date" name="licenseExpiry" className="input" />
+                </Field>
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border-default)', paddingTop: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--c-muted)', marginBottom: 8, textTransform: 'uppercase' }}>
+                Emergency Contact
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <Field label="Contact Name">
+                  <input type="text" name="emergencyContactName" placeholder="e.g. Sunita Kumar" className="input" />
+                </Field>
+                <Field label="Contact Phone">
+                  <input type="tel" name="emergencyContactPhone" placeholder="+91 98765 00000" className="input" />
+                </Field>
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+            <button type="button" className="btn btn-ghost" onClick={() => setRegisterDriverOpen(false)}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}>Register Driver</button>
+          </div>
+        </form>
       </Modal>
 
       {/* ========================================================================= */}

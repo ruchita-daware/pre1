@@ -2,6 +2,9 @@ import { withApi } from '@/lib/with-api'
 import { NextRequest } from 'next/server'
 import { ok, Errors } from '@/lib/api'
 import { requireApi, isResponse } from '@/lib/auth-api'
+import { can } from '@/lib/auth'
+import { normalizeRole } from '@/lib/roles'
+import { db } from '@/lib/db'
 import { AcademicService } from '@/lib/academics/academic-service'
 import type { ProgressStage } from '@prisma/client'
 
@@ -12,11 +15,35 @@ async function _GET(
   req: NextRequest,
   { params }: { params: Promise<{ studentId: string }> }
 ) {
-  const session = await requireApi(req, 'academics:read')
+  const session = await requireApi(req)
   if (isResponse(session)) return session
   if (!session.tenantId) return Errors.forbidden('No tenant context')
 
+  const effectiveRoles = session.roles && session.roles.length > 0 ? session.roles : [session.role]
+  const hasAccess = can(effectiveRoles, 'academics:read') || can(effectiveRoles, 'academics:read-linked')
+  if (!hasAccess) {
+    return Errors.forbidden('Missing permission: academics:read or academics:read-linked')
+  }
+
   const { studentId } = await params
+  const isParent = effectiveRoles.some((r) => ['PARENT', 'GUARDIAN'].includes(normalizeRole(r)))
+  if (isParent) {
+    const isLinked = await db.studentGuardian.findFirst({
+      where: {
+        studentId,
+        guardian: {
+          userId: session.uid,
+          tenantId: session.tenantId,
+          deletedAt: null,
+        },
+      },
+      select: { id: true },
+    })
+    if (!isLinked) {
+      return Errors.forbidden('You are not authorized to view learning progress for this student')
+    }
+  }
+
   const { searchParams } = new URL(req.url)
   const academicSessionId = searchParams.get('academicSessionId') || undefined
 

@@ -33,6 +33,7 @@ import { PickupPinModal } from '@/components/users/PickupPinModal'
 import {
   UserIdentityCell,
   UserContactCell,
+  LinkedChildrenCell,
   UserRolePlacementCell,
   UserRowActions,
 } from '@/components/users'
@@ -356,37 +357,44 @@ function FamilyUsersPageContent() {
   const parentColumns: Column<UserRecord>[] = [
     {
       key: 'name',
-      header: t('users.parentIdentity') || 'Parent Identity',
+      header: t('users.parentFamily') || 'Parent / Family',
       sortable: true,
       sortValue: (u) => u.name,
-      width: '40%',
+      width: '28%',
       render: (u) => (
         <UserIdentityCell
           user={u}
           onClick={() => setViewingUser(u)}
           contextType="parent"
+          showChildren={false}
         />
       ),
     },
     {
       key: 'contact',
-      header: t('users.contactDetails') || 'Contact',
-      width: '26%',
+      header: t('users.contactDetails') || 'Contact Details',
+      width: '22%',
       render: (u) => <UserContactCell user={u} />,
     },
     {
+      key: 'children',
+      header: t('users.linkedChildren') || 'Linked Children',
+      width: '22%',
+      render: (u) => <LinkedChildrenCell user={u} />,
+    },
+    {
       key: 'role',
-      header: t('users.roleTitle') || 'Clearance / Role',
+      header: t('users.roleAndStatus') || 'Role & Status',
       sortable: true,
       sortValue: (u) => u.role,
-      width: '22%',
+      width: '18%',
       render: (u) => <UserRolePlacementCell user={u} contextType="parent" />,
     },
     {
       key: 'actions',
       header: t('common.actions') || 'Actions',
       align: 'right',
-      width: '12%',
+      width: '10%',
       render: (u) => (
         <UserRowActions
           user={u}
@@ -504,37 +512,44 @@ function FamilyUsersPageContent() {
   const guardianColumns: Column<UserRecord>[] = [
     {
       key: 'name',
-      header: t('users.authorizedGuardian') || 'Guardian Identity',
+      header: t('users.authorizedGuardian') || 'Guardian / Family',
       sortable: true,
       sortValue: (u) => u.name,
-      width: '40%',
+      width: '28%',
       render: (u) => (
         <UserIdentityCell
           user={u}
           onClick={() => setViewingUser(u)}
           contextType="guardian"
+          showChildren={false}
         />
       ),
     },
     {
       key: 'contact',
-      header: t('users.contactDetails') || 'Contact',
-      width: '26%',
+      header: t('users.contactDetails') || 'Contact Details',
+      width: '22%',
       render: (u) => <UserContactCell user={u} />,
     },
     {
+      key: 'children',
+      header: t('users.linkedChildren') || 'Linked Children',
+      width: '22%',
+      render: (u) => <LinkedChildrenCell user={u} />,
+    },
+    {
       key: 'role',
-      header: t('users.roleTitle') || 'Clearance / Role',
+      header: t('users.roleAndStatus') || 'Role & Status',
       sortable: true,
       sortValue: (u) => u.role,
-      width: '22%',
+      width: '18%',
       render: (u) => <UserRolePlacementCell user={u} contextType="guardian" />,
     },
     {
       key: 'actions',
       header: t('common.actions') || 'Actions',
       align: 'right',
-      width: '12%',
+      width: '10%',
       render: (u) => (
         <UserRowActions
           user={u}
@@ -661,7 +676,8 @@ function FamilyUsersPageContent() {
 
       {/* Page Header */}
       <PageHead
-        title={t('users.familyUsers')}
+        title={t('users.parentsManagement') || 'Parents Management'}
+        sub="Manage parent accounts, linked students, and communication settings."
         backHref="/app/users"
         actions={
           <div className="flex items-center gap-2">
@@ -951,38 +967,38 @@ function FamilyUsersPageContent() {
             {activeTab === 'PARENTS' ? (
               <>
                 <KpiTile
-                  label={t('users.securityPolicy')}
-                  value={t('users.max2Parents')}
-                  icon={<Lock />}
-                  iconClass="ic-purple"
-                  variant="compact"
-                />
-                <KpiTile
-                  label={t('users.totalParents')}
+                  label={t('users.registeredParents') || 'Registered Parents'}
                   value={kpiValues.totalParents}
                   icon={<User />}
                   iconClass="ic-blue"
                   variant="compact"
                 />
                 <KpiTile
-                  label={t('users.linkedStudents')}
+                  label={t('users.linkedStudents') || 'Linked Students'}
                   value={kpiValues.linkedStudents}
                   icon={<Baby />}
                   iconClass="ic-green"
                   variant="compact"
                 />
                 <KpiTile
-                  label={t('users.feeVisibility')}
-                  value={t('users.feePayers')}
+                  label={t('users.feePayers') || 'Fee Payers'}
+                  value={kpiValues.totalParents > 0 ? `${kpiValues.totalParents} Active` : '0 Active'}
                   icon={<CheckCircle2 />}
                   iconClass="ic-orange"
                   variant="compact"
                 />
                 <KpiTile
-                  label={t('users.multiChildParents')}
+                  label={t('users.multiChildParents') || 'Multi-Child Parents'}
                   value={kpiValues.multiChildParents}
                   icon={<Users />}
                   iconClass="ic-teal"
+                  variant="compact"
+                />
+                <KpiTile
+                  label={t('users.securityPolicy') || 'Security Policy'}
+                  value={t('users.max2Parents') || 'Max 2 per student'}
+                  icon={<Lock />}
+                  iconClass="ic-purple"
                   variant="compact"
                 />
               </>
@@ -1039,7 +1055,7 @@ function FamilyUsersPageContent() {
                 setSearch(val)
                 setPage(1)
               },
-              placeholder: activeTab === 'PARENTS' ? t('users.searchParentPlaceholder') : t('users.searchGuardianPlaceholder'),
+              placeholder: activeTab === 'PARENTS' ? 'Search parent name, phone, email or admission number...' : 'Search guardian name, phone, email...',
               shortcut: '⌘K',
             }}
             filters={[
@@ -1083,7 +1099,37 @@ function FamilyUsersPageContent() {
                   setPage(1)
                 },
               },
+              {
+                id: 'role',
+                label: 'Role',
+                type: 'select',
+                value: activeTab,
+                defaultValue: 'PARENTS',
+                placeholder: 'Role',
+                options: [
+                  { value: 'PARENTS', label: 'Parents' },
+                  { value: 'GUARDIANS', label: 'Guardians' },
+                ],
+                onChange: (val) => {
+                  setActiveTab(val as 'PARENTS' | 'GUARDIANS')
+                  setPage(1)
+                },
+              },
             ]}
+            extraActions={
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm flex items-center gap-1.5 text-xs font-semibold"
+                onClick={() => {
+                  handleSetViewMode('SPREADSHEET')
+                  router.push('/app/users/family?tab=import')
+                }}
+                title="Spreadsheet Import & Export"
+              >
+                <Download size={14} />
+                <span>Export CSV</span>
+              </button>
+            }
             onReset={() => {
               setSearch('')
               setSelectedBranch('ALL')

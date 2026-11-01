@@ -2,6 +2,7 @@ import { withApi } from '@/lib/with-api'
 import { NextRequest } from 'next/server'
 import { ok, Errors } from '@/lib/api'
 import { requireApi, isResponse } from '@/lib/auth-api'
+import { can } from '@/lib/auth'
 import { AcademicService } from '@/lib/academics/academic-service'
 import type { ActivityStatus } from '@prisma/client'
 
@@ -9,9 +10,15 @@ import type { ActivityStatus } from '@prisma/client'
  * GET /api/v1/academics/activities — List classroom activities with filters
  */
 async function _GET(req: NextRequest) {
-  const session = await requireApi(req, 'academics:read')
+  const session = await requireApi(req)
   if (isResponse(session)) return session
   if (!session.tenantId) return Errors.forbidden('No tenant context')
+
+  const effectiveRoles = session.roles && session.roles.length > 0 ? session.roles : [session.role]
+  const hasAccess = can(effectiveRoles, 'academics:read') || can(effectiveRoles, 'academics:read-linked')
+  if (!hasAccess) {
+    return Errors.forbidden('Missing permission: academics:read or academics:read-linked')
+  }
 
   const { searchParams } = new URL(req.url)
   const classroomId = searchParams.get('classroomId') || undefined

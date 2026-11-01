@@ -1,6 +1,7 @@
 export * from './types'
 export * from './UserIdentityCell'
 export * from './UserContactCell'
+export * from './LinkedChildrenCell'
 export * from './UserRolePlacementCell'
 export * from './ContactActionStrip'
 export * from './UserRowActions'

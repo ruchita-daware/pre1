@@ -65,7 +65,7 @@ async function _PATCH(req: NextRequest, { params }: { params: Promise<{ id: stri
  * DELETE /api/v1/transport/vehicles/[id] — Deactivate/delete vehicle
  */
 async function _DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await requireApi(req, 'transport:admin')
+  const session = await requireApi(req, 'transport:write')
   if (isResponse(session)) return session
   if (!session.tenantId) return Errors.forbidden('No tenant context')
   const { id } = await params

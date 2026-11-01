@@ -26,7 +26,7 @@ import { AdmissionsNavigationRibbon } from '@/components/admissions/AdmissionsNa
 import { AdmissionPipelineBoard } from '@/components/admissions/AdmissionPipelineBoard'
 import { DataTable, RowAction } from '@/components/preone/DataTable'
 import { Modal } from '@/components/preone/Modal'
-import { DatePicker, MaskedInput, EnterNav, Wizard } from '@/components/preone/forms'
+import { DatePicker, GlobalDatePicker, MaskedInput, EnterNav, Wizard } from '@/components/preone/forms'
 import { useToast } from '@/components/preone/Toast'
 import { FunnelChart } from '@/components/preone/Chart'
 import { fmtDate, enumLabel } from '@/lib/format'
@@ -5912,8 +5912,8 @@ export default function AdmissionsPage() {
               </select>
             </div>
             <div className="field">
-              <label>Next Follow-up Due Date</label>
-              <input type="datetime-local" name="dueAt" className="input" />
+              <label>Next Follow-up Date</label>
+              <GlobalDatePicker name="dueAt" placeholder="Select follow-up date" size="sm" />
             </div>
           </div>
           <div className="field">
@@ -6097,15 +6097,25 @@ export default function AdmissionsPage() {
             {/* Dynamic fields based on outcome */}
             {selectedOutcomeType === 'CONSIDERING' && (
               <div className="field" style={{ marginTop: 12 }}>
-                <label>Next Follow-up Due Date *</label>
-                <input type="datetime-local" name="nextFollowUpAt" required className="input" defaultValue={new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)} />
+                <label>Next Follow-up Date *</label>
+                <GlobalDatePicker
+                  name="nextFollowUpAt"
+                  value={new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
+                  placeholder="Select follow-up date"
+                  size="sm"
+                />
               </div>
             )}
 
             {selectedOutcomeType === 'FUTURE_TERM' && (
               <div className="field" style={{ marginTop: 12 }}>
                 <label>Wake-up / Re-contact Reminder Date *</label>
-                <input type="date" name="nextFollowUpAt" required className="input" defaultValue={new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)} />
+                <GlobalDatePicker
+                  name="nextFollowUpAt"
+                  value={new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
+                  placeholder="Select reminder date"
+                  size="sm"
+                />
               </div>
             )}
 

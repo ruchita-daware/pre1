@@ -133,6 +133,9 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     'milestones:read-linked',
     'documents:read-linked',
     'pickup:read-linked',
+    'academics:read-linked',
+    'inventory:read-linked',
+    'reports:read-linked',
   ],
   GUARDIAN: [
     'timeline:read',
@@ -145,6 +148,9 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     'pickup:read-linked',
     'pickup:verify-linked',
     'transport:read',
+    'academics:read-linked',
+    'inventory:read-linked',
+    'reports:read-linked',
   ],
   // Legacy aliases
   HELPER: [

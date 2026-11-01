@@ -10,6 +10,7 @@ export interface UserIdentityCellProps {
   onClick?: () => void
   contextType?: 'staff' | 'family' | 'parent' | 'guardian' | 'auto'
   className?: string
+  showChildren?: boolean
 }
 
 export function UserIdentityCell({
@@ -17,6 +18,7 @@ export function UserIdentityCell({
   onClick,
   contextType = 'auto',
   className = '',
+  showChildren = true,
 }: UserIdentityCellProps) {
   // Determine if this user is a family role or staff role
   const isFamily =
@@ -45,7 +47,7 @@ export function UserIdentityCell({
     const isCrossCampus = user.guardianProfile?.isCrossCampus
     const campusesCount = user.guardianProfile?.campusesCount
 
-    if (children.length > 0) {
+    if (showChildren && children.length > 0) {
       contextLine = (
         <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate flex items-center gap-1.5 mt-1 font-medium">
           <Users className="w-3 h-3 text-purple-500 dark:text-purple-400 shrink-0" aria-hidden="true" />
@@ -68,6 +70,16 @@ export function UserIdentityCell({
           )}
         </div>
       )
+    } else if (!showChildren) {
+      if (user.isPrimaryContact) {
+        contextLine = (
+          <div className="text-[11px] text-purple-600 dark:text-purple-400 font-medium mt-0.5 truncate">
+            Primary Contact
+          </div>
+        )
+      } else {
+        contextLine = null
+      }
     } else {
       contextLine = (
         <div className="text-[11px] text-gray-400 italic mt-1 truncate">

@@ -58,6 +58,20 @@ export interface TenantContext {
   studentCount: number
 }
 
+/** Canonical JSON serialization with recursively sorted object keys */
+export function canonicalSnapshot(val: unknown): string {
+  if (val === null || val === undefined) return 'null'
+  if (typeof val !== 'object') return JSON.stringify(val)
+  if (Array.isArray(val)) return '[' + val.map(canonicalSnapshot).join(',') + ']'
+  const obj = val as Record<string, unknown>
+  const keys = Object.keys(obj).sort()
+  return '{' + keys.map((k) => JSON.stringify(k) + ':' + canonicalSnapshot(obj[k])).join(',') + '}'
+}
+
+export function snapshotsEqual(a: unknown, b: unknown): boolean {
+  return canonicalSnapshot(a) === canonicalSnapshot(b)
+}
+
 /** Load everything the predicates need, scoped to the tenant. */
 export async function loadContext(tenantId: string): Promise<TenantContext | null> {
   const tenant = await db.tenant.findFirst({ where: { id: tenantId, deletedAt: null } })
@@ -328,11 +342,13 @@ export function evaluateStep(key: StepKey, ctx: TenantContext, branchId?: string
       return {
         satisfied: ok,
         blocked: false,
-        detail: unmapped.length > 0
+        detail: active.length === 0
+          ? 'No active programs configured in school'
+          : unmapped.length > 0
           ? `Campus(es) lacking program mapping: ${unmapped.map((b) => b.name).join(', ')}`
           : ok
             ? `${active.length} master program(s) active across ${totalMappings} campus mapping(s)`
-            : 'No active programs configured',
+            : 'No active programs configured in school',
         snapshot: { programs: active.length, campusMappings: totalMappings, unmappedCampuses: unmapped.length },
         missingDeps: noDeps,
       }
@@ -795,18 +811,38 @@ export async function syncSetup(
         statusByKey[def.key] = 'COMPLETE'
         autoCompletes.push(def.key)
       } else {
-        const changed = JSON.stringify(row.dataSnapshot ?? {}) !== JSON.stringify(ev.snapshot)
-        if (changed || row.changedAfterCompletion) {
-          await db.schoolSetupStep.update({
-            where: { id: row.id },
-            data: {
-              dataSnapshot: ev.snapshot as any,
-              changedAfterCompletion: changed ? true : row.changedAfterCompletion,
-              lastCheckedAt: new Date(),
-            },
-          })
+        const matchesSnapshot = snapshotsEqual(row.dataSnapshot, ev.snapshot)
+        if (matchesSnapshot) {
+          if (row.changedAfterCompletion) {
+            await db.schoolSetupStep.update({
+              where: { id: row.id },
+              data: {
+                changedAfterCompletion: false,
+                lastCheckedAt: new Date(),
+              },
+            })
+          } else {
+            await db.schoolSetupStep.update({ where: { id: row.id }, data: { lastCheckedAt: new Date() } })
+          }
         } else {
-          await db.schoolSetupStep.update({ where: { id: row.id }, data: { lastCheckedAt: new Date() } })
+          if (!row.dataSnapshot) {
+            await db.schoolSetupStep.update({
+              where: { id: row.id },
+              data: {
+                dataSnapshot: ev.snapshot as any,
+                changedAfterCompletion: false,
+                lastCheckedAt: new Date(),
+              },
+            })
+          } else {
+            await db.schoolSetupStep.update({
+              where: { id: row.id },
+              data: {
+                changedAfterCompletion: true,
+                lastCheckedAt: new Date(),
+              },
+            })
+          }
         }
       }
     } else {
@@ -900,7 +936,8 @@ export async function syncSetup(
         .map((d) => ({ key: d, label: STEP_MAP[d]?.label ?? d }))
 
       const rowStatus = (row?.status as StepStatus) ?? 'BLOCKED'
-      const changedAfter = row?.changedAfterCompletion ?? false
+      const matchesSnap = snapshotsEqual(row?.dataSnapshot, ev.snapshot)
+      const isActuallyDrifted = rowStatus === 'COMPLETE' && (row?.changedAfterCompletion ?? false) && !matchesSnap
       return {
         key: def.key,
         label: def.label,
@@ -915,8 +952,8 @@ export async function syncSetup(
         missingDeps,
         completedAt: row?.completedAt ?? null,
         completedByName: row?.completedByName ?? null,
-        changedAfterCompletion: changedAfter,
-        driftState: rowStatus === 'COMPLETE' && changedAfter,
+        changedAfterCompletion: isActuallyDrifted,
+        driftState: isActuallyDrifted,
         lastCheckedAt: row?.lastCheckedAt ?? new Date(),
         locked: !isUnlocked(def, (k) => (freshRows.find((r) => r.stepKey === k)?.status as StepStatus) ?? 'BLOCKED'),
       }

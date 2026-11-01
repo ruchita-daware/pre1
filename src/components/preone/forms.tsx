@@ -12,52 +12,131 @@ export function toIso(d: Date): string {
   return `${d.getFullYear()}-${m}-${day}`
 }
 
-const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+export function parseDateSafe(val?: string | Date | null): { y: number; m: number; d: number } | null {
+  if (!val) return null
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return null
+    return { y: val.getFullYear(), m: val.getMonth(), d: val.getDate() }
+  }
+  const str = String(val).trim()
+  if (!str) return null
+  const ymdMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (ymdMatch) {
+    return {
+      y: parseInt(ymdMatch[1], 10),
+      m: parseInt(ymdMatch[2], 10) - 1,
+      d: parseInt(ymdMatch[3], 10),
+    }
+  }
+  const parsed = new Date(str)
+  if (isNaN(parsed.getTime())) return null
+  return { y: parsed.getFullYear(), m: parsed.getMonth(), d: parsed.getDate() }
+}
 
-const MONTH_NAMES = [
+export function formatToDateOnly(y: number, m: number, d: number): string {
+  const mm = String(m + 1).padStart(2, '0')
+  const dd = String(d).padStart(2, '0')
+  return `${y}-${mm}-${dd}`
+}
+
+export function toDateOnlyIso(d?: Date | string | null): string {
+  if (!d) return ''
+  const parsed = parseDateSafe(d)
+  if (!parsed) return ''
+  return formatToDateOnly(parsed.y, parsed.m, parsed.d)
+}
+
+export function formatDisplayDate(val?: string | Date | null, locale = 'en-IN'): string {
+  const parsed = parseDateSafe(val)
+  if (!parsed) return ''
+  const dateObj = new Date(parsed.y, parsed.m, parsed.d)
+  return dateObj.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+export const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+
+export const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
-const MONTH_SHORT = [
+export const MONTH_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ]
 
-type DatePickerMode = 'days' | 'month' | 'year'
+export type DatePickerMode = 'days' | 'month' | 'year'
 
-export function DatePicker({
-  value, onChange, name, placeholder = 'Select date',
-}: {
-  value?: string
-  onChange: (iso: string) => void
+export interface GlobalDatePickerProps {
+  value?: string | Date | null
+  onChange?: (iso: string) => void
   name?: string
   placeholder?: string
-}) {
+  minDate?: string | Date
+  maxDate?: string | Date
+  disabled?: boolean
+  required?: boolean
+  readOnly?: boolean
+  className?: string
+  id?: string
+  autoCloseOnSelect?: boolean
+  showToday?: boolean
+  showClear?: boolean
+  align?: 'left' | 'right'
+  size?: 'sm' | 'md'
+  ariaLabel?: string
+}
+
+export function DatePicker({
+  value,
+  onChange = () => {},
+  name,
+  placeholder = 'Select date',
+  minDate,
+  maxDate,
+  disabled = false,
+  required = false,
+  readOnly = false,
+  className = '',
+  id,
+  autoCloseOnSelect = true,
+  showToday = true,
+  showClear = true,
+  align = 'left',
+  size = 'md',
+  ariaLabel,
+}: GlobalDatePickerProps) {
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<DatePickerMode>('days')
-  const [view, setView] = useState(() => {
-    const base = value ? new Date(value + (value.length === 10 ? 'T00:00:00' : '')) : new Date()
-    const valid = !isNaN(base.getTime()) ? base : new Date()
-    return { y: valid.getFullYear(), m: valid.getMonth() }
+
+  const safeVal = useMemo(() => parseDateSafe(value), [value])
+  const isoValue = useMemo(() => (safeVal ? formatToDateOnly(safeVal.y, safeVal.m, safeVal.d) : ''), [safeVal])
+
+  const parsedMin = useMemo(() => parseDateSafe(minDate), [minDate])
+  const parsedMax = useMemo(() => parseDateSafe(maxDate), [maxDate])
+  const minIso = useMemo(() => (parsedMin ? formatToDateOnly(parsedMin.y, parsedMin.m, parsedMin.d) : null), [parsedMin])
+  const maxIso = useMemo(() => (parsedMax ? formatToDateOnly(parsedMax.y, parsedMax.m, parsedMax.d) : null), [parsedMax])
+
+  const [view, setView] = useState<{ y: number; m: number }>(() => {
+    if (safeVal) return { y: safeVal.y, m: safeVal.m }
+    const now = new Date()
+    return { y: now.getFullYear(), m: now.getMonth() }
   })
   const [yearPageStart, setYearPageStart] = useState(() => Math.floor(view.y / 12) * 12)
   const rootRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (open) {
-      if (value) {
-        const parsed = new Date(value + (value.length === 10 ? 'T00:00:00' : ''))
-        if (!isNaN(parsed.getTime())) {
-          setView({ y: parsed.getFullYear(), m: parsed.getMonth() })
-          setYearPageStart(Math.floor(parsed.getFullYear() / 12) * 12)
-        }
+      if (safeVal) {
+        setView({ y: safeVal.y, m: safeVal.m })
+        setYearPageStart(Math.floor(safeVal.y / 12) * 12)
       } else {
         setYearPageStart(Math.floor(view.y / 12) * 12)
       }
       setMode('days')
     }
-  }, [open, value])
+  }, [open, safeVal])
 
   useEffect(() => {
     if (!open) return
@@ -73,6 +152,7 @@ export function DatePicker({
           setMode('days')
         } else {
           setOpen(false)
+          inputRef.current?.focus()
         }
       }
     }
@@ -84,10 +164,36 @@ export function DatePicker({
     }
   }, [open, mode])
 
-  const pick = (d: Date) => {
-    onChange(toIso(d))
+  const pick = (d: Date | { y: number; m: number; d: number }) => {
+    if (disabled || readOnly) return
+    const parsed = d instanceof Date ? { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() } : d
+    const iso = formatToDateOnly(parsed.y, parsed.m, parsed.d)
+
+    if (minIso && iso < minIso) return
+    if (maxIso && iso > maxIso) return
+
+    onChange(iso)
+    if (autoCloseOnSelect) {
+      setOpen(false)
+      setMode('days')
+      inputRef.current?.focus()
+    }
+  }
+
+  const handleToday = () => {
+    if (disabled || readOnly) return
+    const now = new Date()
+    const todayParsed = { y: now.getFullYear(), m: now.getMonth(), d: now.getDate() }
+    setView({ y: todayParsed.y, m: todayParsed.m })
+    pick(todayParsed)
+  }
+
+  const handleClear = () => {
+    if (disabled || readOnly) return
+    onChange('')
     setOpen(false)
     setMode('days')
+    inputRef.current?.focus()
   }
 
   const cells = useMemo(() => {
@@ -97,32 +203,59 @@ export function DatePicker({
     for (let i = 0; i < startPad; i++) out.push(null)
     for (let d = 1; d <= daysIn; d++) out.push(new Date(view.y, view.m, d))
     return out
-  }, [view])
+  }, [view.y, view.m])
+
+  const todayIso = useMemo(() => {
+    const now = new Date()
+    return formatToDateOnly(now.getFullYear(), now.getMonth(), now.getDate())
+  }, [])
 
   const monthLabel = `${MONTH_NAMES[view.m]} ${view.y}`
-  const fmt = (iso?: string) =>
-    iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+  const displayFormatted = safeVal ? formatDisplayDate(value) : ''
 
   return (
-    <div className="dp-root" ref={rootRef}>
-      <div className="dp-input" onClick={() => setOpen((o) => !o)}>
-        <CalIcon size={15} />
+    <div
+      className={`dp-root ${disabled ? 'dp-disabled' : ''} ${className}`}
+      ref={rootRef}
+      style={{ width: '100%' }}
+    >
+      <div
+        className={`dp-input ${size === 'sm' ? 'dp-input-sm' : ''}`}
+        onClick={() => {
+          if (!disabled && !readOnly) {
+            setOpen((o) => !o)
+          }
+        }}
+      >
+        <CalIcon size={size === 'sm' ? 14 : 15} />
         <input
+          ref={inputRef}
+          id={id}
           placeholder={placeholder}
-          value={fmt(value)}
+          value={displayFormatted}
           readOnly
+          disabled={disabled}
+          required={required}
           aria-haspopup="dialog"
           aria-expanded={open}
-          aria-label={placeholder}
+          aria-label={ariaLabel || placeholder}
           onKeyDown={(e) => {
+            if (disabled || readOnly) return
             if (e.key === 'Escape') setOpen(false)
-            if (e.key === 'ArrowDown') setOpen(true)
+            if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setOpen(true)
+            }
           }}
         />
       </div>
-      {name && <input type="hidden" name={name} value={value || ''} />}
+      {name && <input type="hidden" name={name} value={isoValue} />}
       {open && (
-        <div className="dp-cal" role="dialog" aria-label={monthLabel}>
+        <div
+          className={`dp-cal ${align === 'right' ? 'align-right' : ''}`}
+          role="dialog"
+          aria-label={monthLabel}
+        >
           {mode === 'days' && (
             <>
               <div className="dp-head">
@@ -174,20 +307,31 @@ export function DatePicker({
                 ))}
               </div>
               <div className="dp-grid">
-                {cells.map((d, i) =>
-                  d ? (
+                {cells.map((d, i) => {
+                  if (!d) {
+                    return <span key={i} className="dp-day-empty" aria-hidden="true" />
+                  }
+                  const cellIso = toIso(d)
+                  const isSelected = isoValue === cellIso
+                  const isToday = todayIso === cellIso
+                  const isBeforeMin = minIso ? cellIso < minIso : false
+                  const isAfterMax = maxIso ? cellIso > maxIso : false
+                  const isDisabled = isBeforeMin || isAfterMax
+
+                  return (
                     <button
                       type="button"
                       key={i}
-                      className={`dp-day${value && toIso(d) === value ? ' on' : ''}`}
+                      disabled={isDisabled}
+                      className={`dp-day${isSelected ? ' on' : ''}${isToday && !isSelected ? ' is-today' : ''}${isDisabled ? ' disabled' : ''}`}
                       onClick={() => pick(d)}
+                      aria-label={`${d.getDate()} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}${isToday ? ', today' : ''}${isSelected ? ', selected' : ''}`}
+                      aria-selected={isSelected}
                     >
                       {d.getDate()}
                     </button>
-                  ) : (
-                    <span key={i} className="dp-day-empty" aria-hidden="true" />
-                  ),
-                )}
+                  )
+                })}
               </div>
             </>
           )}
@@ -307,25 +451,20 @@ export function DatePicker({
               </button>
             ) : (
               <>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => {
-                    const now = new Date()
-                    setView({ y: now.getFullYear(), m: now.getMonth() })
-                    pick(now)
-                  }}
-                >
-                  Today
-                </button>
-                {value && (
+                {showToday && (
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
-                    onClick={() => {
-                      onChange('')
-                      setOpen(false)
-                    }}
+                    onClick={handleToday}
+                  >
+                    Today
+                  </button>
+                )}
+                {showClear && isoValue && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleClear}
                   >
                     Clear
                   </button>
@@ -338,6 +477,8 @@ export function DatePicker({
     </div>
   )
 }
+
+export const GlobalDatePicker = DatePicker
 
 /* ─── Input masks ─────────────────────────────────────────────────── */
 

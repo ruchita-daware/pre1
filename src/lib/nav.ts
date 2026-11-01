@@ -14,6 +14,7 @@ export interface NavItem {
   icon: React.ComponentType<{ size?: number | string; className?: string }>
   grad: string
   perm?: string
+  perms?: string[]
   roles?: Role[]
 }
 
@@ -23,14 +24,14 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'setup', label: 'Setup', href: '/app/setup', icon: Rocket, grad: 'g-violet', perm: 'settings:read' },
   { key: 'users', label: 'Users', href: '/app/users', icon: UserCheck, grad: 'g-violet', perm: 'users:read' },
   { key: 'admissions', label: 'Admissions', href: '/app/admissions', icon: ClipboardList, grad: 'g-pink', perm: 'admissions:read' },
-  { key: 'students', label: 'Students', href: '/app/students', icon: Users, grad: 'g-blue', perm: 'students:read' },
-  { key: 'daily-diary', label: 'Daily Diary', href: '/app/daily-diary', icon: CalendarCheck, grad: 'g-emerald', perm: 'attendance:read' },
+  { key: 'students', label: 'Students', href: '/app/students', icon: Users, grad: 'g-blue', perms: ['students:read', 'students:read-linked'] },
+  { key: 'daily-diary', label: 'Daily Diary', href: '/app/daily-diary', icon: CalendarCheck, grad: 'g-emerald', perms: ['attendance:read', 'diary:read-linked', 'timeline:read'] },
   { key: 'finance', label: 'Fees', href: '/app/finance', icon: IndianRupee, grad: 'g-yellow', perm: 'finance:read' },
   { key: 'transport', label: 'Transport', href: '/app/transport', icon: Bus, grad: 'g-orange', perm: 'transport:read' },
-  { key: 'inventory', label: 'Inventory', href: '/app/inventory', icon: Package, grad: 'g-emerald', perm: 'inventory:read' },
-  { key: 'learning', label: 'PreO Learning', href: '/app/learning', icon: GraduationCap, grad: 'g-violet', perm: 'academics:read' },
+  { key: 'inventory', label: 'Inventory', href: '/app/inventory', icon: Package, grad: 'g-emerald', perms: ['inventory:read', 'inventory:read-linked'] },
+  { key: 'learning', label: 'PreO Learning', href: '/app/learning', icon: GraduationCap, grad: 'g-violet', perms: ['academics:read', 'academics:read-linked'] },
   { key: 'hr', label: 'HR & Workforce', href: '/app/hr', icon: Users, grad: 'g-indigo', perm: 'users:read' },
-  { key: 'reports', label: 'Reports & Analytics', href: '/app/reports', icon: BarChart3, grad: 'g-purple', perm: 'reports:read' },
+  { key: 'reports', label: 'Reports & Analytics', href: '/app/reports', icon: BarChart3, grad: 'g-purple', perms: ['reports:read', 'reports:read-linked'] },
   { key: 'communication', label: 'Announcements', href: '/app/communication', icon: Megaphone, grad: 'g-orange', perm: 'communication:read' },
   { key: 'settings', label: 'Settings', href: '/app/settings', icon: Settings, grad: 'g-slate', perm: 'settings:read' },
   { key: 'audit', label: 'Audit Logs', href: '/app/audit', icon: ScrollText, grad: 'g-sky', perm: 'audit:read' },
@@ -42,6 +43,7 @@ export function navForRole(roleOrRoles: Role | Role[]): NavItem[] {
   const roles = Array.isArray(roleOrRoles) ? roleOrRoles : [roleOrRoles]
   return NAV_ITEMS.filter((n) => {
     if (n.roles && !n.roles.some((r) => roles.includes(r))) return false
+    if (n.perms && !n.perms.some((p) => can(roles, p))) return false
     if (n.perm && !can(roles, n.perm)) return false
     return true
   })

@@ -299,7 +299,12 @@ export default function BrandingPage() {
         <Breadcrumbs
           items={[
             { label: 'Home', href: '/app' },
-            { label: 'Setup', href: '/app/setup' },
+            {
+              label: 'Setup',
+              href: typeof window !== 'undefined' && localStorage.getItem('preone_setup_branchId') && localStorage.getItem('preone_setup_branchId') !== 'ALL'
+                ? `/app/setup?branchId=${encodeURIComponent(localStorage.getItem('preone_setup_branchId')!)}`
+                : '/app/setup',
+            },
             { label: 'Branding & Theme' },
           ]}
         />
