@@ -325,7 +325,7 @@ export default function SetupStepPage() {
     return <EmptyState icon={<AlertTriangle size={40} />} title="Unknown setup step" message={`No setup step "${stepKey}" exists.`} />
   }
   if (status === null) {
-    return <><PageHead title={def.label} sub={def.description} /><div className="card"><div style={{ padding: 16 }}><Skeleton h={200} /></div></div></>
+    return <><PageHead title={def.label} sub={stepKey === 'school_profile' ? undefined : def.description} /><div className="card"><div style={{ padding: 16 }}><Skeleton h={200} /></div></div></>
   }
 
   const isOptional = def.applicability !== 'MANDATORY'
@@ -351,7 +351,9 @@ export default function SetupStepPage() {
           </div>
         }
         sub={
-          stepScope === 'TENANT'
+          stepKey === 'school_profile'
+            ? undefined
+            : stepScope === 'TENANT'
             ? `${def.description} (🌐 School-Wide: applies to all branches)`
             : `${def.description} (🏫 Campus-Specific configuration)`
         }
@@ -384,13 +386,15 @@ export default function SetupStepPage() {
       />
 
       {/* status strip */}
-      <div className="card" style={{ marginBottom: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span className={`badge ${statusBadgeCls[displayStatus]}`}>{displayStatus}</span>
-        {me?.applicability !== 'MANDATORY' && <span className="badge b-neutral">{me?.applicability}</span>}
-        {me?.changedAfterCompletion && <span className="badge b-orange">edited after completion</span>}
-        <span className="card-sub" style={{ flex: 1 }}>{me?.detail || def.description}</span>
-        {me?.completedByName && <span className="t-caption">completed by {me.completedByName}</span>}
-      </div>
+      {stepKey !== 'school_profile' && (
+        <div className="card" style={{ marginBottom: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className={`badge ${statusBadgeCls[displayStatus]}`}>{displayStatus}</span>
+          {me?.applicability !== 'MANDATORY' && <span className="badge b-neutral">{me?.applicability}</span>}
+          {me?.changedAfterCompletion && <span className="badge b-orange">edited after completion</span>}
+          <span className="card-sub" style={{ flex: 1 }}>{me?.detail || def.description}</span>
+          {me?.completedByName && <span className="t-caption">completed by {me.completedByName}</span>}
+        </div>
+      )}
 
       {/* ── SMART DEPENDENCY RESOLVER: ACTIONABLE 1-CLICK UNBLOCKING ── */}
       <SmartDependencyResolver
@@ -432,8 +436,7 @@ export default function SetupStepPage() {
                     { k: 'name', label: 'School Legal Name', req: true }, { k: 'email', label: 'Email', req: true, t: 'email' },
                     { k: 'phone', label: 'Contact number', req: true }, { k: 'website', label: 'Website' },
                     { k: 'city', label: 'City', req: true }, { k: 'state', label: 'State' },
-                    { k: 'pincode', label: 'Postal code' }, { k: 'timezone', label: 'Timezone' },
-                    { k: 'locale', label: 'Default language' },
+                    { k: 'pincode', label: 'Postal code' },
                   ].map((f) => (
                     <div className="field" key={f.k}>
                       <label>{f.label} {f.req && <span className="req">*</span>}</label>
@@ -457,14 +460,12 @@ export default function SetupStepPage() {
                     <textarea className="textarea" rows={2} value={String(payload.address ?? '')} onChange={(e) => setPayload({ ...payload, address: e.target.value })} />
                   </div>
                 </div>
-                <p className="helper" style={{ marginTop: 8 }}>School identity propagates to branding, login, portals, communication, reports, certificates and documents.</p>
 
                 {/* ── Active Campuses & Branches Synchronization (Requirement B1) ── */}
                 <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <div>
                       <h4 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>Active School Campuses & Branches</h4>
-                      <p className="helper" style={{ margin: '2px 0 0' }}>All branches linked to this school profile in real time (single source of truth).</p>
                     </div>
                     <button className="btn btn-sm btn-outline" onClick={() => router.push('/app/setup/branch')}>
                       <Building2 size={13} /> Manage Branches
