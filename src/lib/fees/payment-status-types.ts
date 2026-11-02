@@ -152,6 +152,11 @@ export interface PaymentAttemptMetadata {
   failureReason?: string | null
   checkoutMode?: string
 
+  totalRefundedCents?: number
+  lastRefundAmountCents?: number
+  refundRef?: string | null
+  refundReason?: string | null
+
   timeline: ThreeDimensionTimelineEvent[]
   reconciliationHistory: ReconciliationExecutionRecord[]
 }
@@ -303,6 +308,11 @@ export function parsePaymentMetadata(payment: {
     failureCode: parsed.failureCode || null,
     failureReason: parsed.failureReason || null,
     checkoutMode: parsed.checkoutMode || 'SANDBOX',
+
+    totalRefundedCents: Number(parsed.totalRefundedCents || 0),
+    lastRefundAmountCents: Number(parsed.lastRefundAmountCents || 0),
+    refundRef: parsed.refundRef || null,
+    refundReason: parsed.refundReason || null,
 
     timeline: Array.isArray(parsed.timeline) ? parsed.timeline : [],
     reconciliationHistory: Array.isArray(parsed.reconciliationHistory) ? parsed.reconciliationHistory : [],
