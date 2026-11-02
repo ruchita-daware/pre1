@@ -1234,13 +1234,28 @@ export class FeeService {
     })
 
     if (!payment) throw new Error('Payment record not found')
-    if (payment.status !== 'SUCCESS') {
-      throw new Error(`Cannot refund payment with status ${payment.status}. Only SUCCESS payments can be refunded.`)
+
+    let initialNotes: any = {}
+    try {
+      initialNotes = payment.notes ? JSON.parse(payment.notes) : {}
+    } catch {
+      initialNotes = {}
     }
 
-    const refundAmount = amountCents && amountCents > 0 ? amountCents : payment.amountCents
-    if (refundAmount > payment.amountCents) {
-      throw new Error(`Refund amount ₹${refundAmount / 100} exceeds payment amount ₹${payment.amountCents / 100}`)
+    const priorRefundedCents = Number(initialNotes.totalRefundedCents || 0)
+    const remainingRefundableCents = Math.max(0, payment.amountCents - priorRefundedCents)
+
+    if (payment.status !== 'SUCCESS' && initialNotes.internalPaymentStatus !== 'PARTIALLY_REFUNDED') {
+      throw new Error(`Cannot refund payment with status ${payment.status}. Only SUCCESS or PARTIALLY_REFUNDED payments can be refunded.`)
+    }
+
+    if (remainingRefundableCents <= 0) {
+      throw new Error('This payment has already been fully refunded.')
+    }
+
+    const refundAmount = amountCents && amountCents > 0 ? amountCents : remainingRefundableCents
+    if (refundAmount > remainingRefundableCents) {
+      throw new Error(`Refund amount ₹${(refundAmount / 100).toFixed(2)} exceeds remaining refundable balance ₹${(remainingRefundableCents / 100).toFixed(2)}`)
     }
 
     const ref = refundRef || `REF-${Date.now()}`
@@ -1252,7 +1267,6 @@ export class FeeService {
         include: { invoice: true, receipt: true, feeSchedule: true },
       })
       if (!lockedPayment) throw new Error('Payment record not found')
-      if (lockedPayment.status !== 'SUCCESS') throw new Error('Payment already refunded or altered')
 
       let notesData: any = {}
       try {
@@ -1260,29 +1274,46 @@ export class FeeService {
       } catch {
         notesData = { rawNotes: lockedPayment.notes }
       }
+
+      const lockedPriorRefunded = Number(notesData.totalRefundedCents || 0)
+      const lockedRemaining = Math.max(0, lockedPayment.amountCents - lockedPriorRefunded)
+      if (refundAmount > lockedRemaining) {
+        throw new Error(`Refund amount exceeds remaining refundable balance`)
+      }
+
+      const newTotalRefunded = lockedPriorRefunded + refundAmount
+      const isFullyRefunded = newTotalRefunded >= lockedPayment.amountCents
+      const nextInternalStatus = isFullyRefunded ? 'REFUNDED' : 'PARTIALLY_REFUNDED'
+      const nextDbStatus = isFullyRefunded ? 'REFUNDED' : 'SUCCESS'
+
       const timeline = Array.isArray(notesData.timeline) ? notesData.timeline : []
       timeline.push({
-        previousStatus: 'SUCCESS',
-        newStatus: 'REFUNDED',
-        event: 'PAYMENT_REFUNDED',
+        previousStatus: notesData.internalPaymentStatus || lockedPayment.status,
+        newStatus: nextInternalStatus,
+        event: isFullyRefunded ? 'PAYMENT_FULLY_REFUNDED' : 'PAYMENT_PARTIALLY_REFUNDED',
         source: 'ADMIN_ACTION',
         refundRef: ref,
         refundAmountCents: refundAmount,
+        totalRefundedCents: newTotalRefunded,
+        remainingCents: Math.max(0, lockedPayment.amountCents - newTotalRefunded),
         reason,
         at: new Date().toISOString(),
         by: ctx.actorName || ctx.actorId,
-        diagnostics: `Payment of ₹${refundAmount / 100} refunded. Reason: ${reason}`,
+        diagnostics: `Refund of ₹${(refundAmount / 100).toFixed(2)} processed (${isFullyRefunded ? 'Full' : 'Partial'}). Reason: ${reason}`,
       })
       notesData.timeline = timeline
       notesData.refundRef = ref
-      notesData.refundAmountCents = refundAmount
+      notesData.lastRefundAmountCents = refundAmount
+      notesData.totalRefundedCents = newTotalRefunded
+      notesData.internalPaymentStatus = nextInternalStatus
+      notesData.providerStatus = nextInternalStatus
       notesData.refundReason = reason
       notesData.refundedAt = new Date().toISOString()
 
       const updatedPayment = await tx.payment.update({
         where: { id: lockedPayment.id },
         data: {
-          status: 'REFUNDED',
+          status: nextDbStatus,
           notes: JSON.stringify(notesData),
         },
       })
