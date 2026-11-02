@@ -956,7 +956,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
     return (
       <div style={{ display: 'flex', height: '85vh', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-          <Sparkles size={36} className="spin" style={{ color: '#7C3AED', marginBottom: 14 }} />
+          <Sparkles size={36} className="spin" style={{ color: 'var(--color-brand-primary)', marginBottom: 14 }} />
           <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>
             Loading Template Studio 2.0...
           </div>
@@ -1008,8 +1008,8 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
         flexDirection: 'column',
         height: 'calc(100vh - 60px)',
         overflow: 'hidden',
-        background: 'var(--bg-page, #0F172A)',
-        color: 'var(--text-primary, #F8FAFC)',
+        background: 'var(--surface-canvas)',
+        color: 'var(--text-primary)',
       }}
     >
       {/* ── 1. COMPACT TOP TOOLBAR ── */}
@@ -1017,7 +1017,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
         style={{
           height: 52,
           borderBottom: '1px solid var(--border, rgba(255,255,255,0.08))',
-          background: 'var(--surface-solid, #1E293B)',
+          background: 'var(--surface-card)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -1031,7 +1031,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
           <button
             type="button"
             className="btn btn-sm btn-ghost"
-            style={{ color: 'var(--text-secondary, #94A3B8)', padding: '6px' }}
+            style={{ color: 'var(--text-secondary)', padding: '6px' }}
             onClick={() => router.push('/app/setup/templates')}
             title="Return to Template Library"
           >
@@ -1049,7 +1049,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
             style={{
               background: 'transparent',
               border: '1px solid transparent',
-              color: 'var(--text-primary, #FFFFFF)',
+              color: 'var(--text-primary)',
               fontSize: 14,
               fontWeight: 700,
               padding: '3px 6px',
@@ -1058,7 +1058,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
               maxWidth: 200,
               textOverflow: 'ellipsis',
             }}
-            onFocus={(e) => (e.target.style.borderColor = 'var(--brand-500, #8B5CF6)')}
+            onFocus={(e) => (e.target.style.borderColor = 'var(--color-brand-primary)')}
             onBlur={(e) => (e.target.style.borderColor = 'transparent')}
             placeholder="Template Name..."
             title="Click to rename template"
@@ -1068,7 +1068,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
           <span
             style={{
               background: 'rgba(124, 58, 237, 0.12)',
-              color: 'var(--brand-300, #C4B5FD)',
+              color: 'var(--color-brand-primary)',
               border: '1px solid rgba(124, 58, 237, 0.25)',
               fontSize: 11,
               fontWeight: 600,
@@ -1086,7 +1086,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                 definition.status === 'PUBLISHED'
                   ? 'rgba(5, 150, 105, 0.12)'
                   : 'rgba(217, 119, 6, 0.12)',
-              color: definition.status === 'PUBLISHED' ? '#34D399' : '#FBBF24',
+              color: definition.status === 'PUBLISHED' ? 'var(--color-success-base)' : 'var(--color-warning-base)',
               border: `1px solid ${
                 definition.status === 'PUBLISHED'
                   ? 'rgba(5, 150, 105, 0.3)'
@@ -1109,7 +1109,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
               alignItems: 'center',
               gap: 4,
               fontSize: 11,
-              color: saving ? '#38BDF8' : isDirty ? '#F97316' : '#10B981',
+              color: saving ? 'var(--color-info-base)' : isDirty ? 'var(--color-warning-base)' : 'var(--color-success-base)',
               fontWeight: 500,
               marginLeft: 4,
             }}
@@ -1119,7 +1119,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                 width: 6,
                 height: 6,
                 borderRadius: '50%',
-                background: saving ? '#38BDF8' : isDirty ? '#F97316' : '#10B981',
+                background: saving ? 'var(--color-info-base)' : isDirty ? 'var(--color-warning-base)' : 'var(--color-success-base)',
               }}
             />
             <span>{saving ? 'Saving...' : isDirty ? 'Unsaved' : 'Saved'}</span>
@@ -1135,8 +1135,8 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
             style={{
               color:
                 historyIndex > 0
-                  ? 'var(--text-primary, #FFFFFF)'
-                  : 'var(--text-muted, #64748B)',
+                  ? 'var(--text-primary)'
+                  : 'var(--text-muted)',
               padding: '6px',
             }}
             onClick={handleUndo}
@@ -1151,8 +1151,8 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
             style={{
               color:
                 historyIndex < history.length - 1
-                  ? 'var(--text-primary, #FFFFFF)'
-                  : 'var(--text-muted, #64748B)',
+                  ? 'var(--text-primary)'
+                  : 'var(--text-muted)',
               padding: '6px',
             }}
             onClick={handleRedo}
@@ -1175,7 +1175,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
           <button
             type="button"
             className="btn btn-sm btn-ghost"
-            style={{ color: 'var(--text-secondary, #CBD5E1)', padding: '5px' }}
+            style={{ color: 'var(--text-secondary)', padding: '5px' }}
             onClick={() => setZoom((prev) => Math.max(0.4, Math.round((prev - 0.1) * 10) / 10))}
             title="Zoom Out"
           >
@@ -1188,7 +1188,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
             style={{
               background: 'transparent',
               border: 'none',
-              color: 'var(--text-primary, #CBD5E1)',
+              color: 'var(--text-primary)',
               fontSize: 11,
               fontWeight: 600,
               cursor: 'pointer',
@@ -1197,19 +1197,19 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
             }}
             title="Zoom percentage"
           >
-            <option value="50" style={{ background: '#1E293B' }}>50%</option>
-            <option value="75" style={{ background: '#1E293B' }}>75%</option>
-            <option value="100" style={{ background: '#1E293B' }}>100%</option>
-            <option value="125" style={{ background: '#1E293B' }}>125%</option>
-            <option value="140" style={{ background: '#1E293B' }}>140%</option>
-            <option value="175" style={{ background: '#1E293B' }}>175%</option>
-            <option value="200" style={{ background: '#1E293B' }}>200%</option>
+            <option value="50" style={{ background: 'var(--surface-card)', color: 'var(--text-primary)' }}>50%</option>
+            <option value="75" style={{ background: 'var(--surface-card)', color: 'var(--text-primary)' }}>75%</option>
+            <option value="100" style={{ background: 'var(--surface-card)', color: 'var(--text-primary)' }}>100%</option>
+            <option value="125" style={{ background: 'var(--surface-card)', color: 'var(--text-primary)' }}>125%</option>
+            <option value="140" style={{ background: 'var(--surface-card)', color: 'var(--text-primary)' }}>140%</option>
+            <option value="175" style={{ background: 'var(--surface-card)', color: 'var(--text-primary)' }}>175%</option>
+            <option value="200" style={{ background: 'var(--surface-card)', color: 'var(--text-primary)' }}>200%</option>
           </select>
 
           <button
             type="button"
             className="btn btn-sm btn-ghost"
-            style={{ color: 'var(--text-secondary, #CBD5E1)', padding: '5px' }}
+            style={{ color: 'var(--text-secondary)', padding: '5px' }}
             onClick={() => setZoom((prev) => Math.min(2.5, Math.round((prev + 0.1) * 10) / 10))}
             title="Zoom In"
           >
@@ -1220,7 +1220,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
           <button
             type="button"
             className="btn btn-sm btn-ghost"
-            style={{ color: 'var(--brand-300, #C4B5FD)', fontSize: 11, padding: '4px 6px', gap: 3 }}
+            style={{ color: 'var(--color-brand-primary)', fontSize: 11, padding: '4px 6px', gap: 3 }}
             onClick={fitToPage}
             title="Fit Page in Viewport"
           >
@@ -1244,8 +1244,8 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
               fontSize: 11,
               padding: '3px 8px',
               gap: 4,
-              background: previewMode ? 'var(--brand-600, #7C3AED)' : 'transparent',
-              color: previewMode ? '#FFFFFF' : 'var(--text-secondary, #CBD5E1)',
+              background: previewMode ? 'var(--color-brand-primary)' : 'transparent',
+              color: previewMode ? 'var(--text-inverse)' : 'var(--text-secondary)',
             }}
             onClick={() => {
               setPreviewMode(!previewMode)
@@ -1266,7 +1266,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                 fontSize: 11,
                 padding: '3px 7px',
                 gap: 4,
-                color: snapToGrid ? 'var(--brand-300, #C4B5FD)' : 'var(--text-muted, #94A3B8)',
+                color: snapToGrid ? 'var(--color-brand-primary)' : 'var(--text-muted)',
               }}
               onClick={() => setViewMenuOpen(!viewMenuOpen)}
               title="View Options"
@@ -1282,10 +1282,10 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                   right: 0,
                   marginTop: 6,
                   width: 180,
-                  background: 'var(--surface-solid, #1E293B)',
+                  background: 'var(--surface-card)',
                   border: '1px solid var(--border, rgba(255,255,255,0.1))',
                   borderRadius: 8,
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+                  boxShadow: 'var(--shadow-dialog)',
                   padding: 8,
                   zIndex: 40,
                   display: 'flex',
@@ -1325,8 +1325,8 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                           borderRadius: 3,
                           border: 'none',
                           cursor: 'pointer',
-                          background: gridSizeMm === mm ? 'var(--brand-600, #7C3AED)' : 'rgba(255,255,255,0.06)',
-                          color: '#FFFFFF',
+                          background: gridSizeMm === mm ? 'var(--color-brand-primary)' : 'var(--surface-subtle)',
+                          color: gridSizeMm === mm ? 'var(--text-inverse)' : 'var(--text-secondary)',
                         }}
                       >
                         {mm}mm
@@ -1364,7 +1364,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
               fontSize: 11,
               padding: '3px 8px',
               gap: 4,
-              color: layersDrawerOpen ? 'var(--brand-300, #C4B5FD)' : 'var(--text-secondary, #CBD5E1)',
+              color: layersDrawerOpen ? 'var(--color-brand-primary)' : 'var(--text-secondary)',
             }}
             onClick={() => setLayersDrawerOpen(!layersDrawerOpen)}
             title="Toggle Document Layers"
@@ -1379,9 +1379,9 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
             type="button"
             className="btn btn-sm"
             style={{
-              background: 'rgba(124, 58, 237, 0.15)',
-              color: 'var(--brand-300, #DDD6FE)',
-              border: '1px solid rgba(168, 85, 247, 0.35)',
+              background: 'var(--color-brand-100)',
+              color: 'var(--color-brand-primary)',
+              border: '1px solid var(--border-default)',
               fontSize: 11,
               fontWeight: 600,
               gap: 5,
@@ -1408,9 +1408,9 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
             className="btn btn-sm btn-primary"
             onClick={() => setPublishModalOpen(true)}
             style={{
-              background: 'var(--brand-600, #7C3AED)',
-              borderColor: 'var(--brand-600, #7C3AED)',
-              color: '#FFFFFF',
+              background: 'var(--color-brand-primary)',
+              borderColor: 'var(--color-brand-primary)',
+              color: 'var(--text-inverse)',
               fontSize: 11,
               fontWeight: 600,
               gap: 5,
@@ -1430,7 +1430,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
             style={{
               width: leftPanelOpen ? 260 : 40,
               transition: 'width 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-              background: 'var(--surface-solid, #1E293B)',
+              background: 'var(--surface-card)',
               borderRight: '1px solid var(--border, rgba(255,255,255,0.08))',
               display: 'flex',
               flexDirection: 'column',
@@ -1457,7 +1457,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                     style={{
                       fontSize: 11,
                       padding: '3px 8px',
-                      background: activeLeftTab === 'fields' ? 'var(--brand-600, #7C3AED)' : 'transparent',
+                      background: activeLeftTab === 'fields' ? 'var(--color-brand-primary)' : 'transparent',
                     }}
                     onClick={() => setActiveLeftTab('fields')}
                     title="Database Field Catalog"
@@ -1470,7 +1470,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                     style={{
                       fontSize: 11,
                       padding: '3px 8px',
-                      background: activeLeftTab === 'elements' ? 'var(--brand-600, #7C3AED)' : 'transparent',
+                      background: activeLeftTab === 'elements' ? 'var(--color-brand-primary)' : 'transparent',
                     }}
                     onClick={() => setActiveLeftTab('elements')}
                     title="Insert Design Elements"
@@ -1689,7 +1689,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                                         style={{
                                           padding: '1px 4px',
                                           fontSize: 10,
-                                          color: 'var(--brand-300, #C4B5FD)',
+                                          color: 'var(--color-brand-primary)',
                                         }}
                                         onClick={(e) => {
                                           e.stopPropagation()
@@ -1741,7 +1741,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Type size={13} style={{ color: '#38BDF8' }} />
+                          <Type size={13} style={{ color: 'var(--color-info-base)' }} />
                           <span>Text</span>
                         </div>
                         {openElementCategories.text ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -1761,7 +1761,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                               })
                             }
                           >
-                            <Heading size={13} style={{ color: '#38BDF8' }} /> Heading 16pt
+                            <Heading size={13} style={{ color: 'var(--color-info-base)' }} /> Heading 16pt
                           </button>
                           <button
                             type="button"
@@ -1775,7 +1775,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                               })
                             }
                           >
-                            <Type size={13} style={{ color: '#38BDF8' }} /> Subheading 12pt
+                            <Type size={13} style={{ color: 'var(--color-info-base)' }} /> Subheading 12pt
                           </button>
                           <button
                             type="button"
@@ -1831,7 +1831,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <ImageIcon size={13} style={{ color: '#34D399' }} />
+                          <ImageIcon size={13} style={{ color: 'var(--color-success-base)' }} />
                           <span>Photos & Images</span>
                         </div>
                         {openElementCategories.media ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -1845,7 +1845,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                             style={{ justifyContent: 'flex-start', fontSize: 11, padding: '5px 8px', gap: 6 }}
                             onClick={() => addElement('photo')}
                           >
-                            <ImageIcon size={13} style={{ color: '#34D399' }} /> Student Photo
+                            <ImageIcon size={13} style={{ color: 'var(--color-success-base)' }} /> Student Photo
                           </button>
                           <button
                             type="button"
@@ -1853,7 +1853,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                             style={{ justifyContent: 'flex-start', fontSize: 11, padding: '5px 8px', gap: 6 }}
                             onClick={() => addElement('image')}
                           >
-                            <Award size={13} style={{ color: '#FBBF24' }} /> School Logo
+                            <Award size={13} style={{ color: 'var(--color-warning-base)' }} /> School Logo
                           </button>
                         </div>
                       )}
@@ -1881,7 +1881,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Square size={13} style={{ color: '#F472B6' }} />
+                          <Square size={13} style={{ color: 'var(--color-brand-primary)' }} />
                           <span>Shapes</span>
                         </div>
                         {openElementCategories.shapes ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -1895,7 +1895,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                             style={{ justifyContent: 'flex-start', fontSize: 11, padding: '5px 8px', gap: 6 }}
                             onClick={() => addElement('shape')}
                           >
-                            <Square size={13} style={{ color: '#F472B6' }} /> Rectangle Box
+                            <Square size={13} style={{ color: 'var(--color-brand-primary)' }} /> Rectangle Box
                           </button>
                           <button
                             type="button"
@@ -1910,7 +1910,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                               })
                             }
                           >
-                            <Minus size={13} style={{ color: '#94A3B8' }} /> Divider Line
+                            <Minus size={13} style={{ color: 'var(--text-muted)' }} /> Divider Line
                           </button>
                           <button
                             type="button"
@@ -1918,7 +1918,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                             style={{ justifyContent: 'flex-start', fontSize: 11, padding: '5px 8px', gap: 6 }}
                             onClick={() => addElement('badge')}
                           >
-                            <Award size={13} style={{ color: '#10B981' }} /> Status Badge
+                            <Award size={13} style={{ color: 'var(--color-success-base)' }} /> Status Badge
                           </button>
                         </div>
                       )}
@@ -1946,7 +1946,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <QrCode size={13} style={{ color: '#A78BFA' }} />
+                          <QrCode size={13} style={{ color: 'var(--color-brand-primary)' }} />
                           <span>QR & Barcode</span>
                         </div>
                         {openElementCategories.codes ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -1960,7 +1960,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                             style={{ justifyContent: 'flex-start', fontSize: 11, padding: '5px 8px', gap: 6 }}
                             onClick={() => addElement('qrcode')}
                           >
-                            <QrCode size={13} style={{ color: '#A78BFA' }} /> Verification QR
+                            <QrCode size={13} style={{ color: 'var(--color-brand-primary)' }} /> Verification QR
                           </button>
                           <button
                             type="button"
@@ -1968,7 +1968,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                             style={{ justifyContent: 'flex-start', fontSize: 11, padding: '5px 8px', gap: 6 }}
                             onClick={() => addElement('barcode')}
                           >
-                            <Barcode size={13} style={{ color: '#CBD5E1' }} /> Admission Barcode
+                            <Barcode size={13} style={{ color: 'var(--text-muted)' }} /> Admission Barcode
                           </button>
                         </div>
                       )}
@@ -1996,7 +1996,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <PenTool size={13} style={{ color: '#F59E0B' }} />
+                          <PenTool size={13} style={{ color: 'var(--color-warning-base)' }} />
                           <span>Signatures</span>
                         </div>
                         {openElementCategories.signatures ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -2010,7 +2010,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                             style={{ justifyContent: 'flex-start', fontSize: 11, padding: '5px 8px', gap: 6 }}
                             onClick={() => addElement('signature', { name: 'Principal Signature' })}
                           >
-                            <PenTool size={13} style={{ color: '#F59E0B' }} /> Principal Signature
+                            <PenTool size={13} style={{ color: 'var(--color-warning-base)' }} /> Principal Signature
                           </button>
                           <button
                             type="button"
@@ -2023,7 +2023,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                               })
                             }
                           >
-                            <PenTool size={13} style={{ color: '#94A3B8' }} /> Authorized Signatory
+                            <PenTool size={13} style={{ color: 'var(--text-muted)' }} /> Authorized Signatory
                           </button>
                         </div>
                       )}
@@ -2044,12 +2044,12 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
               top: 0,
               bottom: 0,
               width: 250,
-              background: 'var(--surface-solid, #1E293B)',
+              background: 'var(--surface-card)',
               borderRight: '1px solid var(--border, rgba(255,255,255,0.1))',
               zIndex: 25,
               display: 'flex',
               flexDirection: 'column',
-              boxShadow: '4px 0 20px rgba(0,0,0,0.3)',
+              boxShadow: 'var(--shadow-floating)',
             }}
           >
             <div
@@ -2062,7 +2062,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600 }}>
-                <Layers size={14} style={{ color: 'var(--brand-300, #C4B5FD)' }} />
+                <Layers size={14} style={{ color: 'var(--color-brand-primary)' }} />
                 <span>Layers ({definition.elements.length})</span>
               </div>
               <button
@@ -2089,14 +2089,14 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                       padding: '5px 8px',
                       borderRadius: 4,
                       background: isSelected ? 'rgba(124, 58, 237, 0.2)' : 'transparent',
-                      border: isSelected ? '1px solid #7C3AED' : '1px solid transparent',
+                      border: isSelected ? '1px solid var(--color-brand-primary)' : '1px solid transparent',
                       cursor: 'pointer',
                     }}
                   >
                     <span
                       style={{
                         fontSize: 11,
-                        color: isSelected ? '#FFFFFF' : 'var(--text-secondary)',
+                        color: isSelected ? 'var(--text-inverse)' : 'var(--text-secondary)',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -2140,7 +2140,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                         }}
                         title={el.locked ? 'Unlock' : 'Lock'}
                       >
-                        {el.locked ? <Lock size={11} style={{ color: '#F97316' }} /> : <Unlock size={11} />}
+                        {el.locked ? <Lock size={11} style={{ color: 'var(--color-warning-base)' }} /> : <Unlock size={11} />}
                       </button>
                     </div>
                   </div>
@@ -2158,7 +2158,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
           onDrop={handleCanvasDrop}
           style={{
             flex: 1,
-            background: 'var(--bg-canvas, #090D16)',
+            background: 'var(--surface-canvas)',
             overflow: 'auto',
             display: 'flex',
             flexDirection: 'column',
@@ -2179,7 +2179,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
               minWidth: canvasWidthPx * zoom,
               minHeight: canvasHeightPx * zoom,
               backgroundColor: definition.backgroundColor || '#FFFFFF',
-              boxShadow: '0 20px 45px -10px rgba(0,0,0,0.5), 0 0 1px rgba(0,0,0,0.3)',
+              boxShadow: 'var(--shadow-modal)',
               borderRadius: definition.pageSize?.includes('ID_CARD') ? 10 : 2,
               position: 'relative',
               overflow: 'hidden',
@@ -2194,7 +2194,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                   position: 'absolute',
                   inset: 0,
                   pointerEvents: 'none',
-                  backgroundImage: `radial-gradient(circle, #94A3B8 0.75px, transparent 0.75px)`,
+                  backgroundImage: `radial-gradient(circle, var(--border-default) 0.75px, transparent 0.75px)`,
                   backgroundSize: `${gridSizeMm * MM_TO_PX * zoom}px ${gridSizeMm * MM_TO_PX * zoom}px`,
                   opacity: 0.35,
                 }}
@@ -2254,7 +2254,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                     boxSizing: 'border-box',
                     // Only show border when selected or when element has a designated style border
                     border: isSelected
-                      ? '1.5px solid #7C3AED'
+                      ? '1.5px solid var(--color-brand-primary)'
                       : s.borderWidth
                       ? `${s.borderWidth}px solid ${s.borderColor || '#CBD5E1'}`
                       : 'none',
@@ -2414,7 +2414,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                         top: -30,
                         left: 0,
                         height: 24,
-                        background: '#1E293B',
+                        background: 'var(--surface-card)',
                         border: '1px solid rgba(255,255,255,0.15)',
                         borderRadius: 4,
                         display: 'flex',
@@ -2422,7 +2422,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                         padding: '0 4px',
                         gap: 2,
                         zIndex: 35,
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                        boxShadow: 'var(--shadow-floating)',
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
                     >
@@ -2432,7 +2432,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                         style={{
                           background: 'transparent',
                           border: 'none',
-                          color: '#CBD5E1',
+                          color: 'var(--text-muted)',
                           padding: '2px 4px',
                           cursor: 'pointer',
                         }}
@@ -2446,7 +2446,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                         style={{
                           background: 'transparent',
                           border: 'none',
-                          color: '#CBD5E1',
+                          color: 'var(--text-muted)',
                           padding: '2px 4px',
                           cursor: 'pointer',
                         }}
@@ -2460,7 +2460,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                         style={{
                           background: 'transparent',
                           border: 'none',
-                          color: '#CBD5E1',
+                          color: 'var(--text-muted)',
                           padding: '2px 4px',
                           cursor: 'pointer',
                         }}
@@ -2474,7 +2474,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                         style={{
                           background: 'transparent',
                           border: 'none',
-                          color: '#F87171',
+                          color: 'var(--color-danger-base)',
                           padding: '2px 4px',
                           cursor: 'pointer',
                         }}
@@ -2493,8 +2493,8 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                           position: 'absolute',
                           width: 7,
                           height: 7,
-                          background: '#7C3AED',
-                          border: '1px solid #FFFFFF',
+                          background: 'var(--color-brand-primary)',
+                          border: '1px solid var(--surface-card)',
                           borderRadius: 2,
                           zIndex: 20,
                         }
@@ -2531,7 +2531,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
               borderRadius: 20,
               padding: '3px 10px',
               fontSize: 10,
-              color: 'var(--text-muted, #94A3B8)',
+              color: 'var(--text-muted)',
               display: 'flex',
               alignItems: 'center',
               gap: 6,
@@ -2551,7 +2551,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
             style={{
               width: rightPanelOpen ? 280 : 40,
               transition: 'width 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-              background: 'var(--surface-solid, #1E293B)',
+              background: 'var(--surface-card)',
               borderLeft: '1px solid var(--border, rgba(255,255,255,0.08))',
               display: 'flex',
               flexDirection: 'column',
@@ -2602,8 +2602,8 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                             fontWeight: 700,
                             padding: '1px 5px',
                             borderRadius: 3,
-                            background: '#7C3AED',
-                            color: '#FFFFFF',
+                            background: 'var(--color-brand-primary)',
+                            color: 'var(--text-inverse)',
                             textTransform: 'uppercase',
                           }}
                         >
@@ -2624,7 +2624,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                             outline: 'none',
                             maxWidth: 140,
                           }}
-                          onFocus={(e) => (e.target.style.borderColor = '#7C3AED')}
+                          onFocus={(e) => (e.target.style.borderColor = 'var(--color-brand-primary)')}
                           onBlur={(e) => (e.target.style.borderColor = 'transparent')}
                         />
                       </div>
@@ -2633,7 +2633,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                         type="button"
                         className="btn btn-xs btn-ghost"
                         onClick={() => updateElement(selectedElement.id, { locked: !selectedElement.locked })}
-                        style={{ color: selectedElement.locked ? '#F97316' : 'var(--text-muted)', padding: 3 }}
+                        style={{ color: selectedElement.locked ? 'var(--color-warning-base)' : 'var(--text-muted)', padding: 3 }}
                         title={selectedElement.locked ? 'Unlock' : 'Lock'}
                       >
                         {selectedElement.locked ? <Lock size={12} /> : <Unlock size={12} />}
@@ -2750,14 +2750,14 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
                                   padding: '4px 6px',
                                 }}
                               >
-                                <code style={{ fontSize: 10, color: 'var(--brand-300, #C4B5FD)' }}>
+                                <code style={{ fontSize: 10, color: 'var(--color-brand-primary)' }}>
                                   {`{{${selectedElement.fieldBinding}}}`}
                                 </code>
                                 <button
                                   type="button"
                                   className="btn btn-xs btn-ghost"
                                   onClick={() => setActiveLeftTab('fields')}
-                                  style={{ fontSize: 9, color: 'var(--brand-300, #DDD6FE)', padding: '1px 4px' }}
+                                  style={{ fontSize: 9, color: 'var(--color-brand-primary)', padding: '1px 4px' }}
                                 >
                                   Change
                                 </button>
@@ -3071,7 +3071,7 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
               borderRadius: 6,
               padding: 10,
               fontSize: 12,
-              color: 'var(--brand-300, #C4B5FD)',
+              color: 'var(--color-brand-primary)',
             }}
           >
             <strong>Version Target:</strong> v{(definition.version || 1) + 1}
@@ -3094,9 +3094,9 @@ export default function TemplateEditorClient({ templateId }: TemplateEditorProps
               onClick={handlePublish}
               disabled={publishing}
               style={{
-                background: 'var(--brand-600, #7C3AED)',
-                borderColor: 'var(--brand-600, #7C3AED)',
-                color: '#FFFFFF',
+                background: 'var(--color-brand-primary)',
+                borderColor: 'var(--color-brand-primary)',
+                color: 'var(--text-inverse)',
               }}
             >
               {publishing ? 'Publishing...' : 'Confirm & Publish'}

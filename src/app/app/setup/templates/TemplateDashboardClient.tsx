@@ -316,8 +316,8 @@ export default function TemplateDashboardClient() {
               style={{
                 fontSize: 11,
                 fontWeight: 700,
-                background: 'linear-gradient(135deg, #7C3AED, #6366F1)',
-                color: '#FFFFFF',
+                background: 'linear-gradient(135deg, var(--color-brand-primary), #6366F1)',
+                color: 'var(--text-inverse)',
                 padding: '2px 8px',
                 borderRadius: 12,
                 letterSpacing: 0.5,
@@ -352,7 +352,7 @@ export default function TemplateDashboardClient() {
             <button
               type="button"
               className="btn btn-primary"
-              style={{ background: 'var(--brand-600, #7C3AED)', borderColor: 'var(--brand-600, #7C3AED)' }}
+              style={{ background: 'var(--color-brand-primary)', borderColor: 'var(--color-brand-primary)' }}
               onClick={() => {
                 setNewTemplateName('')
                 setCreateMode('PRESET')
@@ -382,7 +382,7 @@ export default function TemplateDashboardClient() {
             border: '1px solid var(--border-color)',
             borderRadius: 8,
             padding: '16px 20px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            boxShadow: 'var(--shadow-card)',
           }}
         >
           <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase' }}>
@@ -402,13 +402,13 @@ export default function TemplateDashboardClient() {
             border: '1px solid var(--border-color)',
             borderRadius: 8,
             padding: '16px 20px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            boxShadow: 'var(--shadow-card)',
           }}
         >
           <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase' }}>
             Published & Active
           </div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: '#059669', marginTop: 4 }}>
+          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-success-text)', marginTop: 4 }}>
             {loading ? '…' : stats.published}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -422,13 +422,13 @@ export default function TemplateDashboardClient() {
             border: '1px solid var(--border-color)',
             borderRadius: 8,
             padding: '16px 20px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            boxShadow: 'var(--shadow-card)',
           }}
         >
           <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase' }}>
             In Draft
           </div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: '#D97706', marginTop: 4 }}>
+          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-warning-text)', marginTop: 4 }}>
             {loading ? '…' : stats.drafts}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -442,14 +442,14 @@ export default function TemplateDashboardClient() {
             border: '1px solid var(--border-color)',
             borderRadius: 8,
             padding: '16px 20px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            boxShadow: 'var(--shadow-card)',
           }}
         >
           <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase' }}>
             Setup Step 15
           </div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#7C3AED', marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <CheckCircle2 size={24} color="#7C3AED" /> Satisfied
+          <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--color-brand-primary)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <CheckCircle2 size={24} color="var(--color-brand-primary)" /> Satisfied
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
             Document registry active
@@ -599,13 +599,13 @@ export default function TemplateDashboardClient() {
                 key={t.id}
                 style={{
                   background: 'var(--surface-panel)',
-                  border: t.isDefault ? '2px solid #7C3AED' : '1px solid var(--border-color)',
+                  border: t.isDefault ? '2px solid var(--color-brand-primary)' : '1px solid var(--border-default)',
                   borderRadius: 10,
                   padding: 20,
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between',
-                  boxShadow: t.isDefault ? '0 4px 12px rgba(124, 58, 237, 0.08)' : '0 1px 3px rgba(0,0,0,0.03)',
+                  boxShadow: t.isDefault ? 'var(--shadow-elevated)' : 'var(--shadow-card)',
                   transition: 'all 0.2s ease',
                   position: 'relative',
                 }}
@@ -616,8 +616,8 @@ export default function TemplateDashboardClient() {
                       position: 'absolute',
                       top: -10,
                       right: 16,
-                      background: '#7C3AED',
-                      color: '#FFFFFF',
+                      background: 'var(--color-brand-primary)',
+                      color: 'var(--text-inverse)',
                       fontSize: 10,
                       fontWeight: 700,
                       textTransform: 'uppercase',
@@ -626,10 +626,10 @@ export default function TemplateDashboardClient() {
                       display: 'flex',
                       alignItems: 'center',
                       gap: 4,
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+                      boxShadow: 'var(--shadow-soft)',
                     }}
                   >
-                    <Star size={10} fill="#FFF" /> Default Active
+                    <Star size={10} fill="var(--text-inverse)" /> Default Active
                   </div>
                 )}
 
@@ -717,9 +717,9 @@ export default function TemplateDashboardClient() {
                       type="button"
                       className="btn btn-sm"
                       style={{
-                        background: '#7C3AED18',
-                        color: '#6D28D9',
-                        border: '1px solid #7C3AED40',
+                        background: 'var(--surface-subtle)',
+                        color: 'var(--color-brand-primary)',
+                        border: '1px solid var(--border-default)',
                         fontWeight: 600,
                       }}
                       onClick={() => {
@@ -752,7 +752,7 @@ export default function TemplateDashboardClient() {
                       <button
                         type="button"
                         className="btn btn-sm btn-ghost"
-                        style={{ color: '#DC2626' }}
+                        style={{ color: 'var(--color-danger-base)' }}
                         onClick={() => {
                           setTemplateToDelete(t)
                           setDeleteModalOpen(true)
@@ -893,8 +893,8 @@ export default function TemplateDashboardClient() {
                             }
                           }}
                           style={{
-                            border: isSelected ? '2px solid #7C3AED' : '1px solid var(--border-color)',
-                            background: isSelected ? '#7C3AED0A' : 'var(--surface-panel)',
+                            border: isSelected ? '2px solid var(--color-brand-primary)' : '1px solid var(--border-color)',
+                            background: isSelected ? 'var(--surface-subtle)' : 'var(--surface-panel)',
                             borderRadius: 8,
                             padding: 12,
                             cursor: 'pointer',
@@ -912,8 +912,8 @@ export default function TemplateDashboardClient() {
                             <span
                               style={{
                                 fontSize: 10,
-                                background: isSelected ? '#7C3AED20' : 'var(--surface-muted)',
-                                color: isSelected ? '#7C3AED' : 'var(--text-muted)',
+                                background: isSelected ? 'var(--surface-subtle)' : 'var(--surface-muted)',
+                                color: isSelected ? 'var(--color-brand-primary)' : 'var(--text-muted)',
                                 padding: '1px 6px',
                                 borderRadius: 4,
                                 fontWeight: 500,
@@ -1029,7 +1029,7 @@ export default function TemplateDashboardClient() {
             ) : (
               <div
                 style={{
-                  background: '#F1F5F9',
+                  background: 'var(--surface-canvas)',
                   padding: 20,
                   borderRadius: 8,
                   maxHeight: 520,
@@ -1041,7 +1041,7 @@ export default function TemplateDashboardClient() {
                 <div
                   style={{
                     background: '#FFFFFF',
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+                    boxShadow: 'var(--shadow-elevated)',
                   }}
                   dangerouslySetInnerHTML={{ __html: previewHtml }}
                 />

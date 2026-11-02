@@ -477,8 +477,8 @@ export function FastStockReceivingModal({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 9999,
-        background: 'rgba(15, 23, 42, 0.75)',
+        zIndex: 'var(--z-overlay, 500)',
+        background: 'var(--surface-overlay)',
         backdropFilter: 'blur(8px)',
         display: 'flex',
         alignItems: 'center',
@@ -494,9 +494,9 @@ export function FastStockReceivingModal({
           maxHeight: '92vh',
           display: 'flex',
           flexDirection: 'column',
-          background: 'var(--bg-card, #ffffff)',
+          background: 'var(--surface-card)',
           borderRadius: 20,
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          boxShadow: 'var(--shadow-3)',
           overflow: 'hidden',
           padding: 0,
           position: 'relative',
@@ -506,8 +506,8 @@ export function FastStockReceivingModal({
         <div
           style={{
             padding: '16px 20px',
-            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(59, 130, 246, 0.08) 100%)',
-            borderBottom: '1px solid var(--border-color, #e2e8f0)',
+            background: 'linear-gradient(135deg, color-mix(in srgb, var(--color-success-base) 8%, transparent) 0%, color-mix(in srgb, var(--color-info-base) 8%, transparent) 100%)',
+            borderBottom: '1px solid var(--border-default)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -519,12 +519,12 @@ export function FastStockReceivingModal({
                 width: 36,
                 height: 36,
                 borderRadius: 10,
-                background: '#10B981',
-                color: '#ffffff',
+                background: 'var(--color-success-base)',
+                color: 'var(--text-inverse)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 4px 10px rgba(16, 185, 129, 0.3)',
+                boxShadow: '0 4px 10px color-mix(in srgb, var(--color-success-base) 30%, transparent)',
               }}
             >
               <Zap size={20} />
@@ -565,12 +565,13 @@ export function FastStockReceivingModal({
                   width: '100%',
                   height: 240,
                   borderRadius: 16,
+                  /* Camera viewfinder dark background */
                   background: '#0F172A',
                   overflow: 'hidden',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  border: '2px solid rgba(16, 185, 129, 0.3)',
+                  border: '2px solid color-mix(in srgb, var(--color-success-base) 30%, transparent)',
                 }}
               >
                 {cameraActive ? (
@@ -591,7 +592,7 @@ export function FastStockReceivingModal({
                       style={{
                         position: 'absolute',
                         inset: '20px 40px',
-                        border: '2px dashed #10B981',
+                        border: '2px dashed var(--color-success-base)',
                         borderRadius: 12,
                         boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.45)',
                         pointerEvents: 'none',
@@ -604,8 +605,8 @@ export function FastStockReceivingModal({
                         style={{
                           width: '100%',
                           height: 2,
-                          background: 'linear-gradient(90deg, transparent, #10B981, transparent)',
-                          boxShadow: '0 0 8px #10B981',
+                          background: 'linear-gradient(90deg, transparent, var(--color-success-base), transparent)',
+                          boxShadow: '0 0 8px var(--color-success-base)',
                           animation: 'pulse 1.5s infinite',
                         }}
                       />
@@ -627,10 +628,10 @@ export function FastStockReceivingModal({
                           className="btn btn-sm"
                           onClick={toggleTorch}
                           style={{
-                            background: torchOn ? '#F59E0B' : 'rgba(15, 23, 42, 0.75)',
-                            color: '#ffffff',
+                            background: torchOn ? 'var(--color-warning-base)' : 'var(--surface-overlay)',
+                            color: 'var(--text-inverse)',
                             backdropFilter: 'blur(4px)',
-                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            border: '1px solid color-mix(in srgb, var(--text-inverse) 20%, transparent)',
                             borderRadius: 20,
                             fontSize: '0.75rem',
                           }}
@@ -643,10 +644,10 @@ export function FastStockReceivingModal({
                         className="btn btn-sm"
                         onClick={toggleCameraFacing}
                         style={{
-                          background: 'rgba(15, 23, 42, 0.75)',
-                          color: '#ffffff',
+                          background: 'var(--surface-overlay)',
+                          color: 'var(--text-inverse)',
                           backdropFilter: 'blur(4px)',
-                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                          border: '1px solid color-mix(in srgb, var(--text-inverse) 20%, transparent)',
                           borderRadius: 20,
                           fontSize: '0.75rem',
                         }}
@@ -658,8 +659,8 @@ export function FastStockReceivingModal({
                         className="btn btn-sm btn-ghost"
                         onClick={stopCamera}
                         style={{
-                          background: 'rgba(239, 68, 68, 0.85)',
-                          color: '#ffffff',
+                          background: 'var(--color-danger-base)',
+                          color: 'var(--text-inverse)',
                           borderRadius: 20,
                           fontSize: '0.75rem',
                         }}
@@ -685,8 +686,8 @@ export function FastStockReceivingModal({
                         width: 54,
                         height: 54,
                         borderRadius: '50%',
-                        background: 'rgba(16, 185, 129, 0.15)',
-                        color: '#10B981',
+                        background: 'var(--color-success-surface)',
+                        color: 'var(--color-success-base)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -695,10 +696,10 @@ export function FastStockReceivingModal({
                       <Camera size={28} />
                     </div>
                     <div>
-                      <div style={{ color: '#F8FAFC', fontWeight: 600, fontSize: '0.95rem' }}>
+                      <div style={{ color: 'var(--text-inverse)', fontWeight: 600, fontSize: '0.95rem' }}>
                         Scan Product Barcode
                       </div>
-                      <div style={{ color: '#94A3B8', fontSize: '0.75rem', marginTop: 2 }}>
+                      <div style={{ color: 'color-mix(in srgb, var(--text-inverse) 70%, transparent)', fontSize: '0.75rem', marginTop: 2 }}>
                         Point your camera at the box barcode or SKU label
                       </div>
                     </div>
@@ -708,13 +709,13 @@ export function FastStockReceivingModal({
                       className="btn btn-sm"
                       onClick={startCamera}
                       style={{
-                        background: '#10B981',
-                        color: '#ffffff',
+                        background: 'var(--color-success-base)',
+                        color: 'var(--text-inverse)',
                         fontWeight: 600,
                         borderRadius: 10,
                         padding: '8px 16px',
                         marginTop: 4,
-                        boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)',
+                        boxShadow: '0 4px 12px color-mix(in srgb, var(--color-success-base) 35%, transparent)',
                       }}
                     >
                       <Camera size={15} /> Start Camera Scanner
@@ -729,9 +730,9 @@ export function FastStockReceivingModal({
                   style={{
                     padding: '10px 14px',
                     borderRadius: 10,
-                    background: 'rgba(239, 68, 68, 0.08)',
-                    border: '1px solid rgba(239, 68, 68, 0.25)',
-                    color: '#DC2626',
+                    background: 'var(--color-danger-surface)',
+                    border: '1px solid var(--color-danger-border)',
+                    color: 'var(--color-danger-text)',
                     fontSize: '0.8rem',
                     display: 'flex',
                     alignItems: 'center',
@@ -809,7 +810,7 @@ export function FastStockReceivingModal({
                         style={{
                           padding: '10px 12px',
                           borderRadius: 10,
-                          border: '1px solid var(--border-color, #e2e8f0)',
+                          border: '1px solid var(--border-default)',
                           background: 'var(--bg-card)',
                           cursor: 'pointer',
                           display: 'flex',
@@ -818,8 +819,8 @@ export function FastStockReceivingModal({
                           gap: 10,
                           transition: 'border-color 0.15s ease',
                         }}
-                        onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#10B981')}
-                        onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-color, #e2e8f0)')}
+                        onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--color-success-base)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-default)')}
                       >
                         <div>
                           <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary)' }}>
@@ -836,8 +837,8 @@ export function FastStockReceivingModal({
                               fontSize: '0.72rem',
                               padding: '2px 8px',
                               borderRadius: 12,
-                              background: 'rgba(16, 185, 129, 0.1)',
-                              color: '#059669',
+                              background: 'var(--color-success-surface)',
+                              color: 'var(--color-success-text)',
                               fontWeight: 600,
                             }}
                           >
@@ -862,8 +863,8 @@ export function FastStockReceivingModal({
                 style={{
                   padding: '12px 14px',
                   borderRadius: 14,
-                  background: 'rgba(16, 185, 129, 0.06)',
-                  border: '1px solid rgba(16, 185, 129, 0.25)',
+                  background: 'var(--color-success-surface)',
+                  border: '1px solid var(--color-success-border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -876,8 +877,8 @@ export function FastStockReceivingModal({
                       width: 40,
                       height: 40,
                       borderRadius: 10,
-                      background: '#10B981',
-                      color: '#ffffff',
+                      background: 'var(--color-success-base)',
+                      color: 'var(--text-inverse)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -914,7 +915,7 @@ export function FastStockReceivingModal({
                   justifyContent: 'space-between',
                   padding: '10px 14px',
                   borderRadius: 10,
-                  background: 'var(--bg-muted, #f8fafc)',
+                  background: 'var(--surface-subtle)',
                   fontSize: '0.82rem',
                 }}
               >
@@ -955,7 +956,7 @@ export function FastStockReceivingModal({
                         fontWeight: 700,
                         textAlign: 'center',
                         borderRadius: 12,
-                        border: '2px solid #10B981',
+                        border: '2px solid var(--color-success-base)',
                         background: 'var(--bg-card)',
                         color: 'var(--text-primary)',
                       }}
@@ -996,9 +997,9 @@ export function FastStockReceivingModal({
                         borderRadius: 14,
                         fontSize: '0.75rem',
                         padding: '4px 10px',
-                        background: quantity === num ? 'rgba(16, 185, 129, 0.15)' : undefined,
-                        borderColor: quantity === num ? '#10B981' : undefined,
-                        color: quantity === num ? '#059669' : undefined,
+                        background: quantity === num ? 'var(--color-success-surface)' : undefined,
+                        borderColor: quantity === num ? 'var(--color-success-base)' : undefined,
+                        color: quantity === num ? 'var(--color-success-text)' : undefined,
                         fontWeight: quantity === num ? 700 : 500,
                       }}
                     >
@@ -1039,18 +1040,18 @@ export function FastStockReceivingModal({
                   style={{
                     padding: '12px',
                     borderRadius: 12,
-                    background: 'rgba(59, 130, 246, 0.06)',
-                    border: '1px solid rgba(59, 130, 246, 0.25)',
+                    background: 'var(--color-info-surface)',
+                    border: '1px solid var(--color-info-border)',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 8,
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', fontWeight: 600, color: '#1D4ED8' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-info-base)' }}>
                       <FileText size={15} /> Open Purchase Order Detected
                     </div>
-                    <span style={{ fontSize: '0.72rem', color: '#2563EB', fontWeight: 600 }}>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--color-info-base)', fontWeight: 600 }}>
                       Official GRN
                     </span>
                   </div>
@@ -1069,8 +1070,8 @@ export function FastStockReceivingModal({
                           style={{
                             padding: '8px 10px',
                             borderRadius: 8,
-                            border: `1.5px solid ${isSelected ? '#2563EB' : 'var(--border-color, #e2e8f0)'}`,
-                            background: isSelected ? 'rgba(37, 99, 235, 0.08)' : 'var(--bg-card)',
+                            border: `1.5px solid ${isSelected ? 'var(--color-info-base)' : 'var(--border-default)'}`,
+                            background: isSelected ? 'var(--color-info-surface)' : 'var(--surface-card)',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
@@ -1082,7 +1083,7 @@ export function FastStockReceivingModal({
                             <span style={{ fontWeight: 700, fontFamily: 'monospace' }}>{po.poNumber}</span>
                             <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>{po.vendorName}</span>
                           </div>
-                          <div style={{ fontWeight: 600, color: '#2563EB' }}>
+                          <div style={{ fontWeight: 600, color: 'var(--color-info-base)' }}>
                             {po.pendingQuantity} {matchedItem.unit.symbol} pending
                           </div>
                         </div>
@@ -1099,7 +1100,7 @@ export function FastStockReceivingModal({
               ) : null}
 
               {/* Optional Delivery Evidence & Details Toggle */}
-              <div style={{ borderTop: '1px solid var(--border-color, #e2e8f0)', paddingTop: 10 }}>
+              <div style={{ borderTop: '1px solid var(--border-default)', paddingTop: 10 }}>
                 <button
                   type="button"
                   className="btn btn-sm btn-ghost"
@@ -1127,7 +1128,7 @@ export function FastStockReceivingModal({
                       marginTop: 10,
                       padding: 12,
                       borderRadius: 12,
-                      background: 'var(--bg-muted, #f8fafc)',
+                      background: 'var(--surface-subtle)',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 12,
@@ -1153,8 +1154,8 @@ export function FastStockReceivingModal({
                               position: 'absolute',
                               top: 8,
                               right: 8,
-                              background: 'rgba(239, 68, 68, 0.9)',
-                              color: '#ffffff',
+                              background: 'var(--color-danger-base)',
+                              color: 'var(--text-inverse)',
                               border: 'none',
                               borderRadius: '50%',
                               width: 28,
@@ -1189,7 +1190,7 @@ export function FastStockReceivingModal({
                               gap: 8,
                               padding: '12px',
                               borderRadius: 10,
-                              border: '1.5px dashed var(--border-color, #cbd5e1)',
+                              border: '1.5px dashed var(--border-default)',
                               background: 'var(--bg-card)',
                               color: 'var(--text-muted)',
                               cursor: 'pointer',
@@ -1263,10 +1264,10 @@ export function FastStockReceivingModal({
                   fontSize: '1rem',
                   fontWeight: 700,
                   borderRadius: 14,
-                  background: '#10B981',
-                  borderColor: '#10B981',
-                  color: '#ffffff',
-                  boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
+                  background: 'var(--color-success-base)',
+                  borderColor: 'var(--color-success-base)',
+                  color: 'var(--text-inverse)',
+                  boxShadow: '0 4px 14px color-mix(in srgb, var(--color-success-base) 40%, transparent)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1300,12 +1301,12 @@ export function FastStockReceivingModal({
                   width: 64,
                   height: 64,
                   borderRadius: '50%',
-                  background: 'rgba(16, 185, 129, 0.15)',
-                  color: '#10B981',
+                  background: 'var(--color-success-surface)',
+                  color: 'var(--color-success-base)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  boxShadow: '0 8px 20px rgba(16, 185, 129, 0.25)',
+                  boxShadow: '0 8px 20px color-mix(in srgb, var(--color-success-base) 25%, transparent)',
                 }}
               >
                 <CheckCircle2 size={36} />
@@ -1326,8 +1327,8 @@ export function FastStockReceivingModal({
                   width: '100%',
                   padding: '14px 16px',
                   borderRadius: 14,
-                  background: 'var(--bg-muted, #f8fafc)',
-                  border: '1px solid var(--border-color, #e2e8f0)',
+                  background: 'var(--surface-subtle)',
+                  border: '1px solid var(--border-default)',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 8,
@@ -1344,9 +1345,9 @@ export function FastStockReceivingModal({
                     {lastReceipt.grnNumber || lastReceipt.referenceNumber}
                   </span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderTop: '1px solid var(--border-default)', paddingTop: 8 }}>
                   <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>New Stock Balance:</span>
-                  <span style={{ fontWeight: 700, color: '#10B981', fontSize: '1rem' }}>
+                  <span style={{ fontWeight: 700, color: 'var(--color-success-base)', fontSize: '1rem' }}>
                     {lastReceipt.newAvailableQuantity} {lastReceipt.unitSymbol}{' '}
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 400 }}>
                       (was {lastReceipt.previousAvailableQuantity})
@@ -1374,8 +1375,8 @@ export function FastStockReceivingModal({
                     flex: 1.4,
                     height: 42,
                     borderRadius: 12,
-                    background: '#10B981',
-                    borderColor: '#10B981',
+                    background: 'var(--color-success-base)',
+                    borderColor: 'var(--color-success-base)',
                     fontWeight: 600,
                   }}
                 >
@@ -1389,7 +1390,7 @@ export function FastStockReceivingModal({
           {sessionItems.length > 0 && step !== 'SUCCESS' && (
             <div
               style={{
-                borderTop: '1px solid var(--border-color, #e2e8f0)',
+                borderTop: '1px solid var(--border-default)',
                 paddingTop: 12,
                 display: 'flex',
                 flexDirection: 'column',
@@ -1410,7 +1411,7 @@ export function FastStockReceivingModal({
                       justifyContent: 'space-between',
                       padding: '4px 8px',
                       borderRadius: 6,
-                      background: 'var(--bg-muted, #f8fafc)',
+                      background: 'var(--surface-subtle)',
                     }}
                   >
                     <span>

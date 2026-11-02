@@ -81,32 +81,32 @@ export function PdfViewerModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-xs animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-[var(--overlay-scrim,rgba(15,23,42,0.75))] backdrop-blur-xs animate-in fade-in duration-150"
       role="dialog"
       aria-modal="true"
       aria-label={title}
     >
       <div
-        className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${
+        className={`bg-[var(--color-surface)] border border-[var(--color-border-default)] rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${
           isFullscreen
             ? 'fixed inset-2 sm:inset-4 rounded-xl'
             : 'w-full max-w-5xl h-[90vh]'
         }`}
       >
         {/* Top Header & Toolbar */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50 gap-3">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-default)] bg-[var(--color-surface-subtle)]/80 gap-3">
           {/* Document metadata */}
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-[var(--color-brand-surface)] text-[var(--color-brand-primary)] flex items-center justify-center shrink-0">
               <FileText size={18} />
             </div>
             <div className="min-w-0">
-              <h3 className="font-semibold text-slate-900 dark:text-white text-sm truncate" title={title}>
+              <h3 className="font-semibold text-[var(--color-text-primary)] text-sm truncate" title={title}>
                 {title}
               </h3>
-              <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+              <div className="flex items-center gap-2 text-[11px] text-[var(--color-text-muted)]">
                 {documentType && (
-                  <span className="font-medium text-purple-600 dark:text-purple-400">
+                  <span className="font-medium text-[var(--color-brand-primary)]">
                     {documentType.replace(/_/g, ' ')}
                   </span>
                 )}
@@ -123,12 +123,12 @@ export function PdfViewerModal({
           {/* Controls */}
           <div className="flex items-center gap-1.5 shrink-0">
             {/* Zoom Controls */}
-            <div className="hidden sm:flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 mr-1 text-xs">
+            <div className="hidden sm:flex items-center gap-1 bg-[var(--color-surface)] border border-[var(--color-border-default)] rounded-lg p-0.5 mr-1 text-xs">
               <button
                 type="button"
                 onClick={handleZoomOut}
                 disabled={zoom <= 50}
-                className="p-1 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40"
+                className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)] disabled:opacity-40"
                 title="Zoom Out"
               >
                 <ZoomOut size={14} />
@@ -136,7 +136,7 @@ export function PdfViewerModal({
               <button
                 type="button"
                 onClick={handleResetZoom}
-                className="px-1.5 py-0.5 text-[11px] font-mono font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
+                className="px-1.5 py-0.5 text-[11px] font-mono font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)] rounded"
                 title="Reset Zoom"
               >
                 {zoom}%
@@ -145,7 +145,7 @@ export function PdfViewerModal({
                 type="button"
                 onClick={handleZoomIn}
                 disabled={zoom >= 200}
-                className="p-1 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40"
+                className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)] disabled:opacity-40"
                 title="Zoom In"
               >
                 <ZoomIn size={14} />
@@ -157,7 +157,7 @@ export function PdfViewerModal({
               href={viewUrl}
               target="_blank"
               rel="noreferrer"
-              className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="p-2 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)] transition-colors"
               title="Open PDF in new tab"
             >
               <ExternalLink size={15} />
@@ -167,7 +167,7 @@ export function PdfViewerModal({
             <a
               href={downloadUrl}
               download={fileName || `${title}.pdf`}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white transition-colors shadow-xs"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-brand-primary)] hover:bg-[var(--color-brand-hover)] text-[var(--color-primary-button-text,#ffffff)] transition-colors shadow-xs"
               title="Download official PDF"
             >
               <Download size={13} />
@@ -178,7 +178,7 @@ export function PdfViewerModal({
             <button
               type="button"
               onClick={toggleFullscreen}
-              className="hidden sm:inline-flex p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="hidden sm:inline-flex p-2 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)] transition-colors"
               title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
             >
               {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
@@ -188,7 +188,7 @@ export function PdfViewerModal({
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ml-1"
+              className="p-2 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)] transition-colors ml-1"
               aria-label="Close viewer"
             >
               <X size={17} />
@@ -197,11 +197,11 @@ export function PdfViewerModal({
         </div>
 
         {/* PDF Rendering Body */}
-        <div className="relative flex-1 bg-slate-100 dark:bg-slate-950 overflow-hidden flex items-center justify-center">
+        <div className="relative flex-1 bg-[var(--color-surface-subtle)] overflow-hidden flex items-center justify-center">
           {isLoading && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 dark:bg-slate-900/80 z-10 backdrop-blur-2xs gap-2">
-              <RotateCw className="animate-spin text-purple-600" size={24} />
-              <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--color-surface)]/80 z-10 backdrop-blur-2xs gap-2">
+              <RotateCw className="animate-spin text-[var(--color-brand-primary)]" size={24} />
+              <p className="text-xs font-medium text-[var(--color-text-muted)]">
                 Loading official PDF preview...
               </p>
             </div>

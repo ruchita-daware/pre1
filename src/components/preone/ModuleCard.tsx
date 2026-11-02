@@ -94,6 +94,30 @@ export function ModuleCard({
           <circle cx="26" cy="46" r="2.5" fill="currentColor" opacity="0.25" />
         </svg>
       </div>
+
+      {/* Module-Specific Bottom Accent Line (PRE1-HOME-FINAL-AUDIT-003 - Refined Thin Line) */}
+      <span
+        className="module-card-accent-line"
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: isHovered || isFocused ? '100%' : '40%',
+          height: '2px',
+          borderRadius: isHovered || isFocused ? '0 0 20px 20px' : '999px',
+          backgroundColor: 'var(--module-current-accent, var(--module-accent, ' + pastel.accent + '))',
+          opacity: isHovered || isFocused ? 1 : 0.85,
+          pointerEvents: 'none',
+          userSelect: 'none',
+          zIndex: 2,
+          boxShadow: isHovered || isFocused
+            ? `0 1px 3px color-mix(in srgb, ${pastel.accent} 35%, transparent)`
+            : 'none',
+          transition: 'width 250ms cubic-bezier(0.2, 0.8, 0.2, 1), border-radius 250ms ease, opacity 250ms ease',
+        }}
+        aria-hidden="true"
+      />
     </Link>
   )
 }

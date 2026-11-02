@@ -755,7 +755,7 @@ export default function BrandingPage() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                  boxShadow: 'var(--shadow-card)',
                 }}
               >
                 <img
@@ -850,8 +850,8 @@ export default function BrandingPage() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          zIndex: 100,
-          boxShadow: '0 -4px 16px rgba(0,0,0,0.06)',
+          zIndex: 'var(--z-sticky, 100)',
+          boxShadow: 'var(--shadow-floating)',
         }}
       >
         <button

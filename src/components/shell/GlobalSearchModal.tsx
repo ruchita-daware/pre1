@@ -595,10 +595,10 @@ export function GlobalSearchModal({ isOpen, onClose, initialQuery = '', user }: 
 
               {/* 2. ADD STAFF ACTION CARD */}
               {parsedAction.intent === 'ADD_STAFF' && (
-                <div className="p-4 m-3 rounded-2xl border border-sky-300 dark:border-sky-800 bg-sky-50/50 dark:bg-sky-950/20 space-y-3">
+                <div className="p-4 m-3 rounded-2xl border border-[var(--status-info-border)] bg-[var(--status-info-surface)] space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2.5">
-                      <span className="w-9 h-9 rounded-xl bg-sky-600 text-white flex items-center justify-center shrink-0">
+                      <span className="w-9 h-9 rounded-xl bg-[var(--status-info-foreground)] text-[var(--color-primary-button-text,#ffffff)] flex items-center justify-center shrink-0">
                         <UserCheck size={18} />
                       </span>
                       <div>
@@ -611,7 +611,7 @@ export function GlobalSearchModal({ isOpen, onClose, initialQuery = '', user }: 
                     <span className="badge b-info text-xs">Action Command</span>
                   </div>
 
-                  <div className="flex justify-end gap-2 pt-1 border-t border-sky-200 dark:border-sky-800">
+                  <div className="flex justify-end gap-2 pt-1 border-t border-[var(--status-info-border)]">
                     <button
                       type="button"
                       className="btn btn-sm btn-outline text-xs"
@@ -636,10 +636,10 @@ export function GlobalSearchModal({ isOpen, onClose, initialQuery = '', user }: 
 
               {/* 3. FAST ROLL CALL ACTION CARD */}
               {parsedAction.intent === 'FAST_ROLL_CALL' && (
-                <div className="p-4 m-3 rounded-2xl border border-amber-300 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 space-y-3">
+                <div className="p-4 m-3 rounded-2xl border border-[var(--status-warning-border)] bg-[var(--status-warning-surface)] space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2.5">
-                      <span className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center shrink-0">
+                      <span className="w-9 h-9 rounded-xl bg-[var(--status-warning-foreground)] text-[var(--color-primary-button-text,#ffffff)] flex items-center justify-center shrink-0">
                         <Sparkles size={18} />
                       </span>
                       <div>
@@ -652,7 +652,7 @@ export function GlobalSearchModal({ isOpen, onClose, initialQuery = '', user }: 
                     <span className="badge b-warning text-xs">Action Command</span>
                   </div>
 
-                  <div className="flex justify-end gap-2 pt-1 border-t border-amber-200 dark:border-amber-800">
+                  <div className="flex justify-end gap-2 pt-1 border-t border-[var(--status-warning-border)]">
                     <button
                       type="button"
                       className="btn btn-sm btn-outline text-xs"
@@ -680,7 +680,7 @@ export function GlobalSearchModal({ isOpen, onClose, initialQuery = '', user }: 
                 <div className="p-4 m-3 rounded-2xl border border-border bg-card space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center shrink-0">
+                      <span className="w-8 h-8 rounded-lg bg-[var(--status-success-surface)] text-[var(--status-success-foreground)] flex items-center justify-center shrink-0">
                         {parsedAction.contactMethod === 'whatsapp' ? (
                           <MessageCircle size={16} />
                         ) : (
@@ -762,7 +762,7 @@ export function GlobalSearchModal({ isOpen, onClose, initialQuery = '', user }: 
                                     className="btn btn-sm btn-outline flex items-center gap-1.5 text-xs text-foreground"
                                     title={`Call ${guardian?.fullName}`}
                                   >
-                                    <Phone size={13} className="text-emerald-500" />
+                                    <Phone size={13} className="text-[var(--status-success-foreground)]" />
                                     <span>Call</span>
                                   </a>
 
@@ -774,7 +774,7 @@ export function GlobalSearchModal({ isOpen, onClose, initialQuery = '', user }: 
                                       className="btn btn-sm btn-outline flex items-center gap-1.5 text-xs text-foreground"
                                       title="Open WhatsApp chat"
                                     >
-                                      <MessageCircle size={13} className="text-emerald-600" />
+                                      <MessageCircle size={13} className="text-[var(--status-success-foreground)]" />
                                       <span>WhatsApp</span>
                                     </a>
                                   )}
@@ -808,7 +808,7 @@ export function GlobalSearchModal({ isOpen, onClose, initialQuery = '', user }: 
                 <div className="p-4 m-3 rounded-2xl border border-border bg-card space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center shrink-0">
+                      <span className="w-8 h-8 rounded-lg bg-[var(--status-success-surface)] text-[var(--status-success-foreground)] flex items-center justify-center shrink-0">
                         <Printer size={16} />
                       </span>
                       <div>
@@ -853,7 +853,7 @@ export function GlobalSearchModal({ isOpen, onClose, initialQuery = '', user }: 
                             </div>
 
                             {payments.length === 0 ? (
-                              <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-300 text-xs flex items-center gap-2">
+                              <div className="p-2.5 rounded-lg bg-[var(--status-warning-surface)] text-[var(--status-warning-foreground)] text-xs flex items-center gap-2">
                                 <AlertCircle size={14} className="shrink-0" />
                                 <span>No successful payment records on file. Official receipts cannot be generated without confirmed payment.</span>
                               </div>

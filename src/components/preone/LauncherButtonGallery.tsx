@@ -67,7 +67,7 @@ export function LauncherButtonGallery() {
                 alignItems: 'center',
                 gap: 6,
                 cursor: 'pointer',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                boxShadow: 'var(--shadow-soft)',
               }}
             >
               {copied ? <Check size={14} color="#10B981" /> : <Copy size={14} />}
@@ -116,7 +116,7 @@ export function LauncherButtonGallery() {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
+              boxShadow: 'var(--shadow-card)',
               position: 'relative',
               overflow: 'hidden',
             }}
@@ -175,7 +175,7 @@ export function LauncherButtonGallery() {
                 borderRadius: 16,
                 border: '1px solid #E2E8F0',
                 padding: '20px 24px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                boxShadow: 'var(--shadow-card)',
               }}
             >
               <div style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 16 }}>
@@ -230,7 +230,7 @@ export function LauncherButtonGallery() {
                   borderRadius: 16,
                   border: '1px solid #E2E8F0',
                   padding: '18px 20px',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                  boxShadow: 'var(--shadow-card)',
                 }}
               >
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 14 }}>
@@ -260,7 +260,7 @@ export function LauncherButtonGallery() {
                   borderRadius: 16,
                   border: '1px solid #E2E8F0',
                   padding: '18px 20px',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                  boxShadow: 'var(--shadow-card)',
                 }}
               >
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 14 }}>
@@ -305,7 +305,7 @@ export function LauncherButtonGallery() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 16,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                  boxShadow: 'var(--shadow-card)',
                   height: 64,
                   boxSizing: 'border-box',
                 }}
@@ -338,7 +338,7 @@ export function LauncherButtonGallery() {
                   flexDirection: 'column',
                   gap: 8,
                   alignItems: 'center',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                  boxShadow: 'var(--shadow-card)',
                   height: 94,
                   boxSizing: 'border-box',
                   justifyContent: 'center',
@@ -382,7 +382,7 @@ export function LauncherButtonGallery() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                  boxShadow: 'var(--shadow-card)',
                   height: 64,
                   boxSizing: 'border-box',
                   position: 'relative',

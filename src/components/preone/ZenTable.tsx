@@ -13,14 +13,14 @@ export interface PastelColor {
 }
 
 export const ZEN_PASTEL_PALETTE: PastelColor[] = [
-  { bg: '#EEF2FF', text: '#4338CA', border: 'rgba(199, 210, 254, 0.70)' }, // Indigo
-  { bg: '#ECFDF5', text: '#065F46', border: 'rgba(167, 243, 208, 0.70)' }, // Emerald
-  { bg: '#F5F3FF', text: '#5B21B6', border: 'rgba(221, 214, 254, 0.70)' }, // Violet
-  { bg: '#FFF1F2', text: '#9F1239', border: 'rgba(254, 205, 211, 0.70)' }, // Rose
-  { bg: '#FFFBEB', text: '#92400E', border: 'rgba(253, 230, 138, 0.70)' }, // Amber
-  { bg: '#EFF6FF', text: '#1E40AF', border: 'rgba(191, 219, 254, 0.70)' }, // Sky
-  { bg: '#F0FDFA', text: '#115E59', border: 'rgba(153, 246, 228, 0.70)' }, // Teal
-  { bg: '#F8FAFC', text: '#334155', border: 'rgba(226, 232, 240, 0.80)' }, // Slate
+  { bg: 'var(--status-info-surface, #EEF2FF)', text: 'var(--status-info-foreground, #4338CA)', border: 'var(--status-info-border, rgba(199, 210, 254, 0.70))' }, // Indigo
+  { bg: 'var(--status-success-surface, #ECFDF5)', text: 'var(--status-success-foreground, #065F46)', border: 'var(--status-success-border, rgba(167, 243, 208, 0.70))' }, // Emerald
+  { bg: 'var(--color-brand-surface, #F5F3FF)', text: 'var(--color-brand-primary, #5B21B6)', border: 'var(--color-brand-border, rgba(221, 214, 254, 0.70))' }, // Violet
+  { bg: 'var(--status-danger-surface, #FFF1F2)', text: 'var(--status-danger-foreground, #9F1239)', border: 'var(--status-danger-border, rgba(254, 205, 211, 0.70))' }, // Rose
+  { bg: 'var(--status-warning-surface, #FFFBEB)', text: 'var(--status-warning-foreground, #92400E)', border: 'var(--status-warning-border, rgba(253, 230, 138, 0.70))' }, // Amber
+  { bg: 'var(--status-info-surface, #EFF6FF)', text: 'var(--status-info-foreground, #1E40AF)', border: 'var(--status-info-border, rgba(191, 219, 254, 0.70))' }, // Sky
+  { bg: 'var(--status-success-surface, #F0FDFA)', text: 'var(--status-success-foreground, #115E59)', border: 'var(--status-success-border, rgba(153, 246, 228, 0.70))' }, // Teal
+  { bg: 'var(--color-surface-subtle, #F8FAFC)', text: 'var(--color-text-primary, #334155)', border: 'var(--color-border-default, rgba(226, 232, 240, 0.80))' }, // Slate
 ]
 
 /**
@@ -120,7 +120,7 @@ export function StudentIdentityChip({
       <div className="flex flex-col min-w-0 leading-snug">
         <div className="flex items-center gap-1.5 min-w-0">
           <span
-            className="truncate font-semibold text-slate-800 dark:text-slate-100 group-hover:text-primary transition-colors"
+            className="truncate font-semibold text-[var(--color-text-primary)] group-hover:text-primary transition-colors"
             style={{
               fontFamily: 'var(--font-nunito), inherit',
               fontSize: size === 'sm' ? '13px' : '14px',
@@ -132,7 +132,7 @@ export function StudentIdentityChip({
           </span>
           {admissionNo && (
             <span
-              className="shrink-0 text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200/70 dark:border-slate-700/60"
+              className="shrink-0 text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-[var(--color-surface-subtle)] text-[var(--color-text-muted)] border border-[var(--color-border-default)]"
               title={`Admission No: ${admissionNo}`}
             >
               {admissionNo}
@@ -142,7 +142,7 @@ export function StudentIdentityChip({
 
         {secondaryContext ? (
           <span
-            className="truncate text-[11.5px] text-slate-400 dark:text-slate-500 mt-0.5"
+            className="truncate text-[11.5px] text-[var(--color-text-muted)] mt-0.5"
             style={{ fontFamily: 'var(--font-nunito), inherit' }}
             title={secondaryContext}
           >
@@ -221,7 +221,7 @@ export function FamilyIdentityChip({
 
       <div className="flex flex-col min-w-0 leading-snug">
         <span
-          className="truncate font-semibold text-slate-800 dark:text-slate-100 group-hover:text-primary transition-colors"
+          className="truncate font-semibold text-[var(--color-text-primary)] group-hover:text-primary transition-colors"
           style={{
             fontFamily: 'var(--font-nunito), inherit',
             fontSize: '13.5px',
@@ -230,10 +230,10 @@ export function FamilyIdentityChip({
         >
           {name}
         </span>
-        <div className="flex items-center gap-1.5 text-[11.5px] text-slate-400 dark:text-slate-500 mt-0.5">
+        <div className="flex items-center gap-1.5 text-[11.5px] text-[var(--color-text-muted)] mt-0.5">
           {relContext && <span className="truncate">{relContext}</span>}
           {relContext && phone && <span>·</span>}
-          {phone && <span className="font-mono text-slate-500 text-[11px]">{phone}</span>}
+          {phone && <span className="font-mono text-[var(--color-text-muted)] text-[11px]">{phone}</span>}
         </div>
       </div>
     </div>
@@ -295,8 +295,8 @@ export function QuickRowActions({
           type="button"
           disabled={action.disabled}
           onClick={action.onClick}
-          className={`zen-action-btn flex items-center justify-center rounded-lg text-slate-500 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ${
-            action.danger ? 'hover:text-rose-600 hover:bg-rose-50' : ''
+          className={`zen-action-btn flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-primary hover:bg-[var(--color-surface-subtle)] transition-colors ${
+            action.danger ? 'hover:text-[var(--status-danger-foreground)] hover:bg-[var(--status-danger-surface)]' : ''
           } ${action.disabled ? 'opacity-40 pointer-events-none' : ''}`}
           style={{
             width: 32,
@@ -317,7 +317,7 @@ export function QuickRowActions({
           <button
             type="button"
             onClick={() => setMenuOpen(!menuOpen)}
-            className="zen-action-btn flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="zen-action-btn flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)] transition-colors"
             style={{ width: 32, height: 32, minWidth: 32, minHeight: 32 }}
             title="More actions"
             aria-label="More actions"
@@ -328,7 +328,7 @@ export function QuickRowActions({
 
           {menuOpen && (
             <div
-              className="absolute right-0 top-full mt-1 w-44 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-lg py-1 z-30 animate-in fade-in zoom-in-95 duration-100"
+              className="absolute right-0 top-full mt-1 w-44 rounded-xl bg-[var(--surface-raised)] border border-[var(--border-default)] shadow-lg py-1 z-30 animate-in fade-in zoom-in-95 duration-100"
               role="menu"
             >
               {overflowActions.map((act, idx) => (
@@ -340,12 +340,12 @@ export function QuickRowActions({
                     setMenuOpen(false)
                     act.onClick?.()
                   }}
-                  className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors ${
-                    act.danger ? 'text-rose-600 hover:text-rose-700' : 'text-slate-700 dark:text-slate-200'
+                  className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-[var(--color-surface-subtle)] transition-colors ${
+                    act.danger ? 'text-[var(--status-danger-foreground)] hover:text-[var(--status-danger-foreground)]' : 'text-[var(--color-text-primary)]'
                   } ${act.disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                   role="menuitem"
                 >
-                  {act.icon && <span className="shrink-0 text-slate-400">{act.icon}</span>}
+                  {act.icon && <span className="shrink-0 text-[var(--color-text-muted)]">{act.icon}</span>}
                   <span className="truncate">{act.label}</span>
                 </button>
               ))}
@@ -370,7 +370,7 @@ export function ZenTable({
   ...rest
 }: ZenTableProps) {
   return (
-    <div className={`zen-table-wrap w-full overflow-x-auto rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-xs ${containerClassName}`.trim()}>
+    <div className={`zen-table-wrap w-full overflow-x-auto rounded-2xl shadow-xs ${containerClassName}`.trim()}>
       <table className={`zen-table w-full text-left border-collapse ${className}`.trim()} {...rest}>
         {children}
       </table>
@@ -456,7 +456,7 @@ export function ZenTableCell({
 }: ZenTableCellProps) {
   return (
     <td
-      className={`zen-td data-copy px-4 py-3.5 align-middle text-slate-700 dark:text-slate-200 text-[13.5px] first:rounded-l-lg last:rounded-r-lg ${
+      className={`zen-td data-copy px-4 py-3.5 align-middle text-[var(--color-text-primary)] text-[13.5px] first:rounded-l-lg last:rounded-r-lg ${
         align === 'right' ? 'text-right tabular-nums data-numeric' : align === 'center' ? 'text-center' : 'text-left'
       } ${className}`.trim()}
       style={{
@@ -480,21 +480,21 @@ export function ZenTableSkeleton({
   columns?: number
 }) {
   return (
-    <div className="w-full flex flex-col divide-y divide-slate-100 dark:divide-slate-800">
+    <div className="w-full flex flex-col divide-y divide-[var(--color-border-default)]">
       {[...Array(rows)].map((_, r) => (
         <div
           key={r}
-          className="flex items-center gap-4 px-4 h-14 animate-pulse bg-white dark:bg-slate-900"
+          className="flex items-center gap-4 px-4 h-14 animate-pulse bg-[var(--color-surface)]"
           style={{ minHeight: '56px' }}
         >
           {/* Avatar representation in first column */}
-          <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 shrink-0" />
-          <div className="w-36 h-3.5 rounded bg-slate-200 dark:bg-slate-800 shrink-0" />
+          <div className="w-8 h-8 rounded-full bg-[var(--color-surface-subtle)] shrink-0" />
+          <div className="w-36 h-3.5 rounded bg-[var(--color-surface-subtle)] shrink-0" />
           {[...Array(Math.max(1, columns - 2))].map((_, c) => (
-            <div key={c} className="flex-1 h-3 rounded bg-slate-100 dark:bg-slate-800/60" />
+            <div key={c} className="flex-1 h-3 rounded bg-[var(--color-surface-subtle)]" />
           ))}
           {/* Action representation */}
-          <div className="w-16 h-3 rounded bg-slate-100 dark:bg-slate-800 shrink-0" />
+          <div className="w-16 h-3 rounded bg-[var(--color-surface-subtle)] shrink-0" />
         </div>
       ))}
     </div>

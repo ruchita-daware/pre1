@@ -139,11 +139,11 @@ export function GlobalKpiCard({
         aria-label={`Loading ${displayLabel || 'metric'}`}
       >
         <div className="flex items-center justify-between gap-2">
-          <div className="h-3 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-800" />
-          <div className="h-7 w-7 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800/60" />
+          <div className="h-3 w-20 animate-pulse rounded bg-[var(--color-surface-subtle)]" />
+          <div className="h-7 w-7 animate-pulse rounded-lg bg-[var(--color-surface-subtle)]" />
         </div>
-        <div className="mt-1 h-6 w-16 animate-pulse rounded bg-slate-200 dark:bg-slate-800" />
-        {displaySub && <div className="mt-1 h-2.5 w-24 animate-pulse rounded bg-slate-100 dark:bg-slate-800/60" />}
+        <div className="mt-1 h-6 w-16 animate-pulse rounded bg-[var(--color-surface-subtle)]" />
+        {displaySub && <div className="mt-1 h-2.5 w-24 animate-pulse rounded bg-[var(--color-surface-subtle)]" />}
       </div>
     )
   }
@@ -152,7 +152,7 @@ export function GlobalKpiCard({
   if (error) {
     return (
       <div
-        className={`preone-kpi-card border-rose-200/90 dark:border-rose-900/60 bg-rose-50/40 dark:bg-rose-950/20 ${
+        className={`preone-kpi-card border-[var(--status-danger-border)] bg-[var(--status-danger-surface)] ${
           isCompact ? 'py-2.5 px-3.5' : 'py-3 px-4'
         } ${className}`}
         style={style}
@@ -160,13 +160,13 @@ export function GlobalKpiCard({
         title={error}
       >
         <div className="flex items-center justify-between gap-2">
-          <span className="font-heading text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 truncate">
+          <span className="font-heading text-[11px] font-bold uppercase tracking-wider text-[var(--status-danger-foreground)] truncate">
             {displayLabel}
           </span>
-          <span className="text-rose-500 text-xs font-semibold">!</span>
+          <span className="text-[var(--status-danger-foreground)] text-xs font-semibold">!</span>
         </div>
-        <div className="text-sm font-semibold text-rose-800 dark:text-rose-200">Data Unavailable</div>
-        <div className="text-[11px] text-rose-600/80 dark:text-rose-400/80 truncate font-sans">{error}</div>
+        <div className="text-sm font-semibold text-[var(--status-danger-foreground)]">Data Unavailable</div>
+        <div className="text-[11px] text-[var(--status-danger-foreground)]/80 truncate font-sans">{error}</div>
       </div>
     )
   }
@@ -177,7 +177,7 @@ export function GlobalKpiCard({
   // Determine icon background and text styles if iconClass isn't custom
   const defaultIconWrap =
     iconClass ||
-    'bg-[color-mix(in_srgb,var(--primary,#7c3aed)_10%,transparent)] text-[var(--primary,#7c3aed)] dark:text-purple-300'
+    'bg-[var(--color-brand-surface)] text-[var(--color-brand-primary)]'
 
   const handleKeyDown = isInteractive
     ? (e: React.KeyboardEvent) => {
@@ -209,7 +209,7 @@ export function GlobalKpiCard({
       {/* Top Header Row: Label & Optional Icon / Badge / Trend */}
       <div className="flex items-center justify-between gap-2 w-full min-w-0">
         <span
-          className="font-heading text-[11px] sm:text-[11.5px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate"
+          className="font-heading text-[11px] sm:text-[11.5px] font-bold uppercase tracking-wider text-[var(--text-secondary)] truncate"
           title={displayLabel}
         >
           {displayLabel}
@@ -222,13 +222,13 @@ export function GlobalKpiCard({
               className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10.5px] font-bold ${
                 trend.isPositive !== undefined
                   ? trend.isPositive
-                    ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/40'
-                    : 'text-rose-700 bg-rose-50 dark:text-rose-300 dark:bg-rose-950/40'
+                    ? 'text-[var(--status-success-foreground)] bg-[var(--status-success-surface)]'
+                    : 'text-[var(--status-danger-foreground)] bg-[var(--status-danger-surface)]'
                   : trend.dir === 'up'
-                  ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/40'
+                  ? 'text-[var(--status-success-foreground)] bg-[var(--status-success-surface)]'
                   : trend.dir === 'down'
-                  ? 'text-rose-700 bg-rose-50 dark:text-rose-300 dark:bg-rose-950/40'
-                  : 'text-slate-600 bg-slate-100 dark:text-slate-300 dark:bg-slate-800'
+                  ? 'text-[var(--status-danger-foreground)] bg-[var(--status-danger-surface)]'
+                  : 'text-[var(--color-text-muted)] bg-[var(--color-surface-subtle)]'
               }`}
             >
               {trend.text}
@@ -247,11 +247,11 @@ export function GlobalKpiCard({
 
       {/* Primary Metric Row */}
       <div className="flex items-baseline gap-1.5 w-full min-w-0">
-        <span className="font-mono text-xl sm:text-2xl font-bold tracking-tight tabular-nums text-slate-900 dark:text-white leading-none">
+        <span className="font-mono text-xl sm:text-2xl font-bold tracking-tight tabular-nums text-[var(--text-primary)] leading-none">
           {renderedValue}
         </span>
         {unit && (
-          <span className="font-sans text-xs font-semibold text-slate-500 dark:text-slate-400">
+          <span className="font-sans text-xs font-semibold text-[var(--text-secondary)]">
             {unit}
           </span>
         )}
@@ -259,19 +259,19 @@ export function GlobalKpiCard({
 
       {/* Bottom Supporting Context Row (Status / Meta) */}
       {(status || displaySub) && (
-        <div className="flex items-center gap-2 text-[11px] sm:text-[11.5px] text-slate-500 dark:text-slate-400 truncate w-full min-w-0">
+        <div className="flex items-center gap-2 text-[11px] sm:text-[11.5px] text-[var(--color-text-muted)] truncate w-full min-w-0">
           {status && (
             <span
               className={`inline-flex items-center gap-1 font-semibold truncate ${
                 status.variant === 'warning'
-                  ? 'text-amber-700 dark:text-amber-300'
+                  ? 'text-[var(--status-warning-foreground)]'
                   : status.variant === 'danger'
-                  ? 'text-rose-700 dark:text-rose-300'
+                  ? 'text-[var(--status-danger-foreground)]'
                   : status.variant === 'info'
-                  ? 'text-blue-700 dark:text-blue-300'
+                  ? 'text-[var(--status-info-foreground)]'
                   : status.variant === 'neutral'
-                  ? 'text-slate-600 dark:text-slate-400'
-                  : 'text-emerald-700 dark:text-emerald-300'
+                  ? 'text-[var(--color-text-muted)]'
+                  : 'text-[var(--status-success-foreground)]'
               }`}
             >
               <span className="text-[7px]" aria-hidden="true">●</span>

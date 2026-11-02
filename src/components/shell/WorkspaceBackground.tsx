@@ -43,18 +43,18 @@ export function WorkspaceBackground() {
             cy="120"
             rx="105"
             ry="44"
-            stroke="#A855F7"
+            stroke="var(--color-brand-primary, #A855F7)"
             strokeWidth="1.5"
             strokeDasharray="5 7"
             transform="rotate(-22 120 120)"
           />
           {/* Orbiting celestial satellite dot */}
-          <circle cx="195" cy="85" r="5" fill="#F59E0B" />
-          <circle cx="193" cy="83" r="1.5" fill="#FFFFFF" opacity="0.75" />
+          <circle cx="195" cy="85" r="5" fill="var(--color-brand-secondary, #F59E0B)" />
+          <circle cx="193" cy="83" r="1.5" fill="var(--color-surface, #FFFFFF)" opacity="0.75" />
           {/* Subtle twinkle star near orbit */}
           <path
             d="M210 60L211.5 63.5L215 65L211.5 66.5L210 70L208.5 66.5L205 65L208.5 63.5L210 60Z"
-            fill="#FBBF24"
+            fill="var(--color-brand-secondary, #FBBF24)"
             opacity="0.8"
           />
         </svg>
@@ -65,14 +65,14 @@ export function WorkspaceBackground() {
         <svg width="130" height="78" viewBox="0 0 130 78" fill="none">
           <defs>
             <linearGradient id="workspaceCloudGrad" x1="15" y1="10" x2="115" y2="70" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#FFFFFF" />
-              <stop offset="1" stopColor="#E9D5FF" stopOpacity="0.8" />
+              <stop stopColor="var(--color-surface, #FFFFFF)" />
+              <stop offset="1" stopColor="var(--color-brand-surface, #E9D5FF)" stopOpacity="0.8" />
             </linearGradient>
           </defs>
           <path
             d="M36 64h62a20 20 0 0 0 4-39.6 25 25 0 0 0-48-7.4A18 18 0 0 0 18 46a18 18 0 0 0 18 18z"
             fill="url(#workspaceCloudGrad)"
-            filter="drop-shadow(0 4px 12px rgba(139, 92, 246, 0.06))"
+            filter="drop-shadow(0 4px 12px var(--color-brand-subtle, rgba(139, 92, 246, 0.06)))"
           />
         </svg>
       </div>
@@ -82,10 +82,10 @@ export function WorkspaceBackground() {
         <svg width="54" height="54" viewBox="0 0 60 60" fill="none">
           <path
             d="M30 10C30 18 36 24 44 24C36 24 30 30 30 38C30 30 24 24 16 24C24 24 30 18 30 10Z"
-            fill="#C084FC"
+            fill="var(--color-brand-primary, #C084FC)"
           />
-          <circle cx="48" cy="14" r="2" fill="#FBBF24" />
-          <circle cx="18" cy="42" r="2.5" fill="#38BDF8" opacity="0.7" />
+          <circle cx="48" cy="14" r="2" fill="var(--color-brand-secondary, #FBBF24)" />
+          <circle cx="18" cy="42" r="2.5" fill="var(--color-brand-accent, #38BDF8)" opacity="0.7" />
         </svg>
       </div>
     </div>

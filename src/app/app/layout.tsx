@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const [user, branding] = await Promise.all([
     db.user.findUnique({
       where: { id: session.uid },
-      select: { locale: true, fullName: true, avatarUrl: true },
+      select: { locale: true, fullName: true, avatarUrl: true, preferences: true },
     }).catch((err) => {
       console.error('[AppLayout] Failed to load user:', err)
       return null
@@ -120,6 +120,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               branchName,
               avatarUrl: user?.avatarUrl || null,
               mustChangePassword: session.mustChangePassword,
+              preferences: (user?.preferences as Record<string, any>) || null,
             }}
             branding={branding}
           >

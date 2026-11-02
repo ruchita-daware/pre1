@@ -60,7 +60,7 @@ export function KpiMetricCard({
   value,
   unit,
   icon,
-  iconClass = 'text-primary dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40 border-purple-100 dark:border-purple-900/30',
+  iconClass = 'text-[var(--color-brand-primary)] bg-[var(--color-brand-surface)] border border-[var(--color-brand-primary)]/30',
   trend,
   status,
   meta,
@@ -76,15 +76,15 @@ export function KpiMetricCard({
   if (loading) {
     return (
       <div
-        className={`rounded-2xl border border-border/60 bg-white/96 p-4 sm:p-5 shadow-xs dark:border-border/40 dark:bg-slate-900/96 ${className}`}
+        className={`preone-kpi-card p-4 sm:p-5 ${className}`}
         style={style}
       >
         <div className="flex items-center justify-between gap-3">
-          <div className="h-3 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-800" />
-          <div className="h-8 w-8 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800/60" />
+          <div className="h-3 w-24 animate-pulse rounded bg-[var(--color-surface-subtle)]" />
+          <div className="h-8 w-8 animate-pulse rounded-xl bg-[var(--color-surface-subtle)]" />
         </div>
-        <div className="mt-3 h-7 w-20 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-800" />
-        <div className="mt-2 h-3 w-32 animate-pulse rounded bg-slate-100 dark:bg-slate-800/60" />
+        <div className="mt-3 h-7 w-20 animate-pulse rounded-lg bg-[var(--color-surface-subtle)]" />
+        <div className="mt-2 h-3 w-32 animate-pulse rounded bg-[var(--color-surface-subtle)]" />
       </div>
     )
   }
@@ -93,16 +93,16 @@ export function KpiMetricCard({
   if (error) {
     return (
       <div
-        className={`rounded-2xl border border-rose-200/80 bg-rose-50/50 p-4 sm:p-5 shadow-xs dark:border-rose-900/50 dark:bg-rose-950/20 ${className}`}
+        className={`rounded-2xl border border-[var(--status-danger-border)] bg-[var(--status-danger-surface)] p-4 sm:p-5 shadow-xs ${className}`}
         style={style}
       >
-        <div className="font-heading text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+        <div className="font-heading text-[11px] font-bold uppercase tracking-wider text-[var(--status-danger-foreground)]">
           {label}
         </div>
-        <div className="mt-1 text-sm font-semibold text-rose-900 dark:text-rose-200">
+        <div className="mt-1 text-sm font-semibold text-[var(--status-danger-foreground)]">
           Data Unavailable
         </div>
-        <p className="mt-1 text-[11px] text-rose-600 dark:text-rose-400 font-sans">
+        <p className="mt-1 text-[11px] text-[var(--status-danger-foreground)] font-sans">
           {error}
         </p>
       </div>
@@ -139,7 +139,7 @@ export function KpiMetricCard({
     >
       {/* Top Row: Metric Label & Optional Icon */}
       <div className="flex items-center justify-between gap-3">
-        <span className="font-heading text-[11.5px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
+        <span className="font-heading text-[11.5px] font-semibold uppercase tracking-wider text-[var(--text-secondary)] truncate">
           {label}
         </span>
         {icon && (
@@ -154,11 +154,11 @@ export function KpiMetricCard({
 
       {/* Primary Value Row: Tabular Numeral */}
       <div className="mt-1 flex items-baseline gap-1.5">
-        <span className="data-numeric font-mono text-2xl font-bold tracking-tight tabular-nums text-slate-900 dark:text-white">
+        <span className="data-numeric font-mono text-2xl font-bold tracking-tight tabular-nums text-[var(--text-primary)]">
           {displayValue}
         </span>
         {unit && (
-          <span className="font-sans text-xs font-semibold text-slate-500 dark:text-slate-400">
+          <span className="font-sans text-xs font-semibold text-[var(--text-secondary)]">
             {unit}
           </span>
         )}
@@ -171,14 +171,14 @@ export function KpiMetricCard({
             <div
               className={`flex items-center gap-1 font-medium ${
                 status.variant === 'warning'
-                  ? 'text-amber-700 dark:text-amber-300'
+                  ? 'text-[var(--status-warning-foreground)]'
                   : status.variant === 'danger'
-                  ? 'text-rose-700 dark:text-rose-300'
+                  ? 'text-[var(--status-danger-foreground)]'
                   : status.variant === 'info'
-                  ? 'text-blue-700 dark:text-blue-300'
+                  ? 'text-[var(--status-info-foreground)]'
                   : status.variant === 'neutral'
-                  ? 'text-slate-600 dark:text-slate-400'
-                  : 'text-emerald-700 dark:text-emerald-300'
+                  ? 'text-[var(--color-text-muted)]'
+                  : 'text-[var(--status-success-foreground)]'
               }`}
             >
               <span className="text-[8px]" aria-hidden="true">●</span>
@@ -191,13 +191,13 @@ export function KpiMetricCard({
               className={`font-semibold ${
                 trend.isPositive !== undefined
                   ? trend.isPositive
-                    ? 'text-emerald-600 dark:text-emerald-400'
-                    : 'text-rose-600 dark:text-rose-400'
+                    ? 'text-[var(--status-success-foreground)]'
+                    : 'text-[var(--status-danger-foreground)]'
                   : trend.dir === 'up'
-                  ? 'text-emerald-600 dark:text-emerald-400'
+                  ? 'text-[var(--status-success-foreground)]'
                   : trend.dir === 'down'
-                  ? 'text-rose-600 dark:text-rose-400'
-                  : 'text-slate-500 dark:text-slate-400'
+                  ? 'text-[var(--status-danger-foreground)]'
+                  : 'text-[var(--color-text-muted)]'
               }`}
             >
               {trend.text}
@@ -205,7 +205,7 @@ export function KpiMetricCard({
           )}
 
           {meta && (
-            <span className="text-slate-500 dark:text-slate-400 truncate">
+            <span className="text-[var(--color-text-muted)] truncate">
               {meta}
             </span>
           )}

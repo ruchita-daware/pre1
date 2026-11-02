@@ -16,34 +16,72 @@ describe('PreOne Dark Mode Excellence Test Suite', () => {
     it('verifies src/app/layout.tsx executes an early, blocking <script> in <head> before DOM paint', async () => {
       const layoutFile = await Bun.file('src/app/layout.tsx').text()
       expect(layoutFile).toContain('<head>')
-      expect(layoutFile).toContain('localStorage.getItem(\'preone_theme\')')
-      expect(layoutFile).toContain('localStorage.getItem(\'preone-theme\')')
-      expect(layoutFile).toContain('prefers-color-scheme: dark')
-      expect(layoutFile).toContain('document.documentElement.setAttribute(\'data-theme\', theme)')
-      expect(layoutFile).toContain('document.documentElement.classList.add(\'dark\')')
-      expect(layoutFile).toContain('try {')
-      expect(layoutFile).toContain('} catch (e) {}')
+      expect(layoutFile).toContain('getThemeInitScript()')
+
+      // Behavioral assertion against generated blocking initialization script
+      const { getThemeInitScript } = await import('@/lib/theme/theme-contract')
+      const script = getThemeInitScript()
+      expect(script).toContain('localStorage.getItem')
+      expect(script).toContain('preone_theme_mode')
+      expect(script).toContain('preone_theme')
+      expect(script).toContain('preone-theme')
+      expect(script).toContain('prefers-color-scheme: dark')
+      expect(script).toContain('setAttribute')
+      expect(script).toContain('data-theme')
+      expect(script).toContain('classList.add')
+      expect(script).toContain('try')
     })
 
     it('verifies PreHydration synchronizes theme attributes before React hydration', async () => {
       const preHydrationFile = await Bun.file('src/components/PreHydration.tsx').text()
-      expect(preHydrationFile).toContain('preone-theme')
-      expect(preHydrationFile).toContain('preone_theme')
-      expect(preHydrationFile).toContain('window.matchMedia(\'(prefers-color-scheme: dark)\')')
-      expect(preHydrationFile).toContain('document.documentElement.setAttribute(\'data-theme\', resolvedTheme)')
-      expect(preHydrationFile).toContain('document.documentElement.classList.toggle(\'dark\', isDark)')
+      expect(preHydrationFile).toContain('getStoredThemePreference')
+      expect(preHydrationFile).toContain('resolveTheme')
+      expect(preHydrationFile).toContain('applyThemeToDom')
+
+      // Behavioral verification of resolution logic
+      const { resolveTheme, normalizeThemePreference } = await import('@/lib/theme/theme-contract')
+      expect(resolveTheme(normalizeThemePreference('dark'), false)).toBe('dark')
+      expect(resolveTheme(normalizeThemePreference('light'), true)).toBe('light')
+      expect(resolveTheme(normalizeThemePreference('auto'), true)).toBe('dark')
+      expect(resolveTheme(normalizeThemePreference('auto'), false)).toBe('light')
     })
 
-    it('verifies AppShell and AuthShell synchronize both storage keys on toggle', async () => {
+    it('verifies AppShell and AuthShell integrate canonical theme persistence and legacy mirroring', async () => {
       const appShellFile = await Bun.file('src/components/shell/AppShell.tsx').text()
-      expect(appShellFile).toContain("localStorage.setItem('preone_theme'")
-      expect(appShellFile).toContain("localStorage.setItem('preone-theme'")
-      expect(appShellFile).toContain("document.documentElement.classList.toggle('dark'")
+      expect(appShellFile).toContain('persistThemePreference')
+      expect(appShellFile).toContain('syncThemeWithDatabase')
+      expect(appShellFile).toContain('subscribeToSystemThemeChange')
 
       const authShellFile = await Bun.file('src/components/auth/AuthShell.tsx').text()
-      expect(authShellFile).toContain("localStorage.setItem('preone_theme'")
-      expect(authShellFile).toContain("localStorage.setItem('preone-theme'")
-      expect(authShellFile).toContain("document.documentElement.classList.toggle('dark'")
+      expect(authShellFile).toContain('setStoredThemePreference')
+      expect(authShellFile).toContain('applyThemeToDom')
+      expect(authShellFile).toContain('subscribeToSystemThemeChange')
+
+      // Behavioral verification of legacy dual-write mirroring contract
+      const {
+        setStoredThemePreference,
+        CANONICAL_THEME_KEY,
+        LEGACY_THEME_KEY_SNAKE,
+        LEGACY_THEME_KEY_KEBAB,
+      } = await import('@/lib/theme/theme-contract')
+
+      const testStorage = new Map<string, string>()
+      ;(globalThis as any).window = { matchMedia: () => ({ matches: false }) }
+      ;(globalThis as any).localStorage = {
+        getItem: (k: string) => testStorage.get(k) ?? null,
+        setItem: (k: string, v: string) => testStorage.set(k, String(v)),
+        removeItem: (k: string) => testStorage.delete(k),
+      }
+
+      setStoredThemePreference('dark')
+      expect(testStorage.get(CANONICAL_THEME_KEY)).toBe('dark')
+      expect(testStorage.get(LEGACY_THEME_KEY_SNAKE)).toBe('dark')
+      expect(testStorage.get(LEGACY_THEME_KEY_KEBAB)).toBe('dark')
+
+      setStoredThemePreference('light')
+      expect(testStorage.get(CANONICAL_THEME_KEY)).toBe('light')
+      expect(testStorage.get(LEGACY_THEME_KEY_SNAKE)).toBe('light')
+      expect(testStorage.get(LEGACY_THEME_KEY_KEBAB)).toBe('light')
     })
   })
 

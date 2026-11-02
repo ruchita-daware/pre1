@@ -128,22 +128,22 @@ export function ClassroomRequestCartDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-sm transition-opacity">
+    <div className="fixed inset-0 z-50 overflow-hidden bg-[var(--surface-overlay)] backdrop-blur-sm transition-opacity">
       <div className="absolute inset-0" onClick={onClose} />
 
       <div className="fixed inset-y-0 right-0 flex max-w-full pl-10">
-        <div className="relative w-screen max-w-lg bg-white dark:bg-gray-900 shadow-2xl flex flex-col">
+        <div className="relative w-screen max-w-lg bg-[var(--surface-card)] rounded-l-3xl [box-shadow:var(--shadow-3)] flex flex-col">
           {/* ── DRAWER HEADER ── */}
-          <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 px-6 py-4.5 bg-gradient-to-r from-emerald-50/50 to-teal-50/50 dark:from-gray-800 dark:to-gray-800">
+          <div className="flex items-center justify-between border-b border-[var(--border-default)] px-6 py-4.5 bg-[var(--surface-subtle)]">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-md">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-brand-primary)] text-[var(--text-inverse)] [box-shadow:var(--shadow-1)]">
                 <ShoppingCart className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-base font-extrabold text-gray-900 dark:text-white">
+                <h2 className="text-base font-extrabold text-[var(--text-primary)]">
                   Classroom Supply Cart
                 </h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-[var(--text-secondary)]">
                   {cart.length} {cart.length === 1 ? 'item' : 'items'} • {totalUnits} total units
                 </p>
               </div>
@@ -152,7 +152,7 @@ export function ClassroomRequestCartDrawer({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 transition-colors"
+              className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-[var(--surface-card)] hover:text-[var(--text-primary)] transition-colors"
             >
               <X className="h-5 w-5" />
             </button>
@@ -161,20 +161,20 @@ export function ClassroomRequestCartDrawer({
           {/* ── CELEBRATION MODAL ON SUCCESS ── */}
           {submittedRequestNumber ? (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-success-surface)] text-[var(--color-success-base)]">
                 <CheckCircle2 className="h-10 w-10" />
               </div>
 
               <div className="space-y-1">
-                <h3 className="text-xl font-extrabold text-gray-900 dark:text-white">
+                <h3 className="text-xl font-extrabold text-[var(--text-primary)]">
                   Request Submitted for Approval!
                 </h3>
-                <p className="text-xs text-gray-500">
-                  Request Number: <strong className="font-mono text-emerald-700 dark:text-emerald-400 text-sm">{submittedRequestNumber}</strong>
+                <p className="text-xs text-[var(--text-secondary)]">
+                  Request Number: <strong className="font-mono text-[var(--color-success-text)] text-sm">{submittedRequestNumber}</strong>
                 </p>
               </div>
 
-              <p className="text-xs text-gray-600 dark:text-gray-300 max-w-sm">
+              <p className="text-xs text-[var(--text-secondary)] max-w-sm">
                 Your principal has received an in-app notification to review and approve your classroom supplies. You can track fulfilment status under the <strong>Requests</strong> tab.
               </p>
 
@@ -185,7 +185,7 @@ export function ClassroomRequestCartDrawer({
                     setSubmittedRequestNumber(null)
                     onClose()
                   }}
-                  className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-md hover:bg-emerald-700 transition-colors"
+                  className="w-full py-2.5 px-4 rounded-xl bg-[var(--color-success-base)] text-[var(--text-inverse)] font-bold text-xs [box-shadow:var(--shadow-1)] hover:opacity-90 transition-colors"
                 >
                   Done & Continue Browsing
                 </button>
@@ -194,21 +194,21 @@ export function ClassroomRequestCartDrawer({
           ) : cart.length === 0 ? (
             /* ── EMPTY CART STATE ── */
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800 text-3xl">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--surface-subtle)] text-3xl">
                 🛒
               </div>
               <div className="space-y-1">
-                <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                <h3 className="text-base font-bold text-[var(--text-primary)]">
                   Your supply cart is empty
                 </h3>
-                <p className="text-xs text-gray-500 max-w-xs">
+                <p className="text-xs text-[var(--text-secondary)] max-w-xs">
                   Browse through the store and add crayons, chart papers, paints, and classroom materials for your students.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="mt-2 inline-flex items-center gap-2 py-2 px-4 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-md hover:bg-emerald-700 transition-colors"
+                className="mt-2 inline-flex items-center gap-2 py-2 px-4 rounded-xl bg-[var(--color-brand-primary)] text-[var(--text-inverse)] text-xs font-bold [box-shadow:var(--shadow-1)] hover:opacity-90 transition-colors"
               >
                 <span>Browse Supply Catalog</span>
                 <ArrowRight className="h-4 w-4" />
@@ -219,25 +219,25 @@ export function ClassroomRequestCartDrawer({
             <>
               <div className="flex-1 overflow-y-auto p-6 space-y-6">
                 {/* Classroom & Request Meta */}
-                <div className="space-y-3.5 p-4 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700">
+                <div className="space-y-3.5 p-4 rounded-xl bg-[var(--surface-subtle)] border border-[var(--border-default)]">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-gray-700 dark:text-gray-300">
+                    <span className="font-semibold text-[var(--text-secondary)]">
                       Requesting Teacher:
                     </span>
-                    <span className="font-bold text-gray-900 dark:text-white">
+                    <span className="font-bold text-[var(--text-primary)]">
                       {teacherName}
                     </span>
                   </div>
 
                   {/* Classroom Selector */}
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                      Classroom Section <span className="text-red-500">*</span>
+                    <label className="text-xs font-semibold text-[var(--text-secondary)]">
+                      Classroom Section <span className="text-[var(--color-danger-base)]">*</span>
                     </label>
                     <select
                       value={selectedClassroomId}
                       onChange={(e) => onSelectClassroom(e.target.value)}
-                      className="w-full text-xs font-medium py-2 px-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full text-xs font-medium py-2 px-3 rounded-xl border border-[var(--border-default)] bg-[var(--surface-card)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-primary)]"
                     >
                       {classrooms.map((cls) => (
                         <option key={cls.id} value={cls.id}>
@@ -250,26 +250,26 @@ export function ClassroomRequestCartDrawer({
                   {/* Needed Date & Priority */}
                   <div className="grid grid-cols-2 gap-3 pt-1">
                     <div className="space-y-1">
-                      <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-                        <Calendar className="h-3.5 w-3.5 text-gray-400" />
+                      <label className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-1">
+                        <Calendar className="h-3.5 w-3.5 text-[var(--text-muted)]" />
                         <span>Needed By</span>
                       </label>
                       <input
                         type="date"
                         value={requiredDate}
                         onChange={(e) => setRequiredDate(e.target.value)}
-                        className="w-full text-xs py-1.5 px-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        className="w-full text-xs py-1.5 px-2.5 rounded-lg border border-[var(--border-default)] bg-[var(--surface-card)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-primary)]"
                       />
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      <label className="text-xs font-semibold text-[var(--text-secondary)]">
                         Priority
                       </label>
                       <select
                         value={priority}
                         onChange={(e) => setPriority(e.target.value as any)}
-                        className="w-full text-xs py-1.5 px-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        className="w-full text-xs py-1.5 px-2.5 rounded-lg border border-[var(--border-default)] bg-[var(--surface-card)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-primary)]"
                       >
                         <option value="LOW">Low (Regular)</option>
                         <option value="NORMAL">Normal (Standard)</option>
@@ -281,7 +281,7 @@ export function ClassroomRequestCartDrawer({
 
                   {/* Purpose / Remarks */}
                   <div className="space-y-1 pt-1">
-                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    <label className="text-xs font-semibold text-[var(--text-secondary)]">
                       Purpose / Remarks (Optional)
                     </label>
                     <textarea
@@ -289,25 +289,25 @@ export function ClassroomRequestCartDrawer({
                       value={purpose}
                       onChange={(e) => setPurpose(e.target.value)}
                       placeholder="e.g. Sensory art activities, weekly coloring sheets & hygiene replenishments..."
-                      className="w-full text-xs py-1.5 px-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+                      className="w-full text-xs py-1.5 px-2.5 rounded-lg border border-[var(--border-default)] bg-[var(--surface-card)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-primary)] resize-none"
                     />
                   </div>
                 </div>
 
                 {/* Items in Cart */}
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between text-xs font-bold text-gray-700 dark:text-gray-300">
+                  <div className="flex items-center justify-between text-xs font-bold text-[var(--text-secondary)]">
                     <span>Requested Items ({cart.length})</span>
                     <button
                       type="button"
                       onClick={onClearCart}
-                      className="text-xs text-red-500 hover:text-red-700 underline font-normal"
+                      className="text-xs text-[var(--color-danger-base)] hover:underline font-normal"
                     >
                       Clear All
                     </button>
                   </div>
 
-                  <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                  <div className="divide-y divide-[var(--border-subtle)]">
                     {cart.map((item) => {
                       const isExcessive = item.quantity > item.availableStock
                       const isOutOfStock = item.availableStock <= 0
@@ -322,26 +322,26 @@ export function ClassroomRequestCartDrawer({
                               {item.iconEmoji}
                             </span>
                             <div className="min-w-0 flex-1">
-                              <h4 className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                              <h4 className="text-xs font-bold text-[var(--text-primary)] truncate">
                                 {item.name}
                               </h4>
-                              <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                              <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
                                 <span>Unit: {item.unit}</span>
                                 <span>•</span>
                                 <span
                                   className={
                                     isOutOfStock
-                                      ? 'text-red-600 font-bold'
+                                      ? 'text-[var(--color-danger-base)] font-bold'
                                       : isExcessive
-                                      ? 'text-amber-600 font-bold'
-                                      : 'text-gray-500'
+                                      ? 'text-[var(--color-warning-base)] font-bold'
+                                      : 'text-[var(--text-muted)]'
                                   }
                                 >
                                   {item.availableStock} in stock
                                 </span>
                               </div>
                               {isExcessive && (
-                                <p className="text-[10px] text-red-600 font-semibold pt-0.5">
+                                <p className="text-[10px] text-[var(--color-danger-base)] font-semibold pt-0.5">
                                   ⚠️ Exceeds available stock ({item.availableStock})
                                 </p>
                               )}
@@ -350,15 +350,15 @@ export function ClassroomRequestCartDrawer({
 
                           {/* Stepper & Trash */}
                           <div className="flex items-center gap-2 shrink-0">
-                            <div className="flex items-center rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-0.5">
+                            <div className="flex items-center rounded-lg border border-[var(--border-default)] bg-[var(--surface-subtle)] p-0.5">
                               <button
                                 type="button"
                                 onClick={() => onUpdateQuantity(item.itemId, Math.max(1, item.quantity - 1))}
-                                className="flex h-6 w-6 items-center justify-center rounded hover:bg-white dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
+                                className="flex h-6 w-6 items-center justify-center rounded hover:bg-[var(--surface-card)] text-[var(--text-primary)]"
                               >
                                 <Minus className="h-3 w-3" />
                               </button>
-                              <span className="w-8 text-center text-xs font-bold">
+                              <span className="w-8 text-center text-xs font-bold text-[var(--text-primary)]">
                                 {item.quantity}
                               </span>
                               <button
@@ -370,7 +370,7 @@ export function ClassroomRequestCartDrawer({
                                   )
                                 }
                                 disabled={item.quantity >= item.availableStock}
-                                className="flex h-6 w-6 items-center justify-center rounded hover:bg-white dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-40"
+                                className="flex h-6 w-6 items-center justify-center rounded hover:bg-[var(--surface-card)] text-[var(--text-primary)] disabled:opacity-40"
                               >
                                 <Plus className="h-3 w-3" />
                               </button>
@@ -379,7 +379,7 @@ export function ClassroomRequestCartDrawer({
                             <button
                               type="button"
                               onClick={() => onRemoveItem(item.itemId)}
-                              className="p-1.5 text-gray-400 hover:text-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                              className="p-1.5 text-[var(--text-muted)] hover:text-[var(--color-danger-base)] rounded-md hover:bg-[var(--color-danger-surface)] transition-colors"
                               aria-label={`Remove ${item.name} from cart`}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -392,44 +392,44 @@ export function ClassroomRequestCartDrawer({
                 </div>
 
                 {/* Stock safety notice */}
-                <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 p-3.5 text-amber-900 dark:text-amber-200 text-xs space-y-1">
+                <div className="rounded-xl bg-[var(--color-warning-surface)] border border-[var(--color-warning-border)] p-3.5 text-[var(--color-warning-text)] text-xs space-y-1">
                   <div className="flex items-center gap-1.5 font-bold">
-                    <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0" />
+                    <ShieldAlert className="h-4 w-4 text-[var(--color-warning-base)] shrink-0" />
                     <span>Important Workflow Notice</span>
                   </div>
-                  <p className="text-[11px] leading-relaxed text-amber-800 dark:text-amber-300">
+                  <p className="text-[11px] leading-relaxed text-[var(--color-warning-text)]">
                     Submitting this cart sends an official supply request for principal approval. School inventory stock will be deducted only upon physical issue by inventory staff.
                   </p>
                 </div>
 
                 {errorMsg && (
-                  <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700 font-medium flex items-start gap-2">
-                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-500" />
+                  <div className="rounded-xl bg-[var(--color-danger-surface)] border border-[var(--color-danger-border)] p-3 text-xs text-[var(--color-danger-text)] font-medium flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-[var(--color-danger-base)]" />
                     <span>{errorMsg}</span>
                   </div>
                 )}
               </div>
 
               {/* ── DRAWER FOOTER: SUBMIT ACTION ── */}
-              <div className="border-t border-gray-200 dark:border-gray-800 p-6 bg-white dark:bg-gray-900 space-y-3">
-                <div className="flex items-center justify-between text-xs font-medium text-gray-500">
+              <div className="border-t border-[var(--border-default)] p-6 bg-[var(--surface-card)] space-y-3">
+                <div className="flex items-center justify-between text-xs font-medium text-[var(--text-muted)]">
                   <span>Distinct Items:</span>
-                  <span className="font-bold text-gray-900 dark:text-white">{totalItemCount}</span>
+                  <span className="font-bold text-[var(--text-primary)]">{totalItemCount}</span>
                 </div>
-                <div className="flex items-center justify-between text-sm font-bold text-gray-900 dark:text-white">
+                <div className="flex items-center justify-between text-sm font-bold text-[var(--text-primary)]">
                   <span>Total Units Requested:</span>
-                  <span className="text-base text-emerald-600">{totalUnits} units</span>
+                  <span className="text-base text-[var(--color-brand-primary)]">{totalUnits} units</span>
                 </div>
 
                 <button
                   type="button"
                   onClick={handleSubmitForApproval}
                   disabled={submitting || hasInvalidItems || cart.length === 0}
-                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-600 text-white font-bold text-sm shadow-md hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98]"
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[var(--color-brand-primary)] text-[var(--text-inverse)] font-bold text-sm [box-shadow:var(--shadow-1)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98]"
                 >
                   {submitting ? (
                     <>
-                      <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                       <span>Submitting Request...</span>
                     </>
                   ) : (

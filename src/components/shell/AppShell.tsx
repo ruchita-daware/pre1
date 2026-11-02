@@ -20,6 +20,19 @@ import { WorkspaceBackground } from '@/components/shell/WorkspaceBackground'
 import { GlobalWorkspaceHeader } from '@/components/shell/GlobalWorkspaceHeader'
 import { StaffProfileModal } from '@/components/profile/StaffProfileModal'
 import { getStoredShellGlowConfig, applyShellGlowToDom } from '@/lib/theme/shell-glow'
+import {
+  type ThemePreference,
+  type ResolvedTheme,
+  getStoredThemePreference,
+  resolveTheme,
+  getSystemPrefersDark,
+  applyThemeToDom,
+  setStoredThemePreference,
+  clearUserThemeCache,
+  subscribeToSystemThemeChange,
+  syncThemeWithDatabase,
+  persistThemePreference,
+} from '@/lib/theme/theme-contract'
 import type { BrandingConfig } from '@/lib/branding-types'
 
 export interface ShellUser {
@@ -31,6 +44,7 @@ export interface ShellUser {
   branchName: string | null
   avatarUrl?: string | null
   mustChangePassword?: boolean
+  preferences?: Record<string, any> | null
 }
 
 export function AppShell({
@@ -56,7 +70,7 @@ export function AppShell({
     ...(avatarOverride !== null ? { avatarUrl: avatarOverride } : {}),
   }
   const [query, setQuery] = useState('')
-  const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  const [theme, setTheme] = useState<ResolvedTheme>('light')
   const searchRef = useRef<HTMLInputElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const startBtnRef = useRef<HTMLButtonElement>(null)
@@ -173,23 +187,24 @@ export function AppShell({
   }, [user.role, user.roles])
 
 
-  // theme boot + persistence (reads localStorage once on mount)
+  // theme boot + persistence + dynamic OS subscription + DB sync
   useEffect(() => {
-    const stored = localStorage.getItem('preone_theme') || localStorage.getItem('preone-theme')
-    let isDark = false
-    if (stored === 'dark') {
-      isDark = true
-    } else if (stored === 'light') {
-      isDark = false
-    } else {
-      isDark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-    }
-    const t = isDark ? 'dark' : 'light'
-    document.documentElement.setAttribute('data-theme', t)
-    document.documentElement.classList.toggle('dark', isDark)
-    queueMicrotask(() => setTheme(t))
+    // 1. Authoritative DB sync for authenticated user
+    const dbTheme = user?.preferences?.theme
+    const { resolved } = syncThemeWithDatabase(dbTheme)
+    setTheme(resolved)
+
+    // 2. Subscribe to dynamic OS theme changes for Auto mode
+    const unsubscribe = subscribeToSystemThemeChange((newResolved) => {
+      setTheme(newResolved)
+    })
+
     applyShellGlowToDom(getStoredShellGlowConfig())
-  }, [])
+
+    return () => {
+      unsubscribe()
+    }
+  }, [user?.preferences?.theme])
 
   const toggleTheme = useCallback(() => {
     // Enable smooth cross-fade transition only during deliberate user toggle
@@ -199,14 +214,14 @@ export function AppShell({
     }, 250)
 
     setTheme((prev) => {
-      const next = prev === 'light' ? 'dark' : 'light'
-      try {
-        localStorage.setItem('preone_theme', next)
-        localStorage.setItem('preone-theme', next)
-      } catch {}
-      document.documentElement.setAttribute('data-theme', next)
-      document.documentElement.classList.toggle('dark', next === 'dark')
-      return next
+      let nextResolved: ResolvedTheme = 'dark'
+      if (prev === 'light') nextResolved = 'dark'
+      else if (prev === 'dark') nextResolved = 'high-contrast-light'
+      else if (prev === 'high-contrast-light') nextResolved = 'high-contrast-dark'
+      else nextResolved = 'light'
+      // Persist explicit preference to localStorage and sync with backend database
+      persistThemePreference(nextResolved, true).catch(() => {})
+      return nextResolved
     })
   }, [])
 
@@ -283,6 +298,8 @@ export function AppShell({
   }, [menuOpen, notifOpen, attnOpen])
 
   const logout = useCallback(async () => {
+    // Clear user-specific theme cache so next user does not inherit previous user's theme
+    clearUserThemeCache()
     await fetch('/api/v1/auth/logout', { method: 'POST' })
     router.push('/')
     router.refresh()

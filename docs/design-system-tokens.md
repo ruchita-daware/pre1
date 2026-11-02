@@ -94,13 +94,16 @@ Elevation is layered into three distinct levels:
 
 ---
 
-### 2.5 Radius Scale
+### 2.5 Radius Scale (PRE1-FMDS-BORDER-RADIUS-001)
 
-* `--r-sm`: `10px` (Compact controls, badges)
+* `--r-xs`: `4px` (Small indicators, tightly fitted elements)
+* `--r-sm`: `8px` (Compact controls, mini badges, tooltips — reconciled from legacy 10px)
 * `--r-md`: `12px` (Standard buttons, inputs, segmented controls)
 * `--r-lg`: `16px` (Cards, table containers, popover menus)
 * `--r-xl`: `24px` (Large modals, dialogs, auth surfaces)
+* `--r-card`: `20px` (Large feature cards and designated hero surfaces)
 * `--r-pill`: `999px` (Status pills, avatar clips, floating tags)
+* `--r-full`: `999px` (Full-radius alias)
 
 ---
 

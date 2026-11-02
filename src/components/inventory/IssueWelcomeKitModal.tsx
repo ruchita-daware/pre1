@@ -268,11 +268,11 @@ export function IssueWelcomeKitModal({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 9998,
+        zIndex: 'var(--z-overlay, 500)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+        backgroundColor: 'var(--surface-overlay)',
         backdropFilter: 'blur(4px)',
         padding: '16px',
         overflowY: 'auto',
@@ -282,14 +282,14 @@ export function IssueWelcomeKitModal({
         style={{
           width: '100%',
           maxWidth: '680px',
-          backgroundColor: '#ffffff',
+          backgroundColor: 'var(--surface-card)',
           borderRadius: '16px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          boxShadow: 'var(--shadow-3)',
           display: 'flex',
           flexDirection: 'column',
           maxHeight: '94vh',
           overflow: 'hidden',
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--border-default)',
         }}
       >
         {/* Modal Header */}
@@ -299,8 +299,8 @@ export function IssueWelcomeKitModal({
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '16px 22px',
-            borderBottom: '1px solid #e2e8f0',
-            backgroundColor: '#faf5ff',
+            borderBottom: '1px solid var(--border-default)',
+            backgroundColor: 'var(--surface-subtle)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -309,8 +309,8 @@ export function IssueWelcomeKitModal({
                 width: 38,
                 height: 38,
                 borderRadius: '10px',
-                backgroundColor: '#ede9fe',
-                color: '#7c3aed',
+                backgroundColor: 'var(--surface-subtle)',
+                color: 'var(--color-brand-primary)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -319,10 +319,10 @@ export function IssueWelcomeKitModal({
               <Package size={20} />
             </div>
             <div>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
                 Issue Student Welcome Kit
               </h3>
-              <p style={{ fontSize: '0.78rem', margin: '2px 0 0 0', color: '#64748b' }}>
+              <p style={{ fontSize: '0.78rem', margin: '2px 0 0 0', color: 'var(--text-secondary)' }}>
                 1-click bundle issuance with atomic stock deduction & printable handover slip
               </p>
             </div>
@@ -335,9 +335,9 @@ export function IssueWelcomeKitModal({
               width: 32,
               height: 32,
               borderRadius: '8px',
-              border: '1px solid #cbd5e1',
-              backgroundColor: '#ffffff',
-              color: '#64748b',
+              border: '1px solid var(--border-default)',
+              backgroundColor: 'var(--surface-card)',
+              color: 'var(--text-secondary)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -357,9 +357,7 @@ export function IssueWelcomeKitModal({
                 style={{
                   padding: '12px 14px',
                   borderRadius: '10px',
-                  backgroundColor: '#fef2f2',
-                  border: '1px solid #fecaca',
-                  color: '#b91c1c',
+                  backgroundColor: 'var(--color-danger-surface)', border: '1px solid var(--color-danger-border)', color: 'var(--color-danger-text)',
                   display: 'flex',
                   alignItems: 'flex-start',
                   gap: 10,
@@ -382,7 +380,7 @@ export function IssueWelcomeKitModal({
                   fontWeight: 700,
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',
-                  color: '#475569',
+                  color: 'var(--text-secondary)',
                   marginBottom: 6,
                 }}
               >
@@ -397,8 +395,8 @@ export function IssueWelcomeKitModal({
                     justifyContent: 'space-between',
                     padding: '12px 16px',
                     borderRadius: '12px',
-                    backgroundColor: '#f8fafc',
-                    border: '1px solid #cbd5e1',
+                    backgroundColor: 'var(--surface-subtle)',
+                    border: '1px solid var(--border-default)',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -407,8 +405,7 @@ export function IssueWelcomeKitModal({
                         width: 36,
                         height: 36,
                         borderRadius: '999px',
-                        backgroundColor: '#e0e7ff',
-                        color: '#4338ca',
+                        backgroundColor: 'var(--color-info-surface)', color: 'var(--color-info-base)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -419,10 +416,10 @@ export function IssueWelcomeKitModal({
                       {selectedStudent.fullName.charAt(0)}
                     </div>
                     <div>
-                      <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.92rem' }}>
+                      <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.92rem' }}>
                         {selectedStudent.fullName}
                       </div>
-                      <div style={{ fontSize: '0.76rem', color: '#64748b' }}>
+                      <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
                         Adm No: <strong>{selectedStudent.admissionNo}</strong>
                         {selectedStudent.classroomName ? ` • ${selectedStudent.classroomName}` : ''}
                       </div>
@@ -438,7 +435,7 @@ export function IssueWelcomeKitModal({
                       }}
                       style={{
                         fontSize: '0.75rem',
-                        color: '#7c3aed',
+                        color: 'var(--color-brand-primary)',
                         fontWeight: 600,
                         background: 'none',
                         border: 'none',
@@ -459,7 +456,7 @@ export function IssueWelcomeKitModal({
                         position: 'absolute',
                         left: 12,
                         top: 11,
-                        color: '#94a3b8',
+                        color: 'var(--text-muted)',
                       }}
                     />
                     <input
@@ -471,7 +468,7 @@ export function IssueWelcomeKitModal({
                         width: '100%',
                         padding: '9px 12px 9px 36px',
                         borderRadius: '10px',
-                        border: '1px solid #cbd5e1',
+                        border: '1px solid var(--border-default)',
                         fontSize: '0.88rem',
                         outline: 'none',
                       }}
@@ -480,7 +477,7 @@ export function IssueWelcomeKitModal({
                       <Loader2
                         size={16}
                         className="animate-spin"
-                        style={{ position: 'absolute', right: 12, top: 11, color: '#7c3aed' }}
+                        style={{ position: 'absolute', right: 12, top: 11, color: 'var(--color-brand-primary)' }}
                       />
                     )}
                   </div>
@@ -493,10 +490,10 @@ export function IssueWelcomeKitModal({
                         right: 0,
                         top: '100%',
                         marginTop: 4,
-                        backgroundColor: '#ffffff',
-                        border: '1px solid #cbd5e1',
+                        backgroundColor: 'var(--surface-card)',
+                        border: '1px solid var(--border-default)',
                         borderRadius: '10px',
-                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                        boxShadow: 'var(--shadow-2)',
                         zIndex: 50,
                         maxHeight: '200px',
                         overflowY: 'auto',
@@ -521,19 +518,19 @@ export function IssueWelcomeKitModal({
                           style={{
                             padding: '10px 14px',
                             cursor: 'pointer',
-                            borderBottom: '1px solid #f1f5f9',
+                            borderBottom: '1px solid var(--border-default)',
                             display: 'flex',
                             justifyContent: 'space-between',
                             alignItems: 'center',
                           }}
-                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}
-                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ffffff')}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--surface-subtle)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--surface-card)')}
                         >
                           <div>
-                            <div style={{ fontWeight: 600, fontSize: '0.88rem', color: '#0f172a' }}>
+                            <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary)' }}>
                               {s.fullName}
                             </div>
-                            <div style={{ fontSize: '0.74rem', color: '#64748b' }}>
+                            <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
                               {s.admissionNo} {s.classroom ? `• ${s.classroom.name}` : ''}
                             </div>
                           </div>
@@ -543,8 +540,7 @@ export function IssueWelcomeKitModal({
                                 fontSize: '0.7rem',
                                 padding: '2px 6px',
                                 borderRadius: '4px',
-                                backgroundColor: '#fef3c7',
-                                color: '#92400e',
+                                backgroundColor: 'var(--color-warning-surface)', color: 'var(--color-warning-text)',
                                 fontWeight: 600,
                               }}
                             >
@@ -565,9 +561,7 @@ export function IssueWelcomeKitModal({
                 style={{
                   padding: '12px 14px',
                   borderRadius: '10px',
-                  backgroundColor: '#fffbeb',
-                  border: '1px solid #fde68a',
-                  color: '#92400e',
+                  backgroundColor: 'var(--color-warning-surface)', border: '1px solid var(--color-warning-border)', color: 'var(--color-warning-text)',
                   fontSize: '0.82rem',
                 }}
               >
@@ -575,7 +569,7 @@ export function IssueWelcomeKitModal({
                   <AlertTriangle size={16} />
                   <span>Student Already Received a Welcome Kit</span>
                 </div>
-                <p style={{ margin: '4px 0 8px 0', fontSize: '0.78rem', color: '#78350f' }}>
+                <p style={{ margin: '4px 0 8px 0', fontSize: '0.78rem', color: 'var(--color-warning-text)' }}>
                   Student was previously issued <strong>{eligibilityInfo.previousKit?.bundleName}</strong> (
                   {eligibilityInfo.previousKit?.kitNumber}) on{' '}
                   {new Date(eligibilityInfo.previousKit?.issueDate).toLocaleDateString()}.
@@ -602,7 +596,7 @@ export function IssueWelcomeKitModal({
                     fontWeight: 700,
                     textTransform: 'uppercase',
                     letterSpacing: '0.04em',
-                    color: '#475569',
+                    color: 'var(--text-secondary)',
                     marginBottom: 6,
                   }}
                 >
@@ -615,9 +609,9 @@ export function IssueWelcomeKitModal({
                     width: '100%',
                     padding: '8px 12px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: '1px solid var(--border-default)',
                     fontSize: '0.85rem',
-                    backgroundColor: '#ffffff',
+                    backgroundColor: 'var(--surface-card)',
                   }}
                 >
                   {bundles.map((b) => (
@@ -639,12 +633,12 @@ export function IssueWelcomeKitModal({
                     fontWeight: 700,
                     textTransform: 'uppercase',
                     letterSpacing: '0.04em',
-                    color: '#475569',
+                    color: 'var(--text-secondary)',
                     marginBottom: 6,
                   }}
                 >
                   <span>3. Uniform Size</span>
-                  <span style={{ fontSize: '0.7rem', color: '#7c3aed', textTransform: 'none' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--color-brand-primary)', textTransform: 'none' }}>
                     (2 Sets Included)
                   </span>
                 </label>
@@ -660,9 +654,9 @@ export function IssueWelcomeKitModal({
                           flex: 1,
                           padding: '7px 0',
                           borderRadius: '8px',
-                          border: isSelected ? '2px solid #7c3aed' : '1px solid #cbd5e1',
-                          backgroundColor: isSelected ? '#ede9fe' : '#ffffff',
-                          color: isSelected ? '#6d28d9' : '#475569',
+                          border: isSelected ? '2px solid var(--color-brand-primary)' : '1px solid var(--border-default)',
+                          backgroundColor: isSelected ? 'var(--surface-subtle)' : 'var(--surface-card)',
+                          color: isSelected ? 'var(--color-brand-primary)' : 'var(--text-secondary)',
                           fontWeight: isSelected ? 800 : 600,
                           fontSize: '0.85rem',
                           cursor: 'pointer',
@@ -687,7 +681,7 @@ export function IssueWelcomeKitModal({
                     fontWeight: 700,
                     textTransform: 'uppercase',
                     letterSpacing: '0.04em',
-                    color: '#475569',
+                    color: 'var(--text-secondary)',
                     marginBottom: 6,
                   }}
                 >
@@ -700,9 +694,9 @@ export function IssueWelcomeKitModal({
                     width: '100%',
                     padding: '8px 12px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: '1px solid var(--border-default)',
                     fontSize: '0.85rem',
-                    backgroundColor: '#ffffff',
+                    backgroundColor: 'var(--surface-card)',
                   }}
                 >
                   {locations.map((loc) => (
@@ -730,7 +724,7 @@ export function IssueWelcomeKitModal({
                     fontWeight: 700,
                     textTransform: 'uppercase',
                     letterSpacing: '0.04em',
-                    color: '#475569',
+                    color: 'var(--text-secondary)',
                   }}
                 >
                   4. Bundle Contents & Live Stock Check
@@ -740,7 +734,7 @@ export function IssueWelcomeKitModal({
                     style={{
                       fontSize: '0.74rem',
                       fontWeight: 700,
-                      color: details.allInStock ? '#15803d' : '#b91c1c',
+                      color: details.allInStock ? 'var(--color-success-text)' : 'var(--color-danger-text)',
                     }}
                   >
                     {details.allInStock
@@ -752,25 +746,25 @@ export function IssueWelcomeKitModal({
 
               <div
                 style={{
-                  backgroundColor: '#f8fafc',
+                  backgroundColor: 'var(--surface-subtle)',
                   borderRadius: '12px',
-                  border: '1px solid #e2e8f0',
+                  border: '1px solid var(--border-default)',
                   overflow: 'hidden',
                 }}
               >
                 {loadingDetails ? (
-                  <div style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>
+                  <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
                     <Loader2 size={20} className="animate-spin" style={{ margin: '0 auto 6px' }} />
                     <span style={{ fontSize: '0.8rem' }}>Checking store stock levels...</span>
                   </div>
                 ) : details ? (
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
                     <thead>
-                      <tr style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: '#f1f5f9' }}>
-                        <th style={{ padding: '8px 12px', textAlign: 'left', color: '#475569' }}>Item Component</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'center', color: '#475569' }}>Qty Needed</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'center', color: '#475569' }}>Available Stock</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right', color: '#475569' }}>Status</th>
+                      <tr style={{ borderBottom: '1px solid var(--border-default)', backgroundColor: 'var(--surface-subtle)' }}>
+                        <th style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-secondary)' }}>Item Component</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'center', color: 'var(--text-secondary)' }}>Qty Needed</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'center', color: 'var(--text-secondary)' }}>Available Stock</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--text-secondary)' }}>Status</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -778,11 +772,11 @@ export function IssueWelcomeKitModal({
                         <tr
                           key={comp.bundleItemId}
                           style={{
-                            borderBottom: '1px solid #f1f5f9',
-                            backgroundColor: comp.hasSufficientStock ? 'transparent' : '#fef2f2',
+                            borderBottom: '1px solid var(--border-default)',
+                            backgroundColor: comp.hasSufficientStock ? 'transparent' : 'var(--color-danger-surface)',
                           }}
                         >
-                          <td style={{ padding: '9px 12px', fontWeight: 600, color: '#0f172a' }}>
+                          <td style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--text-primary)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <span>{comp.itemName}</span>
                               {comp.hasVariants && (
@@ -790,8 +784,7 @@ export function IssueWelcomeKitModal({
                                   style={{
                                     fontSize: '0.7rem',
                                     fontWeight: 700,
-                                    backgroundColor: '#ede9fe',
-                                    color: '#6d28d9',
+                                    backgroundColor: 'var(--surface-subtle)', color: 'var(--color-brand-primary)',
                                     padding: '1px 5px',
                                     borderRadius: '4px',
                                   }}
@@ -800,7 +793,7 @@ export function IssueWelcomeKitModal({
                                 </span>
                               )}
                             </div>
-                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
                               {comp.sku}
                             </div>
                           </td>
@@ -812,7 +805,7 @@ export function IssueWelcomeKitModal({
                               padding: '9px 12px',
                               textAlign: 'center',
                               fontWeight: 700,
-                              color: comp.hasSufficientStock ? '#0f172a' : '#b91c1c',
+                              color: comp.hasSufficientStock ? 'var(--text-primary)' : 'var(--color-danger-text)',
                             }}
                           >
                             {comp.availableStock} {comp.unit}
@@ -826,8 +819,7 @@ export function IssueWelcomeKitModal({
                                   gap: 4,
                                   fontSize: '0.72rem',
                                   fontWeight: 700,
-                                  color: '#15803d',
-                                  backgroundColor: '#dcfce7',
+                                  color: 'var(--color-success-text)', backgroundColor: 'var(--color-success-surface)',
                                   padding: '2px 7px',
                                   borderRadius: '999px',
                                 }}
@@ -842,8 +834,7 @@ export function IssueWelcomeKitModal({
                                   gap: 4,
                                   fontSize: '0.72rem',
                                   fontWeight: 700,
-                                  color: '#b91c1c',
-                                  backgroundColor: '#fee2e2',
+                                  color: 'var(--color-danger-text)', backgroundColor: 'var(--color-danger-surface)',
                                   padding: '2px 7px',
                                   borderRadius: '999px',
                                 }}
@@ -856,12 +847,12 @@ export function IssueWelcomeKitModal({
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr style={{ backgroundColor: '#f1f5f9', borderTop: '1px solid #cbd5e1' }}>
+                      <tr style={{ backgroundColor: 'var(--surface-subtle)', borderTop: '1px solid var(--border-default)' }}>
                         <td style={{ padding: '8px 12px', fontWeight: 700 }}>Total Items Included:</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 800, color: '#7c3aed' }}>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 800, color: 'var(--color-brand-primary)' }}>
                           {details.totalItemsCount} units
                         </td>
-                        <td colSpan={2} style={{ padding: '8px 12px', textAlign: 'right', fontSize: '0.75rem', color: '#64748b' }}>
+                        <td colSpan={2} style={{ padding: '8px 12px', textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                           Deduction is all-or-nothing
                         </td>
                       </tr>
@@ -881,7 +872,7 @@ export function IssueWelcomeKitModal({
                     fontWeight: 700,
                     textTransform: 'uppercase',
                     letterSpacing: '0.04em',
-                    color: '#475569',
+                    color: 'var(--text-secondary)',
                     marginBottom: 6,
                   }}
                 >
@@ -896,7 +887,7 @@ export function IssueWelcomeKitModal({
                     width: '100%',
                     padding: '8px 12px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: '1px solid var(--border-default)',
                     fontSize: '0.85rem',
                   }}
                 />
@@ -910,7 +901,7 @@ export function IssueWelcomeKitModal({
                     fontWeight: 700,
                     textTransform: 'uppercase',
                     letterSpacing: '0.04em',
-                    color: '#475569',
+                    color: 'var(--text-secondary)',
                     marginBottom: 6,
                   }}
                 >
@@ -925,7 +916,7 @@ export function IssueWelcomeKitModal({
                     width: '100%',
                     padding: '8px 12px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: '1px solid var(--border-default)',
                     fontSize: '0.85rem',
                   }}
                 />
@@ -940,17 +931,17 @@ export function IssueWelcomeKitModal({
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '14px 22px',
-              borderTop: '1px solid #e2e8f0',
-              backgroundColor: '#f8fafc',
+              borderTop: '1px solid var(--border-default)',
+              backgroundColor: 'var(--surface-subtle)',
             }}
           >
-            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
               {isBlockedByStock ? (
-                <span style={{ color: '#b91c1c', fontWeight: 600 }}>
+                <span style={{ color: 'var(--color-danger-text)', fontWeight: 600 }}>
                   Cannot confirm: replenish out-of-stock items first
                 </span>
               ) : isBlockedByDuplicate ? (
-                <span style={{ color: '#b45309', fontWeight: 600 }}>
+                <span style={{ color: 'var(--color-warning-text)', fontWeight: 600 }}>
                   Acknowledge duplicate issuance override above
                 </span>
               ) : (
@@ -966,9 +957,9 @@ export function IssueWelcomeKitModal({
                 style={{
                   padding: '8px 16px',
                   borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  backgroundColor: '#ffffff',
-                  color: '#475569',
+                  border: '1px solid var(--border-default)',
+                  backgroundColor: 'var(--surface-card)',
+                  color: 'var(--text-secondary)',
                   fontWeight: 600,
                   fontSize: '0.84rem',
                   cursor: submitting ? 'not-allowed' : 'pointer',
@@ -988,9 +979,9 @@ export function IssueWelcomeKitModal({
                   borderRadius: '8px',
                   backgroundColor:
                     submitting || !selectedStudent || isBlockedByStock || isBlockedByDuplicate
-                      ? '#cbd5e1'
-                      : '#7c3aed',
-                  color: '#ffffff',
+                      ? 'var(--border-default)'
+                      : 'var(--color-brand-primary)',
+                  color: 'var(--text-inverse)',
                   border: 'none',
                   fontWeight: 700,
                   fontSize: '0.85rem',
@@ -998,7 +989,7 @@ export function IssueWelcomeKitModal({
                     submitting || !selectedStudent || isBlockedByStock || isBlockedByDuplicate
                       ? 'not-allowed'
                       : 'pointer',
-                  boxShadow: '0 2px 4px rgba(124, 58, 237, 0.2)',
+                  boxShadow: '0 2px 4px color-mix(in srgb, var(--color-brand-primary) 20%, transparent)',
                 }}
               >
                 {submitting ? (

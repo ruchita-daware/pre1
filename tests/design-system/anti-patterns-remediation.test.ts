@@ -37,7 +37,7 @@ describe('PreOne Anti-Patterns Audit & Remediation Test Suite', () => {
       // Should not render an animated Lucide Sparkle as a tab active indicator
       expect(ribbonFile).not.toContain('<Sparkles size={12} className="text-emerald-500 animate-pulse shrink-0" />')
       // Active indicator should be standardized
-      expect(ribbonFile).toContain('rounded-full ${theme.activeDot} animate-pulse shrink-0')
+      expect(ribbonFile).toContain('GlobalModuleNavigation')
     })
   })
 

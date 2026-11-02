@@ -107,14 +107,14 @@ export function GlobalModuleNavigation({
     const variant = item.badgeVariant || 'primary'
     const variantCls =
       variant === 'warning'
-        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300'
+        ? 'bg-[var(--status-warning-surface)] text-[var(--status-warning-foreground)]'
         : variant === 'danger'
-        ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300'
+        ? 'bg-[var(--status-danger-surface)] text-[var(--status-danger-foreground)]'
         : variant === 'success'
-        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300'
+        ? 'bg-[var(--status-success-surface)] text-[var(--status-success-foreground)]'
         : variant === 'info'
-        ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300'
-        : 'bg-purple-100 text-purple-800 dark:bg-purple-950/80 dark:text-purple-300'
+        ? 'bg-[var(--status-info-surface)] text-[var(--status-info-foreground)]'
+        : 'bg-[var(--color-brand-surface)] text-[var(--color-brand-primary)]'
 
     if (isMobile) {
       return (
@@ -152,7 +152,7 @@ export function GlobalModuleNavigation({
             className={`transition-colors ${
               isActive
                 ? 'text-primary'
-                : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'
+                : 'text-[var(--color-text-muted)] group-hover:text-[var(--color-text-primary)]'
             }`}
           />
         )
@@ -185,7 +185,7 @@ export function GlobalModuleNavigation({
       <nav
         aria-label={ariaLabel}
         role={isPureTabs ? 'tablist' : 'navigation'}
-        className={`preone-module-nav group flex items-center justify-between sm:justify-start gap-1 p-1 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-[color-mix(in_srgb,var(--primary,#7c3aed)_16%,var(--border,rgba(226,232,240,0.9)))] dark:border-[color-mix(in_srgb,var(--primary,#8b5cf6)_24%,var(--border-dark,#1e293b))] shadow-xs transition-all duration-200 select-none ${
+        className={`preone-module-nav group flex items-center justify-between sm:justify-start gap-1 p-1 rounded-2xl bg-[var(--color-surface)]/90 backdrop-blur-md border border-[var(--color-border-default)] shadow-xs transition-all duration-200 select-none ${
           variant === 'compact' ? 'py-0.5' : ''
         }`}
       >
@@ -198,9 +198,9 @@ export function GlobalModuleNavigation({
               isHiddenOnMobile ? 'hidden sm:inline-flex' : 'inline-flex'
             } ${
               isActive
-                ? 'preone-nav-item-active bg-[color-mix(in_srgb,var(--primary,#7c3aed)_10%,transparent)] text-primary dark:text-purple-300 border border-[color-mix(in_srgb,var(--primary,#7c3aed)_38%,transparent)] shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 border border-transparent hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100/70 dark:hover:bg-slate-800/60'
-            } focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1`
+                ? 'preone-nav-item-active bg-[var(--color-brand-surface)] text-[var(--color-brand-primary)] border border-[var(--color-brand-primary)]/40 shadow-xs'
+                : 'text-[var(--color-text-muted)] border border-transparent hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)]'
+            } focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-1`
 
             const accessibleName = item.ariaLabel || item.label
 
@@ -249,8 +249,8 @@ export function GlobalModuleNavigation({
                 onClick={() => setMoreMenuOpen((prev) => !prev)}
                 className={`preone-nav-item flex items-center justify-center p-2 rounded-xl text-xs font-semibold transition-all duration-150 min-h-[38px] min-w-[38px] border ${
                   isOverflowActive
-                    ? 'bg-[color-mix(in_srgb,var(--primary,#7c3aed)_10%,transparent)] text-primary border-[color-mix(in_srgb,var(--primary,#7c3aed)_38%,transparent)]'
-                    : 'text-slate-600 dark:text-slate-400 border-transparent hover:bg-slate-100/70 dark:hover:bg-slate-800/60'
+                    ? 'bg-[var(--color-brand-surface)] text-[var(--color-brand-primary)] border-[var(--color-brand-primary)]/40'
+                    : 'text-[var(--color-text-muted)] border-transparent hover:bg-[var(--color-surface-subtle)]'
                 }`}
                 aria-label="More navigation workspaces"
                 aria-expanded={moreMenuOpen}
@@ -266,11 +266,11 @@ export function GlobalModuleNavigation({
               {/* Mobile Overflow Dropdown Menu */}
               {moreMenuOpen && (
                 <div
-                  className="absolute right-0 top-full mt-2 w-56 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150"
+                  className="absolute right-0 top-full mt-2 w-56 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border-default)] shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150"
                   role="menu"
                   aria-orientation="vertical"
                 >
-                  <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
                     Additional Workspaces
                   </div>
                   {mobileOverflowItems.map((item) => {
@@ -278,8 +278,8 @@ export function GlobalModuleNavigation({
                     const IconComponent = item.icon
                     const itemClasses = `w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
                       isActive
-                        ? 'bg-primary/10 text-primary dark:text-purple-300'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        ? 'bg-[var(--color-brand-surface)] text-[var(--color-brand-primary)]'
+                        : 'text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)]'
                     }`
 
                     let overflowIconNode: React.ReactNode = null
@@ -288,7 +288,7 @@ export function GlobalModuleNavigation({
                         overflowIconNode = IconComponent
                       } else if (typeof IconComponent === 'function' || (typeof IconComponent === 'object' && IconComponent !== null)) {
                         const Comp = IconComponent as React.ComponentType<{ size?: number; className?: string }>
-                        overflowIconNode = <Comp size={14} className={isActive ? 'text-primary' : 'text-slate-400'} />
+                        overflowIconNode = <Comp size={14} className={isActive ? 'text-[var(--color-brand-primary)]' : 'text-[var(--color-text-muted)]'} />
                       }
                     }
 

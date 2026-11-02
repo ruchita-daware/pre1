@@ -40,7 +40,7 @@ export interface GlobalWorkspaceHeaderProps {
     branchName: string | null
     avatarUrl?: string | null
   }
-  theme: 'light' | 'dark'
+  theme: 'light' | 'dark' | 'high-contrast-light' | 'high-contrast-dark'
   onToggleTheme: () => void
   onOpenSearch: () => void
   // Notifications
@@ -243,8 +243,8 @@ export function GlobalWorkspaceHeader({
                     d="M12 2C12 7.52 7.52 12 2 12C7.52 12 12 16.48 12 22C12 16.48 16.48 12 22 12C16.48 12 12 7.52 12 2Z"
                     fill="url(#workspaceHeaderSparkleGrad)"
                   />
-                  <circle cx="18.5" cy="5.5" r="1.5" fill="#F59E0B" />
-                  <circle cx="5.5" cy="18.5" r="1.2" fill="#38BDF8" opacity="0.85" />
+                  <circle cx="18.5" cy="5.5" r="1.5" fill="var(--color-brand-secondary, #F59E0B)" />
+                  <circle cx="5.5" cy="18.5" r="1.2" fill="var(--color-brand-accent, #38BDF8)" opacity="0.85" />
                   <defs>
                     <linearGradient
                       id="workspaceHeaderSparkleGrad"
@@ -254,9 +254,9 @@ export function GlobalWorkspaceHeader({
                       y2="22"
                       gradientUnits="userSpaceOnUse"
                     >
-                      <stop stopColor="#9333EA" />
-                      <stop offset="0.5" stopColor="#7C3AED" />
-                      <stop offset="1" stopColor="#A855F7" />
+                      <stop stopColor="var(--color-brand-primary, #7C3AED)" />
+                      <stop offset="0.5" stopColor="var(--color-brand-primary, #7C3AED)" />
+                      <stop offset="1" stopColor="var(--color-brand-hover, #A855F7)" />
                     </linearGradient>
                   </defs>
                 </svg>
@@ -309,9 +309,9 @@ export function GlobalWorkspaceHeader({
               {langOpen && (
                 <div
                   role="menu"
-                  className="dropdown-menu absolute right-0 mt-2 w-40 rounded-xl bg-white dark:bg-slate-900 shadow-xl border border-slate-200 dark:border-slate-800 py-1.5 z-50 animate-in fade-in zoom-in-95"
+                  className="dropdown-menu absolute right-0 mt-2 w-40 rounded-xl bg-[var(--color-surface)] shadow-elevated border border-[var(--color-border-default)] py-1.5 z-[var(--z-dropdown,300)] animate-in fade-in zoom-in-95"
                 >
-                  <div className="px-3 py-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                  <div className="px-3 py-1 text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
                     {t('header.language')}
                   </div>
                   {SUPPORTED_LOCALES.map((loc) => {
@@ -327,15 +327,15 @@ export function GlobalWorkspaceHeader({
                         }}
                         className={`w-full flex items-center justify-between px-3 py-2 text-sm text-left transition-colors ${
                           isSelected
-                            ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-medium'
-                            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            ? 'bg-[var(--color-brand-surface)] text-[var(--color-brand-primary)] font-medium'
+                            : 'text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)]'
                         }`}
                       >
                         <span className="flex items-center gap-2">
                           <span>{loc.nativeName}</span>
                         </span>
                         {isSelected && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-brand-primary)]" />
                         )}
                       </button>
                     )
@@ -407,8 +407,8 @@ export function GlobalWorkspaceHeader({
                       style={{
                         fontSize: 11,
                         flexShrink: 0,
-                        background: 'var(--warning-strong, var(--warning))',
-                        color: 'var(--text-inverse, #ffffff)',
+                        background: 'var(--status-warning-foreground, var(--warning))',
+                        color: 'var(--color-primary-button-text, #ffffff)',
                         borderRadius: 999,
                         padding: '2px 8px',
                         fontWeight: 700,
@@ -464,8 +464,8 @@ export function GlobalWorkspaceHeader({
                         style={{
                           fontSize: 11,
                           flexShrink: 0,
-                          background: 'var(--warning-strong, #d97706)',
-                          color: '#fff',
+                          background: 'var(--status-warning-foreground, #d97706)',
+                          color: 'var(--color-primary-button-text, #ffffff)',
                           borderRadius: 999,
                           padding: '2px 8px',
                           fontWeight: 700,
@@ -504,8 +504,8 @@ export function GlobalWorkspaceHeader({
                         style={{
                           fontSize: 11,
                           flexShrink: 0,
-                          background: 'var(--warning-strong, #d97706)',
-                          color: '#fff',
+                          background: 'var(--status-warning-foreground, #d97706)',
+                          color: 'var(--color-primary-button-text, #ffffff)',
                           borderRadius: 999,
                           padding: '2px 8px',
                           fontWeight: 700,
@@ -622,7 +622,7 @@ export function GlobalWorkspaceHeader({
                       style={{
                         padding: '10px 14px',
                         borderBottom: '1px solid var(--border-subtle)',
-                        backgroundColor: n.isRead ? 'transparent' : 'rgba(99, 102, 241, 0.04)',
+                        backgroundColor: n.isRead ? 'transparent' : 'var(--color-surface-subtle)',
                         cursor: 'pointer',
                         transition: 'background 0.15s ease',
                       }}
@@ -756,7 +756,7 @@ export function GlobalWorkspaceHeader({
                       setProfileMenuOpen(false)
                       onLogout?.()
                     }}
-                    className="btn btn-ghost btn-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                    className="btn btn-ghost btn-xs text-[var(--status-danger-foreground)] hover:bg-[var(--status-danger-surface)]"
                     style={{
                       display: 'flex',
                       alignItems: 'center',

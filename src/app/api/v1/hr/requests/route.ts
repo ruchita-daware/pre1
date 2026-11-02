@@ -38,11 +38,15 @@ async function _GET(req: NextRequest) {
       take: 100,
     })
 
-    // 2. Attendance Corrections (attendance_staff entries created with source = 'CORRECTION')
+    // 2. Attendance Corrections (attendance_staff entries created with source = 'MANUAL' and correction notes)
     const corrections = await db.attendanceStaff.findMany({
       where: {
         tenantId,
-        source: 'CORRECTION',
+        source: 'MANUAL',
+        notes: {
+          contains: 'Correction',
+          mode: 'insensitive',
+        },
       },
       include: {
         staffProfile: {
@@ -108,7 +112,7 @@ async function _GET(req: NextRequest) {
         branchName: c.staffProfile.branch?.name || 'Main Campus',
         submittedAt: c.updatedAt,
         period: new Date(c.date).toLocaleDateString('en-IN'),
-        reason: c.notes || 'Attendance punch correction',
+        reason: c.notes?.replace(/^\[Correction\]\s*/i, '') || 'Attendance punch correction',
         status: 'APPROVED', // Marked directly by HR write
         actionedByName: c.markedByName,
         actionedAt: c.updatedAt,

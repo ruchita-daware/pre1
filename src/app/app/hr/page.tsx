@@ -513,7 +513,6 @@ function HRPageContent() {
                 // Keep s fallback
               }
             }}
-            onOpenOnboard={() => setIsOnboardOpen(true)}
             canWrite={canWrite}
             subView={staffSubView}
             onSubViewChange={setStaffSubView}

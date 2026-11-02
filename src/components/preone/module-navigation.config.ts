@@ -51,6 +51,7 @@ export interface ModuleNavigationItem {
   id: string
   label: string
   href?: string
+  onClick?: () => void
   icon?: React.ComponentType<{ size?: number; className?: string }> | React.ReactNode
   badge?: number | string
   badgeVariant?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral'

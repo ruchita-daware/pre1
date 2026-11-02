@@ -679,7 +679,7 @@ export default function PromotionHubPage() {
                       flexDirection: 'column',
                       justifyContent: 'space-between',
                       border: '1px solid var(--border-subtle)',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                      boxShadow: 'var(--shadow-card)',
                     }}
                   >
                     <div>

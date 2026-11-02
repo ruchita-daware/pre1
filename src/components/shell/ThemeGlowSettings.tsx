@@ -401,7 +401,7 @@ export function ThemeGlowSettings({ onSaved, showTitle = true }: ThemeGlowSettin
               <span className="text-xs font-semibold text-[var(--foreground)]">PreOne Header</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="w-2 h-2 rounded-full bg-[var(--status-success-foreground)]" />
               <span className="text-[11px] text-[var(--foreground-muted)]">Active</span>
             </div>
           </div>

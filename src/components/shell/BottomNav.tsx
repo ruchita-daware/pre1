@@ -134,7 +134,7 @@ export function BottomNav({
           label: t('nav.learning'),
           href: learningItem.href,
           icon: learningItem.icon || GraduationCap,
-          image: '/animations/home/preo_learning_mascot.webp',
+          image: '/animations/home/preo_learning.webp',
         })
       }
     } else {
@@ -153,7 +153,7 @@ export function BottomNav({
           label: t('nav.learning'),
           href: learningItem.href,
           icon: learningItem.icon || GraduationCap,
-          image: '/animations/home/preo_learning_mascot.webp',
+          image: '/animations/home/preo_learning.webp',
         })
       }
       if (staffItem) {

@@ -31,6 +31,14 @@ import { PageHead, StatusBadge, GlobalModuleNavigation, SETTINGS_NAVIGATION_CONF
 import { Modal } from '@/components/preone/Modal'
 import { useToast } from '@/components/preone/Toast'
 import { ThemeGlowSettings } from '@/components/shell/ThemeGlowSettings'
+import {
+  normalizeThemePreference,
+  preferenceToDbFormat,
+  setStoredThemePreference,
+  applyThemeToDom,
+  resolveTheme,
+  getSystemPrefersDark,
+} from '@/lib/theme/theme-contract'
 
 interface SchoolProfile {
   id: string
@@ -375,6 +383,13 @@ export default function SettingsControlCenter() {
   const handleSavePreferences = async () => {
     setBusy(true)
     try {
+      // 1. Immediately mirror to local storage
+      const normalizedPref = normalizeThemePreference(themePref)
+      setStoredThemePreference(normalizedPref)
+      const resolved = resolveTheme(normalizedPref, getSystemPrefersDark())
+      applyThemeToDom(resolved)
+
+      // 2. Persist to User.preferences in PostgreSQL
       const res = await fetch('/api/v1/settings/preferences', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -383,6 +398,8 @@ export default function SettingsControlCenter() {
 
       if (res.success) {
         toast.success('Preferences saved')
+      } else {
+        toast.error('Failed to save preferences', res.error?.message || 'Database sync failed')
       }
     } catch (e: any) {
       toast.error('Failed to save preferences', e.message)
@@ -1332,15 +1349,17 @@ export default function SettingsControlCenter() {
                 onChange={(e) => {
                   const val = e.target.value
                   setThemePref(val)
-                  if (typeof document !== 'undefined') {
-                    if (val === 'DARK') document.documentElement.setAttribute('data-theme', 'dark')
-                    else if (val === 'LIGHT') document.documentElement.setAttribute('data-theme', 'light')
-                  }
+                  const normalized = normalizeThemePreference(val)
+                  setStoredThemePreference(normalized)
+                  const resolved = resolveTheme(normalized, getSystemPrefersDark())
+                  applyThemeToDom(resolved)
                 }}
               >
                 <option value="LIGHT">Light Theme</option>
                 <option value="DARK">Dark Theme</option>
-                <option value="SYSTEM">Follow System Preference</option>
+                <option value="SYSTEM">Follow System Preference (Auto)</option>
+                <option value="HIGH_CONTRAST_LIGHT">High Contrast Light (WCAG AAA)</option>
+                <option value="HIGH_CONTRAST_DARK">High Contrast Dark (WCAG AAA)</option>
               </select>
             </div>
             <div className="form-group">

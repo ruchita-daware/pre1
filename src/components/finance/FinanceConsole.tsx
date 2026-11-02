@@ -746,11 +746,11 @@ export function FinanceConsole() {
                 width: 40,
                 height: 40,
                 borderRadius: 10,
-                background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                background: 'linear-gradient(135deg, var(--color-success-base) 0%, var(--color-success-text) 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#fff',
+                color: 'var(--text-inverse)',
                 boxShadow: '0 4px 12px rgba(5, 150, 105, 0.25)',
               }}
             >
@@ -800,12 +800,13 @@ export function FinanceConsole() {
               gap: 8,
               padding: '8px 16px',
               borderRadius: 8,
-              background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-              color: '#fff',
+              background: 'linear-gradient(135deg, var(--surface-raised) 0%, var(--surface-card) 100%)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-default)',
               fontSize: 13,
               fontWeight: 600,
               textDecoration: 'none',
-              boxShadow: '0 2px 6px rgba(15, 23, 42, 0.15)',
+              boxShadow: 'var(--shadow-soft)',
             }}
           >
             <Layers size={15} />
@@ -835,10 +836,10 @@ export function FinanceConsole() {
         <div style={{ background: 'var(--surface)', padding: 16, borderRadius: 12, border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--foreground-muted)', fontSize: 12, marginBottom: 6 }}>
             <span>Active Structures</span>
-            <Layers size={14} color="#059669" />
+            <Layers size={14} color="var(--color-success-base)" />
           </div>
           <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--foreground)' }}>{kpi.activeStructuresCount}</div>
-          <div style={{ fontSize: 11, color: '#059669', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ fontSize: 11, color: 'var(--color-success-text)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
             <CheckCircle2 size={11} /> Governed in Setup
           </div>
         </div>
@@ -846,7 +847,7 @@ export function FinanceConsole() {
         <div style={{ background: 'var(--surface)', padding: 16, borderRadius: 12, border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--foreground-muted)', fontSize: 12, marginBottom: 6 }}>
             <span>Scheduled Dues</span>
-            <Calendar size={14} color="#2563eb" />
+            <Calendar size={14} color="var(--color-info-base)" />
           </div>
           <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--foreground)' }}>₹{kpi.totalScheduledDuesRupees.toLocaleString('en-IN')}</div>
           <div style={{ fontSize: 11, color: 'var(--foreground-muted)', marginTop: 4 }}>Total billed commitments</div>
@@ -855,43 +856,43 @@ export function FinanceConsole() {
         <div style={{ background: 'var(--surface)', padding: 16, borderRadius: 12, border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--foreground-muted)', fontSize: 12, marginBottom: 6 }}>
             <span>Realized Collections</span>
-            <TrendingUp size={14} color="#16a34a" />
+            <TrendingUp size={14} color="var(--color-success-base)" />
           </div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: '#16a34a' }}>₹{kpi.totalCollectedRupees.toLocaleString('en-IN')}</div>
-          <div style={{ fontSize: 11, color: '#16a34a', marginTop: 4 }}>{kpi.collectionRate}% collected</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-success-text)' }}>₹{kpi.totalCollectedRupees.toLocaleString('en-IN')}</div>
+          <div style={{ fontSize: 11, color: 'var(--color-success-text)', marginTop: 4 }}>{kpi.collectionRate}% collected</div>
         </div>
 
         <div style={{ background: 'var(--surface)', padding: 16, borderRadius: 12, border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--foreground-muted)', fontSize: 12, marginBottom: 6 }}>
             <span>Outstanding Balance</span>
-            <Clock size={14} color="#d97706" />
+            <Clock size={14} color="var(--color-warning-base)" />
           </div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: '#d97706' }}>₹{kpi.totalOutstandingRupees.toLocaleString('en-IN')}</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-warning-text)' }}>₹{kpi.totalOutstandingRupees.toLocaleString('en-IN')}</div>
           <div style={{ fontSize: 11, color: 'var(--foreground-muted)', marginTop: 4 }}>Pending collection</div>
         </div>
 
         <div style={{ background: 'var(--surface)', padding: 16, borderRadius: 12, border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--foreground-muted)', fontSize: 12, marginBottom: 6 }}>
             <span>Overdue Dues</span>
-            <AlertTriangle size={14} color="#dc2626" />
+            <AlertTriangle size={14} color="var(--color-danger-base)" />
           </div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: '#dc2626' }}>₹{kpi.totalOverdueRupees.toLocaleString('en-IN')}</div>
-          <div style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>Past grace period</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-danger-text)' }}>₹{kpi.totalOverdueRupees.toLocaleString('en-IN')}</div>
+          <div style={{ fontSize: 11, color: 'var(--color-danger-text)', marginTop: 4 }}>Past grace period</div>
         </div>
 
         <div style={{ background: 'var(--surface)', padding: 16, borderRadius: 12, border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--foreground-muted)', fontSize: 12, marginBottom: 6 }}>
             <span>Caution Deposits Held</span>
-            <ShieldCheck size={14} color="#7c3aed" />
+            <ShieldCheck size={14} color="var(--color-brand-primary)" />
           </div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: '#7c3aed' }}>₹{kpi.depositsHeldRupees.toLocaleString('en-IN')}</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-brand-primary)' }}>₹{kpi.depositsHeldRupees.toLocaleString('en-IN')}</div>
           <div style={{ fontSize: 11, color: 'var(--foreground-muted)', marginTop: 4 }}>Refundable balances</div>
         </div>
 
         <div style={{ background: 'var(--surface)', padding: 16, borderRadius: 12, border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--foreground-muted)', fontSize: 12, marginBottom: 6 }}>
             <span>Receipts Issued</span>
-            <Receipt size={14} color="#0891b2" />
+            <Receipt size={14} color="var(--color-info-base)" />
           </div>
           <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--foreground)' }}>{kpi.paymentCount}</div>
           <div style={{ fontSize: 11, color: 'var(--foreground-muted)', marginTop: 4 }}>Verified transactions</div>
@@ -995,7 +996,7 @@ export function FinanceConsole() {
           { key: 'STRUCTURES', label: 'Operational Fee Plans', icon: Layers, badge: structures.length },
           { key: 'DEPOSITS', label: 'Caution Deposits Ledger', icon: ShieldCheck, badge: deposits.length },
           { key: 'PAYMENTS', label: 'Payment Receipts', icon: Receipt, badge: payments.length },
-          { key: 'FOLLOW_UP', label: 'Overdue Follow-ups & Reminders', icon: Phone, badge: followUps.length, badgeColor: '#dc2626' },
+          { key: 'FOLLOW_UP', label: 'Overdue Follow-ups & Reminders', icon: Phone, badge: followUps.length, badgeColor: 'var(--color-danger-base)' },
           { key: 'REPORTS', label: 'Financial Reports', icon: FileSpreadsheet },
           { key: 'AUDIT', label: 'Financial Audit Trail', icon: FileText, badge: auditLogs.length },
           { key: 'IMPORT', label: 'Bulk Migration / Import', icon: Download },
@@ -1012,9 +1013,9 @@ export function FinanceConsole() {
                 gap: 8,
                 padding: '10px 16px',
                 border: 'none',
-                borderBottom: isActive ? '2px solid #059669' : '2px solid transparent',
+                borderBottom: isActive ? '2px solid var(--color-success-base)' : '2px solid transparent',
                 background: 'transparent',
-                color: isActive ? '#059669' : 'var(--foreground-muted)',
+                color: isActive ? 'var(--color-success-text)' : 'var(--text-muted)',
                 fontWeight: isActive ? 600 : 500,
                 fontSize: 13,
                 cursor: 'pointer',
@@ -1031,7 +1032,7 @@ export function FinanceConsole() {
                     borderRadius: 10,
                     fontSize: 11,
                     background: tab.badgeColor ? `${tab.badgeColor}15` : 'rgba(5, 150, 105, 0.1)',
-                    color: tab.badgeColor || '#059669',
+                    color: tab.badgeColor || 'var(--color-success-text)',
                     fontWeight: 600,
                   }}
                 >
@@ -1059,9 +1060,9 @@ export function FinanceConsole() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Layers size={18} color="#059669" />
+              <Layers size={18} color="var(--color-success-base)" />
               <div>
-                <strong style={{ fontSize: 13, color: '#047857' }}>Configuration vs. Operations Separation:</strong>
+                <strong style={{ fontSize: 13, color: 'var(--color-success-text)' }}>Configuration vs. Operations Separation:</strong>
                 <span style={{ fontSize: 13, color: 'var(--foreground)', marginLeft: 6 }}>
                   Fee structures, fee heads, frequencies, and gateway credentials are configured in Setup. Apply active structures here to generate student fee schedules.
                 </span>
@@ -1071,7 +1072,7 @@ export function FinanceConsole() {
               href="/app/setup/fees_setup"
               style={{
                 fontSize: 12,
-                color: '#059669',
+                color: 'var(--color-success-text)',
                 fontWeight: 600,
                 textDecoration: 'none',
                 display: 'flex',
@@ -1133,7 +1134,7 @@ export function FinanceConsole() {
                             {st.items.length} Fee Heads
                           </span>
                         </td>
-                        <td style={{ padding: '14px 16px', fontWeight: 700, color: '#059669' }}>
+                        <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--color-success-text)' }}>
                           ₹{totalAnnual.toLocaleString('en-IN')}
                         </td>
                         <td style={{ padding: '14px 16px' }}>
@@ -1167,8 +1168,8 @@ export function FinanceConsole() {
                                 padding: '6px 12px',
                                 borderRadius: 6,
                                 border: 'none',
-                                background: '#059669',
-                                color: '#fff',
+                                background: 'var(--color-success-base)',
+                                color: 'var(--text-inverse)',
                                 fontSize: 12,
                                 fontWeight: 600,
                                 cursor: 'pointer',
@@ -1250,12 +1251,12 @@ export function FinanceConsole() {
                           <div style={{ fontWeight: 500 }}>{sc.itemName}</div>
                           <div style={{ fontSize: 11, color: 'var(--foreground-muted)' }}>{sc.period}</div>
                         </td>
-                        <td style={{ padding: '12px 16px', color: isOverdue ? '#dc2626' : 'var(--foreground-muted)' }}>
+                        <td style={{ padding: '12px 16px', color: isOverdue ? 'var(--color-danger-text)' : 'var(--text-muted)' }}>
                           {new Date(sc.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </td>
                         <td style={{ padding: '12px 16px', fontWeight: 500 }}>₹{parseFloat(sc.amountDueRupees).toLocaleString('en-IN')}</td>
-                        <td style={{ padding: '12px 16px', color: '#16a34a', fontWeight: 500 }}>₹{parseFloat(sc.amountPaidRupees).toLocaleString('en-IN')}</td>
-                        <td style={{ padding: '12px 16px', fontWeight: 700, color: isOverdue ? '#dc2626' : '#d97706' }}>
+                        <td style={{ padding: '12px 16px', color: 'var(--color-success-text)', fontWeight: 500 }}>₹{parseFloat(sc.amountPaidRupees).toLocaleString('en-IN')}</td>
+                        <td style={{ padding: '12px 16px', fontWeight: 700, color: isOverdue ? 'var(--color-danger-text)' : 'var(--color-warning-text)' }}>
                           ₹{parseFloat(sc.remainingRupees).toLocaleString('en-IN')}
                         </td>
                         <td style={{ padding: '12px 16px' }}>
@@ -1265,8 +1266,8 @@ export function FinanceConsole() {
                               borderRadius: 12,
                               fontSize: 11,
                               fontWeight: 600,
-                              background: isPaid ? '#dcfce7' : isOverdue ? '#fee2e2' : '#fef3c7',
-                              color: isPaid ? '#15803d' : isOverdue ? '#b91c1c' : '#b45309',
+                              background: isPaid ? 'var(--color-success-surface)' : isOverdue ? 'var(--color-danger-surface)' : 'var(--color-warning-surface)',
+                              color: isPaid ? 'var(--color-success-text)' : isOverdue ? 'var(--color-danger-text)' : 'var(--color-warning-text)',
                             }}
                           >
                             {sc.status}
@@ -1289,8 +1290,8 @@ export function FinanceConsole() {
                                   padding: '5px 10px',
                                   borderRadius: 6,
                                   border: 'none',
-                                  background: '#059669',
-                                  color: '#fff',
+                                  background: 'var(--color-success-base)',
+                                  color: 'var(--text-inverse)',
                                   fontSize: 11,
                                   fontWeight: 600,
                                   cursor: 'pointer',
@@ -1358,9 +1359,9 @@ export function FinanceConsole() {
                         <td style={{ padding: '12px 16px', color: 'var(--foreground-muted)' }}>{d.admissionNo}</td>
                         <td style={{ padding: '12px 16px' }}>{d.name}</td>
                         <td style={{ padding: '12px 16px', fontWeight: 500 }}>₹{parseFloat(d.totalRupees).toLocaleString('en-IN')}</td>
-                        <td style={{ padding: '12px 16px', color: '#16a34a' }}>₹{parseFloat(d.refundedRupees).toLocaleString('en-IN')}</td>
-                        <td style={{ padding: '12px 16px', color: '#d97706' }}>₹{parseFloat(d.adjustedRupees).toLocaleString('en-IN')}</td>
-                        <td style={{ padding: '12px 16px', fontWeight: 700, color: '#7c3aed' }}>
+                        <td style={{ padding: '12px 16px', color: 'var(--color-success-text)' }}>₹{parseFloat(d.refundedRupees).toLocaleString('en-IN')}</td>
+                        <td style={{ padding: '12px 16px', color: 'var(--color-warning-text)' }}>₹{parseFloat(d.adjustedRupees).toLocaleString('en-IN')}</td>
+                        <td style={{ padding: '12px 16px', fontWeight: 700, color: 'var(--color-brand-primary)' }}>
                           ₹{remaining.toLocaleString('en-IN')}
                         </td>
                         <td style={{ padding: '12px 16px' }}>
@@ -1370,8 +1371,8 @@ export function FinanceConsole() {
                               borderRadius: 12,
                               fontSize: 11,
                               fontWeight: 600,
-                              background: d.status === 'HELD' ? '#ede9fe' : '#f1f5f9',
-                              color: d.status === 'HELD' ? '#6d28d9' : '#475569',
+                              background: d.status === 'HELD' ? 'var(--color-brand-surface, var(--color-brand-100))' : 'var(--surface-subtle)',
+                              color: d.status === 'HELD' ? 'var(--color-brand-primary)' : 'var(--text-secondary)',
                             }}
                           >
                             {d.status}
@@ -1388,9 +1389,9 @@ export function FinanceConsole() {
                                 style={{
                                   padding: '5px 10px',
                                   borderRadius: 6,
-                                  border: '1px solid #059669',
-                                  background: 'rgba(5,150,105,0.08)',
-                                  color: '#059669',
+                                  border: '1px solid var(--color-success-base)',
+                                  background: 'var(--color-success-surface)',
+                                  color: 'var(--color-success-text)',
                                   fontSize: 11,
                                   fontWeight: 600,
                                   cursor: 'pointer',
@@ -1406,9 +1407,9 @@ export function FinanceConsole() {
                                 style={{
                                   padding: '5px 10px',
                                   borderRadius: 6,
-                                  border: '1px solid #d97706',
-                                  background: 'rgba(217,119,6,0.08)',
-                                  color: '#d97706',
+                                  border: '1px solid var(--color-warning-base)',
+                                  background: 'var(--color-warning-surface)',
+                                  color: 'var(--color-warning-text)',
                                   fontSize: 11,
                                   fontWeight: 600,
                                   cursor: 'pointer',
@@ -1437,41 +1438,41 @@ export function FinanceConsole() {
           {/* Monitoring KPI Cards */}
           {monitoringKPIs && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: 12 }}>
-                <div style={{ fontSize: 11, color: '#166534', fontWeight: 600 }}>Total Successful</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#15803d', marginTop: 4 }}>{monitoringKPIs.totalSuccessfulCount}</div>
+              <div style={{ background: 'var(--color-success-surface)', border: '1px solid var(--color-success-border)', borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--color-success-text)', fontWeight: 600 }}>Total Successful</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-success-text)', marginTop: 4 }}>{monitoringKPIs.totalSuccessfulCount}</div>
               </div>
-              <div style={{ background: '#fefce8', border: '1px solid #fef08a', borderRadius: 8, padding: 12 }}>
-                <div style={{ fontSize: 11, color: '#854d0e', fontWeight: 600 }}>Total Pending</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#a16207', marginTop: 4 }}>{monitoringKPIs.totalPendingCount}</div>
+              <div style={{ background: 'var(--color-warning-surface)', border: '1px solid var(--color-warning-border)', borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--color-warning-text)', fontWeight: 600 }}>Total Pending</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-warning-text)', marginTop: 4 }}>{monitoringKPIs.totalPendingCount}</div>
               </div>
-              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: 12 }}>
-                <div style={{ fontSize: 11, color: '#1e40af', fontWeight: 600 }}>Under Verification</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#2563eb', marginTop: 4 }}>{monitoringKPIs.underVerificationCount}</div>
+              <div style={{ background: 'var(--color-info-surface)', border: '1px solid var(--color-info-border)', borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--color-info-text)', fontWeight: 600 }}>Under Verification</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-info-base)', marginTop: 4 }}>{monitoringKPIs.underVerificationCount}</div>
               </div>
-              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: 12 }}>
-                <div style={{ fontSize: 11, color: '#991b1b', fontWeight: 600 }}>Failed Payments</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#dc2626', marginTop: 4 }}>{monitoringKPIs.failedCount}</div>
+              <div style={{ background: 'var(--color-danger-surface)', border: '1px solid var(--color-danger-border)', borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--color-danger-text)', fontWeight: 600 }}>Failed Payments</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-danger-base)', marginTop: 4 }}>{monitoringKPIs.failedCount}</div>
               </div>
-              <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: 12 }}>
-                <div style={{ fontSize: 11, color: '#9a3412', fontWeight: 600 }}>Delayed (&gt;5m)</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#ea580c', marginTop: 4 }}>{monitoringKPIs.delayedCount}</div>
+              <div style={{ background: 'var(--color-warning-surface)', border: '1px solid var(--color-warning-border)', borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--color-warning-text)', fontWeight: 600 }}>Delayed (&gt;5m)</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-warning-base)', marginTop: 4 }}>{monitoringKPIs.delayedCount}</div>
               </div>
-              <div style={{ background: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: 8, padding: 12 }}>
-                <div style={{ fontSize: 11, color: '#6b21a8', fontWeight: 600 }}>Unreconciled</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#7e22ce', marginTop: 4 }}>{monitoringKPIs.unreconciledCount}</div>
+              <div style={{ background: 'var(--color-brand-surface, var(--color-brand-100))', border: '1px solid var(--border-default)', borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--color-brand-primary)', fontWeight: 600 }}>Unreconciled</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-brand-primary)', marginTop: 4 }}>{monitoringKPIs.unreconciledCount}</div>
               </div>
-              <div style={{ background: '#fdf4ff', border: '1px solid #f5d0fe', borderRadius: 8, padding: 12 }}>
-                <div style={{ fontSize: 11, color: '#86198f', fontWeight: 600 }}>Refunds Pending</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#a21caf', marginTop: 4 }}>{monitoringKPIs.refundsPendingCount}</div>
+              <div style={{ background: 'var(--color-brand-surface, var(--color-brand-100))', border: '1px solid var(--border-default)', borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--color-brand-primary)', fontWeight: 600 }}>Refunds Pending</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-brand-primary)', marginTop: 4 }}>{monitoringKPIs.refundsPendingCount}</div>
               </div>
-              <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: 12 }}>
-                <div style={{ fontSize: 11, color: '#14532d', fontWeight: 600 }}>Amount Collected</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#15803d', marginTop: 4 }}>₹{(monitoringKPIs.amountCollectedRupees || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+              <div style={{ background: 'var(--color-success-surface)', border: '1px solid var(--color-success-border)', borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--color-success-text)', fontWeight: 600 }}>Amount Collected</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-success-text)', marginTop: 4 }}>₹{(monitoringKPIs.amountCollectedRupees || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
               </div>
-              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: 12 }}>
-                <div style={{ fontSize: 11, color: '#78350f', fontWeight: 600 }}>Awaiting Confirmation</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#d97706', marginTop: 4 }}>₹{(monitoringKPIs.amountAwaitingConfirmationRupees || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+              <div style={{ background: 'var(--color-warning-surface)', border: '1px solid var(--color-warning-border)', borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--color-warning-text)', fontWeight: 600 }}>Awaiting Confirmation</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-warning-text)', marginTop: 4 }}>₹{(monitoringKPIs.amountAwaitingConfirmationRupees || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
               </div>
             </div>
           )}
@@ -1509,12 +1510,12 @@ export function FinanceConsole() {
                   gap: 6,
                   padding: '6px 14px',
                   borderRadius: 6,
-                  border: '1px solid #fed7aa',
-                  background: '#fff7ed',
+                  border: '1px solid var(--color-warning-border)',
+                  background: 'var(--color-warning-surface)',
                   fontSize: 12,
                   cursor: 'pointer',
                   fontWeight: 600,
-                  color: '#c2410c',
+                  color: 'var(--color-warning-text)',
                 }}
               >
                 <AlertCircle size={13} /> Support Issues
@@ -1530,12 +1531,12 @@ export function FinanceConsole() {
                   gap: 6,
                   padding: '6px 14px',
                   borderRadius: 6,
-                  border: '1px solid #e2e8f0',
-                  background: '#f8fafc',
+                  border: '1px solid var(--border-default)',
+                  background: 'var(--surface-subtle)',
                   fontSize: 12,
                   cursor: 'pointer',
                   fontWeight: 600,
-                  color: '#475569',
+                  color: 'var(--text-secondary)',
                 }}
               >
                 <FileText size={13} /> Webhook Logs
@@ -1548,11 +1549,11 @@ export function FinanceConsole() {
                   gap: 6,
                   padding: '6px 14px',
                   borderRadius: 6,
-                  border: '1px solid #cbd5e1',
-                  background: '#f8fafc',
+                  border: '1px solid var(--border-default)',
+                  background: 'var(--surface-subtle)',
                   fontSize: 12,
                   textDecoration: 'none',
-                  color: '#0284c7',
+                  color: 'var(--color-info-text)',
                   fontWeight: 500,
                 }}
               >
@@ -1622,9 +1623,9 @@ export function FinanceConsole() {
               style={{
                 padding: '10px 14px',
                 borderRadius: 6,
-                background: '#f0fdf4',
-                border: '1px solid #bbf7d0',
-                color: '#15803d',
+                background: 'var(--color-success-surface)',
+                border: '1px solid var(--color-success-border)',
+                color: 'var(--color-success-text)',
                 fontSize: 12,
                 display: 'flex',
                 alignItems: 'center',
@@ -1703,15 +1704,15 @@ export function FinanceConsole() {
 
                     return (
                       <tr key={p.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                        <td style={{ padding: '12px 16px', fontWeight: 700, color: '#0891b2' }}>
+                        <td style={{ padding: '12px 16px', fontWeight: 700, color: 'var(--color-info-text)' }}>
                           {p.receiptNumber || '—'}
                         </td>
                         <td style={{ padding: '12px 16px', fontSize: 11, color: 'var(--foreground-muted)' }}>
                           <div style={{ fontWeight: 600, color: 'var(--foreground)' }}>{p.paymentNumber}</div>
                           {p.transactionRef && (
-                            <div style={{ fontSize: 10, color: '#64748b' }}>UTR: {p.transactionRef}</div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>UTR: {p.transactionRef}</div>
                           )}
-                          <div style={{ fontSize: 10, color: '#64748b' }}>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                             {p.method} • {new Date(p.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
                           </div>
                         </td>
@@ -1719,7 +1720,7 @@ export function FinanceConsole() {
                           <div style={{ fontWeight: 600 }}>{p.studentName}</div>
                           <div style={{ fontSize: 11, color: 'var(--foreground-muted)' }}>{p.admissionNo}</div>
                         </td>
-                        <td style={{ padding: '12px 16px', fontWeight: 700, color: '#16a34a' }}>
+                        <td style={{ padding: '12px 16px', fontWeight: 700, color: 'var(--color-success-text)' }}>
                           ₹{parseFloat(p.amountRupees).toLocaleString('en-IN')}
                         </td>
                         {/* Column 1: Provider Status */}
@@ -1733,20 +1734,20 @@ export function FinanceConsole() {
                               fontWeight: 600,
                               background:
                                 provStatus === 'CAPTURED'
-                                  ? '#dcfce7'
+                                  ? 'var(--color-success-surface)'
                                   : provStatus === 'AUTHORIZED'
-                                  ? '#e0f2fe'
+                                  ? 'var(--color-info-surface)'
                                   : provStatus === 'FAILED'
-                                  ? '#fee2e2'
-                                  : '#fef3c7',
+                                  ? 'var(--color-danger-surface)'
+                                  : 'var(--color-warning-surface)',
                               color:
                                 provStatus === 'CAPTURED'
-                                  ? '#15803d'
+                                  ? 'var(--color-success-text)'
                                   : provStatus === 'AUTHORIZED'
-                                  ? '#0369a1'
+                                  ? 'var(--color-info-text)'
                                   : provStatus === 'FAILED'
-                                  ? '#b91c1c'
-                                  : '#b45309',
+                                  ? 'var(--color-danger-text)'
+                                  : 'var(--color-warning-text)',
                             }}
                           >
                             {provStatus}
@@ -1763,20 +1764,20 @@ export function FinanceConsole() {
                               fontWeight: 600,
                               background:
                                 intnlStatus === 'SUCCESS'
-                                  ? '#dcfce7'
+                                  ? 'var(--color-success-surface)'
                                   : intnlStatus === 'MANUAL_REVIEW'
-                                  ? '#fed7aa'
+                                  ? 'var(--color-warning-surface)'
                                   : intnlStatus === 'FAILED'
-                                  ? '#fee2e2'
-                                  : '#fef3c7',
+                                  ? 'var(--color-danger-surface)'
+                                  : 'var(--color-warning-surface)',
                               color:
                                 intnlStatus === 'SUCCESS'
-                                  ? '#15803d'
+                                  ? 'var(--color-success-text)'
                                   : intnlStatus === 'MANUAL_REVIEW'
-                                  ? '#c2410c'
+                                  ? 'var(--color-warning-text)'
                                   : intnlStatus === 'FAILED'
-                                  ? '#b91c1c'
-                                  : '#b45309',
+                                  ? 'var(--color-danger-text)'
+                                  : 'var(--color-warning-text)',
                             }}
                           >
                             {intnlStatus}
@@ -1793,20 +1794,20 @@ export function FinanceConsole() {
                               fontWeight: 600,
                               background:
                                 reconStatus === 'MATCHED'
-                                  ? '#dcfce7'
+                                  ? 'var(--color-success-surface)'
                                   : reconStatus === 'MISMATCH'
-                                  ? '#fecaca'
+                                  ? 'var(--color-danger-surface)'
                                   : reconStatus === 'RETRY_PENDING'
-                                  ? '#fef3c7'
-                                  : '#f1f5f9',
+                                  ? 'var(--color-warning-surface)'
+                                  : 'var(--surface-subtle)',
                               color:
                                 reconStatus === 'MATCHED'
-                                  ? '#15803d'
+                                  ? 'var(--color-success-text)'
                                   : reconStatus === 'MISMATCH'
-                                  ? '#991b1b'
+                                  ? 'var(--color-danger-text)'
                                   : reconStatus === 'RETRY_PENDING'
-                                  ? '#b45309'
-                                  : '#475569',
+                                  ? 'var(--color-warning-text)'
+                                  : 'var(--text-secondary)',
                             }}
                           >
                             {reconStatus}
@@ -1821,10 +1822,10 @@ export function FinanceConsole() {
                                 style={{
                                   padding: '5px 10px',
                                   borderRadius: 6,
-                                  border: '1px solid #bfdbfe',
-                                  background: '#eff6ff',
+                                  border: '1px solid var(--color-info-border)',
+                                  background: 'var(--color-info-surface)',
                                   fontSize: 11,
-                                  color: '#1d4ed8',
+                                  color: 'var(--color-info-text)',
                                   cursor: checkingPaymentId === p.id ? 'not-allowed' : 'pointer',
                                   display: 'inline-flex',
                                   alignItems: 'center',
@@ -1898,15 +1899,15 @@ export function FinanceConsole() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Phone size={18} color="#dc2626" />
+              <Phone size={18} color="var(--color-danger-base)" />
               <div>
-                <strong style={{ fontSize: 13, color: '#dc2626' }}>Parent Dues Communication & Follow-up Workspace:</strong>
+                <strong style={{ fontSize: 13, color: 'var(--color-danger-text)' }}>Parent Dues Communication & Follow-up Workspace:</strong>
                 <span style={{ fontSize: 13, color: 'var(--foreground)', marginLeft: 6 }}>
                   Directly contact parents via phone, WhatsApp, or formal email reminder. All communication events are automatically logged to the student&apos;s chronological timeline.
                 </span>
               </div>
             </div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#dc2626' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-danger-text)' }}>
               {followUps.length} Overdue Accounts
             </div>
           </div>
@@ -1928,7 +1929,7 @@ export function FinanceConsole() {
               <tbody>
                 {followUps.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#16a34a', fontWeight: 600 }}>
+                    <td colSpan={8} style={{ padding: 40, textAlign: 'center', color: 'var(--color-success-text)', fontWeight: 600 }}>
                       <CheckCircle2 size={24} style={{ margin: '0 auto 8px auto', display: 'block' }} />
                       All accounts are in good standing! No overdue balances found.
                     </td>
@@ -1948,7 +1949,7 @@ export function FinanceConsole() {
                           {f.parentPhone || 'No phone'} {f.parentEmail ? `• ${f.parentEmail}` : ''}
                         </div>
                       </td>
-                      <td style={{ padding: '12px 16px', fontWeight: 700, color: '#dc2626' }}>
+                      <td style={{ padding: '12px 16px', fontWeight: 700, color: 'var(--color-danger-text)' }}>
                         ₹{parseFloat(f.totalOutstandingRupees).toLocaleString('en-IN')}
                       </td>
                       <td style={{ padding: '12px 16px' }}>
@@ -1958,8 +1959,8 @@ export function FinanceConsole() {
                             borderRadius: 12,
                             fontSize: 11,
                             fontWeight: 600,
-                            background: f.daysOverdue > 30 ? '#fee2e2' : '#fef3c7',
-                            color: f.daysOverdue > 30 ? '#b91c1c' : '#b45309',
+                            background: f.daysOverdue > 30 ? 'var(--color-danger-surface)' : 'var(--color-warning-surface)',
+                            color: f.daysOverdue > 30 ? 'var(--color-danger-text)' : 'var(--color-warning-text)',
                           }}
                         >
                           {f.daysOverdue} days
@@ -2009,9 +2010,9 @@ export function FinanceConsole() {
                                 style={{
                                   padding: 6,
                                   borderRadius: 6,
-                                  border: '1px solid #16a34a',
-                                  background: 'rgba(22, 163, 74, 0.1)',
-                                  color: '#16a34a',
+                                  border: '1px solid var(--color-success-base)',
+                                  background: 'var(--color-success-surface)',
+                                  color: 'var(--color-success-text)',
                                   display: 'flex',
                                   alignItems: 'center',
                                 }}
@@ -2026,9 +2027,9 @@ export function FinanceConsole() {
                             style={{
                               padding: 6,
                               borderRadius: 6,
-                              border: '1px solid #2563eb',
-                              background: 'rgba(37, 99, 235, 0.1)',
-                              color: '#2563eb',
+                              border: '1px solid var(--color-info-base)',
+                              background: 'var(--color-info-surface)',
+                              color: 'var(--color-info-base)',
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
@@ -2125,9 +2126,9 @@ export function FinanceConsole() {
                 gap: 6,
                 padding: '8px 16px',
                 borderRadius: 6,
-                border: '1px solid #059669',
-                background: '#059669',
-                color: '#fff',
+                border: '1px solid var(--color-success-base)',
+                background: 'var(--color-success-base)',
+                color: 'var(--text-inverse)',
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: reportRows.length === 0 ? 'not-allowed' : 'pointer',
@@ -2189,7 +2190,7 @@ export function FinanceConsole() {
               gap: 10,
             }}
           >
-            <ShieldCheck size={18} color="#059669" />
+            <ShieldCheck size={18} color="var(--color-success-base)" />
             <span style={{ fontSize: 13, color: 'var(--foreground)' }}>
               <strong>Immutable Audit Log:</strong> Every financial mutation (fee plan activation, schedule generation, payment recording, receipt issuance, refund, and deposit adjustment) is permanently recorded with actor identity and timestamp.
             </span>
@@ -2271,7 +2272,7 @@ export function FinanceConsole() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 'var(--z-overlay, 500)',
             padding: 20,
           }}
         >
@@ -2283,7 +2284,7 @@ export function FinanceConsole() {
               borderRadius: 12,
               padding: 24,
               border: '1px solid var(--border-color)',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              boxShadow: 'var(--shadow-dialog)',
             }}
           >
             <h3 style={{ margin: '0 0 6px 0', fontSize: 18, fontWeight: 700 }}>
@@ -2341,9 +2342,9 @@ export function FinanceConsole() {
                 style={{
                   padding: 12,
                   borderRadius: 8,
-                  background: '#dcfce7',
-                  border: '1px solid #86efac',
-                  color: '#15803d',
+                  background: 'var(--color-success-surface)',
+                  border: '1px solid var(--color-success-border)',
+                  color: 'var(--color-success-text)',
                   fontSize: 13,
                   marginBottom: 16,
                 }}
@@ -2374,8 +2375,8 @@ export function FinanceConsole() {
                     padding: '8px 18px',
                     borderRadius: 6,
                     border: 'none',
-                    background: '#059669',
-                    color: '#fff',
+                    background: 'var(--color-success-base)',
+                    color: 'var(--text-inverse)',
                     fontSize: 13,
                     fontWeight: 600,
                     cursor: applying ? 'not-allowed' : 'pointer',
@@ -2399,7 +2400,7 @@ export function FinanceConsole() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 'var(--z-overlay, 500)',
             padding: 20,
           }}
         >
@@ -2411,7 +2412,7 @@ export function FinanceConsole() {
               borderRadius: 12,
               padding: 24,
               border: '1px solid var(--border-color)',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              boxShadow: 'var(--shadow-dialog)',
             }}
           >
             <h3 style={{ margin: '0 0 6px 0', fontSize: 18, fontWeight: 700 }}>
@@ -2449,7 +2450,7 @@ export function FinanceConsole() {
                     background: 'var(--surface)',
                     fontSize: 14,
                     fontWeight: 700,
-                    color: '#059669',
+                    color: 'var(--color-success-text)',
                   }}
                 />
               </div>
@@ -2520,8 +2521,8 @@ export function FinanceConsole() {
                     padding: '8px 18px',
                     borderRadius: 6,
                     border: 'none',
-                    background: '#059669',
-                    color: '#fff',
+                    background: 'var(--color-success-base)',
+                    color: 'var(--text-inverse)',
                     fontSize: 13,
                     fontWeight: 600,
                     cursor: recordingPayment ? 'not-allowed' : 'pointer',
@@ -2545,51 +2546,51 @@ export function FinanceConsole() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 'var(--z-overlay, 500)',
             padding: 20,
           }}
         >
           <div
             style={{
-              background: '#fff',
-              color: '#0f172a',
+              background: 'var(--surface-card)',
+              color: 'var(--text-primary)',
               width: '100%',
               maxWidth: 620,
               borderRadius: 12,
               padding: 32,
-              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)',
+              boxShadow: 'var(--shadow-dialog)',
               maxHeight: '90vh',
               overflowY: 'auto',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #0f172a', paddingBottom: 16, marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid var(--border-default)', paddingBottom: 16, marginBottom: 20 }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em' }}>
                   {receiptModal.tenant?.name || 'PreOne Academy'}
                 </h2>
-                <div style={{ fontSize: 12, color: '#64748b' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                   {receiptModal.tenant?.address || 'Main Campus, PreOne Education District'}
                 </div>
-                <div style={{ fontSize: 12, color: '#64748b' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                   Phone: {receiptModal.tenant?.phone || '+91 98765 43210'}
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <span style={{ display: 'inline-block', padding: '4px 10px', background: '#059669', color: '#fff', fontWeight: 700, borderRadius: 4, fontSize: 12 }}>
+                <span style={{ display: 'inline-block', padding: '4px 10px', background: 'var(--color-success-base)', color: 'var(--text-inverse)', fontWeight: 700, borderRadius: 4, fontSize: 12 }}>
                   FEE RECEIPT
                 </span>
                 <div style={{ fontSize: 13, fontWeight: 700, marginTop: 6 }}>
                   Receipt #: {receiptModal.receiptNumber}
                 </div>
-                <div style={{ fontSize: 11, color: '#64748b' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                   Date: {new Date(receiptModal.issuedAt).toLocaleDateString('en-IN')}
                 </div>
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, padding: 14, background: '#f8fafc', borderRadius: 8, marginBottom: 20, fontSize: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, padding: 14, background: 'var(--surface-subtle)', borderRadius: 8, marginBottom: 20, fontSize: 12 }}>
               <div>
-                <div style={{ color: '#64748b', fontSize: 11 }}>STUDENT DETAILS</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>STUDENT DETAILS</div>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>
                   {receiptModal.payment?.student ? `${receiptModal.payment.student.firstName} ${receiptModal.payment.student.lastName || ''}`.trim() : '—'}
                 </div>
@@ -2597,7 +2598,7 @@ export function FinanceConsole() {
                 <div>Classroom: {receiptModal.payment?.student?.currentClassroom?.name || 'Unassigned'}</div>
               </div>
               <div>
-                <div style={{ color: '#64748b', fontSize: 11 }}>PAYMENT METADATA</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>PAYMENT METADATA</div>
                 <div>Payment Mode: <strong>{receiptModal.payment?.method}</strong></div>
                 <div>Ref / UTR: {receiptModal.payment?.transactionRef || 'N/A'}</div>
                 <div>Payment ID: {receiptModal.payment?.paymentNumber}</div>
@@ -2606,13 +2607,13 @@ export function FinanceConsole() {
 
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12, marginBottom: 24 }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid #cbd5e1', color: '#475569' }}>
+                <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}>
                   <th style={{ padding: '8px 0' }}>Description</th>
                   <th style={{ padding: '8px 0', textAlign: 'right' }}>Amount Paid (₹)</th>
                 </tr>
               </thead>
               <tbody>
-                <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                <tr style={{ borderBottom: '1px solid var(--border-default)' }}>
                   <td style={{ padding: '10px 0' }}>Fee Settlement via {receiptModal.payment?.method}</td>
                   <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 700 }}>
                     ₹{(receiptModal.amountCents / 100).toFixed(2)}
@@ -2621,14 +2622,14 @@ export function FinanceConsole() {
               </tbody>
             </table>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: 24, marginTop: 24 }}>
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '1px solid var(--border-default)', paddingTop: 24, marginTop: 24 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                 <div>• This is an electronically generated valid receipt.</div>
                 <div>• Retain this receipt for your records.</div>
               </div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ borderBottom: '1px dashed #94a3b8', width: 140, marginBottom: 6 }}></div>
-                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Authorized Signatory</div>
+                <div style={{ borderBottom: '1px dashed var(--border-subtle)', width: 140, marginBottom: 6 }}></div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Authorized Signatory</div>
               </div>
             </div>
 
@@ -2638,8 +2639,8 @@ export function FinanceConsole() {
                 style={{
                   padding: '8px 16px',
                   borderRadius: 6,
-                  border: '1px solid #cbd5e1',
-                  background: '#f8fafc',
+                  border: '1px solid var(--border-default)',
+                  background: 'var(--surface-subtle)',
                   fontSize: 13,
                   cursor: 'pointer',
                 }}
@@ -2652,8 +2653,8 @@ export function FinanceConsole() {
                   padding: '8px 18px',
                   borderRadius: 6,
                   border: 'none',
-                  background: '#059669',
-                  color: '#fff',
+                  background: 'var(--color-success-base)',
+                  color: 'var(--text-inverse)',
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -2679,7 +2680,7 @@ export function FinanceConsole() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 'var(--z-overlay, 500)',
             padding: 20,
           }}
         >
@@ -2720,7 +2721,7 @@ export function FinanceConsole() {
                     background: 'var(--surface)',
                     fontSize: 14,
                     fontWeight: 700,
-                    color: '#059669',
+                    color: 'var(--color-success-text)',
                   }}
                 />
               </div>
@@ -2779,7 +2780,7 @@ export function FinanceConsole() {
                 <button
                   type="submit"
                   disabled={processingRefund}
-                  style={{ padding: '8px 18px', borderRadius: 6, border: 'none', background: '#059669', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                  style={{ padding: '8px 18px', borderRadius: 6, border: 'none', background: 'var(--color-success-base)', color: 'var(--text-inverse)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
                 >
                   {processingRefund ? 'Processing...' : 'Confirm Refund'}
                 </button>
@@ -2799,7 +2800,7 @@ export function FinanceConsole() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 'var(--z-overlay, 500)',
             padding: 20,
           }}
         >
@@ -2849,7 +2850,7 @@ export function FinanceConsole() {
                   required
                   value={adjustForm.amountRupees}
                   onChange={(e) => setAdjustForm({ ...adjustForm, amountRupees: e.target.value })}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--surface)', fontSize: 14, fontWeight: 700, color: '#d97706' }}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--surface)', fontSize: 14, fontWeight: 700, color: 'var(--color-warning-text)' }}
                 />
               </div>
 
@@ -2878,7 +2879,7 @@ export function FinanceConsole() {
                 <button
                   type="submit"
                   disabled={processingAdjust}
-                  style={{ padding: '8px 18px', borderRadius: 6, border: 'none', background: '#d97706', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                  style={{ padding: '8px 18px', borderRadius: 6, border: 'none', background: 'var(--color-warning-base)', color: 'var(--text-inverse)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
                 >
                   {processingAdjust ? 'Adjusting...' : 'Confirm Adjustment'}
                 </button>
@@ -2898,7 +2899,7 @@ export function FinanceConsole() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 'var(--z-overlay, 500)',
             padding: 20,
           }}
         >
@@ -2945,15 +2946,15 @@ export function FinanceConsole() {
                   </div>
                   <div style={{ padding: 10, background: 'var(--surface-subtle)', borderRadius: 8 }}>
                     <div style={{ fontSize: 11, color: 'var(--foreground-muted)' }}>Total Paid</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#16a34a' }}>₹{studentLedger.summary?.totalPaidRupees?.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-success-text)' }}>₹{studentLedger.summary?.totalPaidRupees?.toLocaleString('en-IN')}</div>
                   </div>
                   <div style={{ padding: 10, background: 'var(--surface-subtle)', borderRadius: 8 }}>
                     <div style={{ fontSize: 11, color: 'var(--foreground-muted)' }}>Outstanding</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#d97706' }}>₹{studentLedger.summary?.totalOutstandingRupees?.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-warning-text)' }}>₹{studentLedger.summary?.totalOutstandingRupees?.toLocaleString('en-IN')}</div>
                   </div>
                   <div style={{ padding: 10, background: 'var(--surface-subtle)', borderRadius: 8 }}>
                     <div style={{ fontSize: 11, color: 'var(--foreground-muted)' }}>Overdue</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#dc2626' }}>₹{studentLedger.summary?.totalOverdueRupees?.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-danger-text)' }}>₹{studentLedger.summary?.totalOverdueRupees?.toLocaleString('en-IN')}</div>
                   </div>
                 </div>
 
@@ -2977,7 +2978,7 @@ export function FinanceConsole() {
                           <td style={{ padding: '8px 12px' }}>{inv.title}</td>
                           <td style={{ padding: '8px 12px' }}>{new Date(inv.dueDate).toLocaleDateString('en-IN')}</td>
                           <td style={{ padding: '8px 12px' }}>₹{inv.totalRupees}</td>
-                          <td style={{ padding: '8px 12px', fontWeight: 600, color: parseFloat(inv.balanceRupees) > 0 ? '#dc2626' : '#16a34a' }}>
+                          <td style={{ padding: '8px 12px', fontWeight: 600, color: parseFloat(inv.balanceRupees) > 0 ? 'var(--color-danger-text)' : 'var(--color-success-text)' }}>
                             ₹{inv.balanceRupees}
                           </td>
                           <td style={{ padding: '8px 12px' }}>{inv.status}</td>
@@ -2990,7 +2991,7 @@ export function FinanceConsole() {
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                   <button
                     onClick={() => setLedgerStudentId(null)}
-                    style={{ padding: '8px 18px', borderRadius: 6, border: 'none', background: '#059669', color: '#fff', fontSize: 13, cursor: 'pointer' }}
+                    style={{ padding: '8px 18px', borderRadius: 6, border: 'none', background: 'var(--color-success-base)', color: 'var(--text-inverse)', fontSize: 13, cursor: 'pointer' }}
                   >
                     Done
                   </button>
@@ -3011,7 +3012,7 @@ export function FinanceConsole() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 'var(--z-overlay, 500)',
             padding: 20,
           }}
         >
@@ -3078,7 +3079,7 @@ export function FinanceConsole() {
                 <button
                   type="submit"
                   disabled={savingFollowUp}
-                  style={{ padding: '8px 18px', borderRadius: 6, border: 'none', background: '#059669', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                  style={{ padding: '8px 18px', borderRadius: 6, border: 'none', background: 'var(--color-success-base)', color: 'var(--text-inverse)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
                 >
                   {savingFollowUp ? 'Saving...' : 'Save Follow-up'}
                 </button>
@@ -3098,7 +3099,7 @@ export function FinanceConsole() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 'var(--z-overlay, 500)',
             padding: 20,
           }}
         >
@@ -3146,8 +3147,8 @@ export function FinanceConsole() {
                   padding: '8px 18px',
                   borderRadius: 6,
                   border: 'none',
-                  background: '#2563eb',
-                  color: '#fff',
+                  background: 'var(--color-info-base)',
+                  color: 'var(--text-inverse)',
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: sendingReminder ? 'not-allowed' : 'pointer',
@@ -3173,7 +3174,7 @@ export function FinanceConsole() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 'var(--z-overlay, 500)',
             padding: 20,
           }}
         >
@@ -3207,7 +3208,7 @@ export function FinanceConsole() {
                     <td style={{ padding: '8px 12px', fontWeight: 600 }}>{i.name}</td>
                     <td style={{ padding: '8px 12px' }}>{i.feeType}</td>
                     <td style={{ padding: '8px 12px' }}>{i.frequency}</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#059669' }}>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--color-success-text)' }}>
                       ₹{(i.amountCents / 100).toLocaleString('en-IN')}
                     </td>
                   </tr>
@@ -3237,7 +3238,7 @@ export function FinanceConsole() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 'var(--z-overlay, 500)',
             padding: 20,
           }}
         >
@@ -3265,7 +3266,7 @@ export function FinanceConsole() {
             >
               <div>
                 <h3 style={{ margin: '0 0 4px 0', fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Clock size={18} color="#0284c7" />
+                  <Clock size={18} color="var(--color-info-base)" />
                   Transaction Lifecycle Timeline
                 </h3>
                 <div style={{ fontSize: 12, color: 'var(--foreground-muted)' }}>
@@ -3302,7 +3303,7 @@ export function FinanceConsole() {
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ color: 'var(--foreground-muted)', fontSize: 11 }}>AMOUNT & STATUS</div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: '#16a34a' }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--color-success-text)' }}>
                   ₹{parseFloat(timelinePayment.amountRupees).toLocaleString('en-IN')}
                 </div>
                 <span
@@ -3313,8 +3314,8 @@ export function FinanceConsole() {
                     borderRadius: 10,
                     fontSize: 11,
                     fontWeight: 600,
-                    background: timelinePayment.status === 'SUCCESS' ? '#dcfce7' : '#fee2e2',
-                    color: timelinePayment.status === 'SUCCESS' ? '#15803d' : '#b91c1c',
+                    background: timelinePayment.status === 'SUCCESS' ? 'var(--color-success-surface)' : 'var(--color-danger-surface)',
+                    color: timelinePayment.status === 'SUCCESS' ? 'var(--color-success-text)' : 'var(--color-danger-text)',
                   }}
                 >
                   {timelinePayment.status} ({timelinePayment.method})
@@ -3370,11 +3371,11 @@ export function FinanceConsole() {
                               width: 18,
                               height: 18,
                               borderRadius: '50%',
-                              background: isSuccess ? '#16a34a' : isFail ? '#dc2626' : '#0284c7',
+                              background: isSuccess ? 'var(--color-success-base)' : isFail ? 'var(--color-danger-base)' : 'var(--color-info-base)',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              color: '#fff',
+                              color: 'var(--text-inverse)',
                               fontSize: 10,
                               fontWeight: 700,
                             }}
@@ -3383,7 +3384,7 @@ export function FinanceConsole() {
                           </div>
                           <div style={{ background: 'var(--surface-subtle)', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-color)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                              <span style={{ fontWeight: 600, fontSize: 12, color: isSuccess ? '#15803d' : isFail ? '#b91c1c' : 'var(--foreground)' }}>
+                              <span style={{ fontWeight: 600, fontSize: 12, color: isSuccess ? 'var(--color-success-text)' : isFail ? 'var(--color-danger-text)' : 'var(--text-primary)' }}>
                                 {evt.eventType || evt.event}
                               </span>
                               <span style={{ fontSize: 11, color: 'var(--foreground-muted)' }}>
@@ -3395,17 +3396,17 @@ export function FinanceConsole() {
                             {(evt.newProviderStatus || evt.newInternalStatus || evt.newReconciliationStatus) && (
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0', fontSize: 11 }}>
                                 {evt.newProviderStatus && (
-                                  <span style={{ padding: '2px 6px', borderRadius: 4, background: '#e0f2fe', color: '#0369a1', fontWeight: 600 }}>
+                                  <span style={{ padding: '2px 6px', borderRadius: 4, background: 'var(--color-info-surface)', color: 'var(--color-info-text)', fontWeight: 600 }}>
                                     Provider: {evt.previousProviderStatus || '—'} → {evt.newProviderStatus}
                                   </span>
                                 )}
                                 {evt.newInternalStatus && (
-                                  <span style={{ padding: '2px 6px', borderRadius: 4, background: '#fef3c7', color: '#b45309', fontWeight: 600 }}>
+                                  <span style={{ padding: '2px 6px', borderRadius: 4, background: 'var(--color-warning-surface)', color: 'var(--color-warning-text)', fontWeight: 600 }}>
                                     PreOne: {evt.previousInternalStatus || '—'} → {evt.newInternalStatus}
                                   </span>
                                 )}
                                 {evt.newReconciliationStatus && (
-                                  <span style={{ padding: '2px 6px', borderRadius: 4, background: '#f3e8ff', color: '#7e22ce', fontWeight: 600 }}>
+                                  <span style={{ padding: '2px 6px', borderRadius: 4, background: 'var(--color-brand-surface, var(--color-brand-100))', color: 'var(--color-brand-primary)', fontWeight: 600 }}>
                                     Recon: {evt.previousReconciliationStatus || '—'} → {evt.newReconciliationStatus}
                                   </span>
                                 )}
@@ -3414,11 +3415,11 @@ export function FinanceConsole() {
 
                             {evt.orderId && <div style={{ fontSize: 11, color: 'var(--foreground-muted)' }}>Gateway Order: {evt.orderId}</div>}
                             {evt.gatewayPaymentId && <div style={{ fontSize: 11, color: 'var(--foreground-muted)' }}>Gateway Payment ID: {evt.gatewayPaymentId}</div>}
-                            {evt.receiptNumber && <div style={{ fontSize: 11, color: '#0891b2', fontWeight: 600 }}>Receipt Issued: {evt.receiptNumber}</div>}
-                            {evt.reason && <div style={{ fontSize: 11, color: '#dc2626' }}>Failure Reason: {evt.reason}</div>}
-                            {evt.diagnostics && <div style={{ fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>Note: {evt.diagnostics}</div>}
+                            {evt.receiptNumber && <div style={{ fontSize: 11, color: 'var(--color-info-text)', fontWeight: 600 }}>Receipt Issued: {evt.receiptNumber}</div>}
+                            {evt.reason && <div style={{ fontSize: 11, color: 'var(--color-danger-text)' }}>Failure Reason: {evt.reason}</div>}
+                            {evt.diagnostics && <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>Note: {evt.diagnostics}</div>}
                             {(evt.by || evt.source) && (
-                              <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
+                              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
                                 Source: {evt.source || 'API'} {evt.by ? `• by ${evt.by}` : ''}
                               </div>
                             )}
@@ -3461,7 +3462,7 @@ export function FinanceConsole() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 'var(--z-overlay, 500)',
             padding: 20,
           }}
         >
@@ -3489,7 +3490,7 @@ export function FinanceConsole() {
             >
               <div>
                 <h3 style={{ margin: '0 0 4px 0', fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <AlertCircle size={18} color="#c2410c" />
+                  <AlertCircle size={18} color="var(--color-warning-base)" />
                   Payment Exceptions & Support Tickets
                 </h3>
                 <div style={{ fontSize: 12, color: 'var(--foreground-muted)' }}>
@@ -3523,15 +3524,15 @@ export function FinanceConsole() {
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: '#0284c7' }}>{issue.id}</span>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--color-info-text)' }}>{issue.id}</span>
                       <span
                         style={{
                           padding: '2px 8px',
                           borderRadius: 10,
                           fontSize: 11,
                           fontWeight: 600,
-                          background: issue.status === 'RESOLVED' ? '#dcfce7' : '#ffedd5',
-                          color: issue.status === 'RESOLVED' ? '#15803d' : '#c2410c',
+                          background: issue.status === 'RESOLVED' ? 'var(--color-success-surface)' : 'var(--color-warning-surface)',
+                          color: issue.status === 'RESOLVED' ? 'var(--color-success-text)' : 'var(--color-warning-text)',
                         }}
                       >
                         {issue.status} • {issue.priority}
@@ -3543,7 +3544,7 @@ export function FinanceConsole() {
                     <div style={{ fontSize: 12, color: 'var(--foreground-muted)', marginBottom: 8 }}>
                       Reported Issue: <em>&ldquo;{issue.reportedIssue}&rdquo;</em>
                     </div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                       Logged by {issue.parentName} on {new Date(issue.createdAt).toLocaleString('en-IN')}
                     </div>
                   </div>
@@ -3581,7 +3582,7 @@ export function FinanceConsole() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 'var(--z-overlay, 500)',
             padding: 20,
           }}
         >
@@ -3609,7 +3610,7 @@ export function FinanceConsole() {
             >
               <div>
                 <h3 style={{ margin: '0 0 4px 0', fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <FileText size={18} color="#0284c7" />
+                  <FileText size={18} color="var(--color-info-base)" />
                   Provider Webhook Ingestion Logs
                 </h3>
                 <div style={{ fontSize: 12, color: 'var(--foreground-muted)' }}>
@@ -3653,8 +3654,8 @@ export function FinanceConsole() {
                           borderRadius: 10,
                           fontSize: 10,
                           fontWeight: 600,
-                          background: ev.status === 'PROCESSED' ? '#dcfce7' : ev.status === 'DUPLICATE' ? '#eff6ff' : '#fee2e2',
-                          color: ev.status === 'PROCESSED' ? '#15803d' : ev.status === 'DUPLICATE' ? '#1d4ed8' : '#b91c1c',
+                          background: ev.status === 'PROCESSED' ? 'var(--color-success-surface)' : ev.status === 'DUPLICATE' ? 'var(--color-info-surface)' : 'var(--color-danger-surface)',
+                          color: ev.status === 'PROCESSED' ? 'var(--color-success-text)' : ev.status === 'DUPLICATE' ? 'var(--color-info-text)' : 'var(--color-danger-text)',
                         }}
                       >
                         {ev.status}
@@ -3664,10 +3665,10 @@ export function FinanceConsole() {
                       Event ID: <code>{ev.providerEventId}</code> • Signature: {ev.signatureValid ? '✅ Verified' : '❌ Invalid'}
                     </div>
                     {ev.receiptNumber && (
-                      <div style={{ color: '#0891b2', fontWeight: 600, fontSize: 11 }}>Issued Receipt: {ev.receiptNumber}</div>
+                      <div style={{ color: 'var(--color-info-text)', fontWeight: 600, fontSize: 11 }}>Issued Receipt: {ev.receiptNumber}</div>
                     )}
-                    {ev.error && <div style={{ color: '#dc2626', fontSize: 11 }}>Error: {ev.error}</div>}
-                    <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
+                    {ev.error && <div style={{ color: 'var(--color-danger-text)', fontSize: 11 }}>Error: {ev.error}</div>}
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
                       Received: {new Date(ev.createdAt).toLocaleString('en-IN')}
                     </div>
                   </div>

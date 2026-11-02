@@ -376,11 +376,11 @@ export function WhatsAppReorderModal({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 9999,
+        zIndex: 'var(--z-overlay, 500)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(15, 23, 42, 0.7)',
+        backgroundColor: 'var(--surface-overlay)',
         backdropFilter: 'blur(5px)',
         padding: '16px',
         overflowY: 'auto',
@@ -390,14 +390,14 @@ export function WhatsAppReorderModal({
         style={{
           width: '100%',
           maxWidth: '820px',
-          backgroundColor: '#ffffff',
+          backgroundColor: 'var(--surface-card)',
           borderRadius: '16px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+          boxShadow: 'var(--shadow-3)',
           display: 'flex',
           flexDirection: 'column',
           maxHeight: '94vh',
           overflow: 'hidden',
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--border-default)',
         }}
       >
         {/* ========================================================================= */}
@@ -409,8 +409,8 @@ export function WhatsAppReorderModal({
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '16px 22px',
-            borderBottom: '1px solid #e2e8f0',
-            backgroundColor: '#f0fdf4',
+            borderBottom: '1px solid var(--border-default)',
+            backgroundColor: 'var(--surface-subtle)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -432,11 +432,11 @@ export function WhatsAppReorderModal({
             <div>
               <h3
                 id={titleId}
-                style={{ fontSize: '1.08rem', fontWeight: 700, margin: 0, color: '#064e3b' }}
+                style={{ fontSize: '1.08rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}
               >
                 WhatsApp Vendor Re-Ordering
               </h3>
-              <p style={{ fontSize: '0.78rem', margin: '2px 0 0 0', color: '#047857' }}>
+              <p style={{ fontSize: '0.78rem', margin: '2px 0 0 0', color: 'var(--text-secondary)' }}>
                 1-tap prefilled order dispatch • Multi-vendor grouping • Zero stock mutations
               </p>
             </div>
@@ -450,9 +450,9 @@ export function WhatsAppReorderModal({
               width: 32,
               height: 32,
               borderRadius: '8px',
-              border: '1px solid #cbd5e1',
-              backgroundColor: '#ffffff',
-              color: '#64748b',
+              border: '1px solid var(--border-default)',
+              backgroundColor: 'var(--surface-card)',
+              color: 'var(--text-secondary)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -481,14 +481,14 @@ export function WhatsAppReorderModal({
               style={{
                 textAlign: 'center',
                 padding: '40px 20px',
-                color: '#64748b',
+                color: 'var(--text-secondary)',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 gap: 10,
               }}
             >
-              <Package size={36} className="text-slate-400" />
+              <Package size={36} className="text-[var(--text-muted)]" />
               <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>No Items Selected for Reorder</div>
               <p style={{ fontSize: '0.82rem', margin: 0 }}>
                 Please select at least one low-stock item to generate a vendor order.
@@ -505,7 +505,7 @@ export function WhatsAppReorderModal({
                       fontWeight: 700,
                       textTransform: 'uppercase',
                       letterSpacing: '0.04em',
-                      color: '#475569',
+                      color: 'var(--text-secondary)',
                     }}
                   >
                     Vendors in this Re-Order ({vendorGroups.length})
@@ -532,9 +532,9 @@ export function WhatsAppReorderModal({
                           style={{
                             padding: '7px 12px',
                             borderRadius: '10px',
-                            border: isActive ? '2px solid #059669' : '1px solid #cbd5e1',
-                            backgroundColor: isActive ? '#ecfdf5' : '#f8fafc',
-                            color: isActive ? '#065f46' : '#334155',
+                            border: isActive ? '2px solid var(--color-success-base)' : '1px solid var(--border-default)',
+                            backgroundColor: isActive ? 'var(--color-success-surface)' : 'var(--surface-subtle)',
+                            color: isActive ? 'var(--color-success-text)' : 'var(--text-secondary)',
                             fontWeight: isActive ? 700 : 500,
                             fontSize: '0.82rem',
                             display: 'flex',
@@ -550,15 +550,15 @@ export function WhatsAppReorderModal({
                               fontSize: '0.7rem',
                               padding: '1px 6px',
                               borderRadius: '999px',
-                              backgroundColor: isActive ? '#059669' : '#e2e8f0',
-                              color: isActive ? '#ffffff' : '#475569',
+                              backgroundColor: isActive ? 'var(--color-success-base)' : 'var(--surface-subtle)',
+                              color: isActive ? 'var(--text-inverse)' : 'var(--text-secondary)',
                               fontWeight: 700,
                             }}
                           >
                             {g.items.length}
                           </span>
                           {!g.isPhoneValid && g.vendorId && (
-                            <span title="Missing WhatsApp number" style={{ color: '#d97706' }}>
+                            <span title="Missing WhatsApp number" style={{ color: 'var(--color-warning-base)' }}>
                               <AlertTriangle size={12} />
                             </span>
                           )}
@@ -575,8 +575,8 @@ export function WhatsAppReorderModal({
                   style={{
                     padding: '14px 16px',
                     borderRadius: '12px',
-                    backgroundColor: activeGroup.vendorId ? '#f8fafc' : '#fffbeb',
-                    border: `1px solid ${activeGroup.vendorId ? '#e2e8f0' : '#fef3c7'}`,
+                    backgroundColor: activeGroup.vendorId ? 'var(--surface-subtle)' : 'var(--color-warning-surface)',
+                    border: `1px solid ${activeGroup.vendorId ? 'var(--border-default)' : 'var(--color-warning-border)'}`,
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 10,
@@ -592,12 +592,12 @@ export function WhatsAppReorderModal({
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Building size={16} className="text-slate-500" />
-                      <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>
+                      <Building size={16} className="text-[var(--text-secondary)]" />
+                      <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
                         {activeGroup.vendorName}
                       </span>
                       {activeGroup.contactPerson && (
-                        <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                           (Contact: {activeGroup.contactPerson})
                         </span>
                       )}
@@ -612,8 +612,8 @@ export function WhatsAppReorderModal({
                             fontWeight: 600,
                             padding: '3px 8px',
                             borderRadius: '999px',
-                            backgroundColor: '#dcfce7',
-                            color: '#15803d',
+                            backgroundColor: 'var(--color-success-surface)',
+                            color: 'var(--color-success-text)',
                             display: 'flex',
                             alignItems: 'center',
                             gap: 4,
@@ -629,8 +629,8 @@ export function WhatsAppReorderModal({
                             fontWeight: 600,
                             padding: '3px 8px',
                             borderRadius: '999px',
-                            backgroundColor: '#fef3c7',
-                            color: '#b45309',
+                            backgroundColor: 'var(--color-warning-surface)',
+                            color: 'var(--color-warning-text)',
                             display: 'flex',
                             alignItems: 'center',
                             gap: 4,
@@ -649,10 +649,10 @@ export function WhatsAppReorderModal({
                       style={{
                         padding: '10px 12px',
                         borderRadius: '8px',
-                        backgroundColor: '#fff7ed',
-                        border: '1px solid #fed7aa',
+                        backgroundColor: 'var(--color-warning-surface)',
+                        border: '1px solid var(--color-warning-border)',
                         fontSize: '0.82rem',
-                        color: '#9a3412',
+                        color: 'var(--color-warning-text)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
@@ -668,7 +668,7 @@ export function WhatsAppReorderModal({
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <select
-                          className="select select-sm text-xs bg-white border-amber-300"
+                          className="select select-sm text-xs bg-[var(--surface-card)] border-[var(--color-warning-border)] text-[var(--text-primary)]"
                           defaultValue=""
                           onChange={(e) => handleBulkAssignVendor(e.target.value)}
                         >
@@ -696,7 +696,7 @@ export function WhatsAppReorderModal({
                         flexWrap: 'wrap',
                       }}
                     >
-                      <span style={{ color: '#b45309', fontWeight: 600 }}>Enter WhatsApp Phone:</span>
+                      <span style={{ color: 'var(--color-warning-text)', fontWeight: 600 }}>Enter WhatsApp Phone:</span>
                       <input
                         type="tel"
                         placeholder="e.g. 9876543210 or +91 9876543210"
@@ -705,12 +705,12 @@ export function WhatsAppReorderModal({
                         style={{
                           padding: '4px 10px',
                           borderRadius: '6px',
-                          border: '1px solid #cbd5e1',
+                          border: '1px solid var(--border-default)',
                           fontSize: '0.82rem',
                           minWidth: '220px',
                         }}
                       />
-                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                         (Will use standard 91-country code for India if 10 digits)
                       </span>
                     </div>
@@ -735,12 +735,12 @@ export function WhatsAppReorderModal({
                         fontWeight: 700,
                         textTransform: 'uppercase',
                         letterSpacing: '0.04em',
-                        color: '#475569',
+                        color: 'var(--text-secondary)',
                       }}
                     >
                       Items to Request ({activeGroup.items.length})
                     </label>
-                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                       Quantities reflect order request, not on-hand stock
                     </span>
                   </div>
@@ -748,7 +748,7 @@ export function WhatsAppReorderModal({
                   <div
                     style={{
                       borderRadius: '10px',
-                      border: '1px solid #e2e8f0',
+                      border: '1px solid var(--border-default)',
                       overflow: 'hidden',
                     }}
                   >
@@ -761,14 +761,14 @@ export function WhatsAppReorderModal({
                       }}
                     >
                       <thead>
-                        <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                          <th style={{ padding: '8px 12px', color: '#475569', fontWeight: 600 }}>Item</th>
-                          <th style={{ padding: '8px 12px', color: '#475569', fontWeight: 600 }}>Available</th>
-                          <th style={{ padding: '8px 12px', color: '#475569', fontWeight: 600 }}>Suggested</th>
-                          <th style={{ padding: '8px 12px', color: '#475569', fontWeight: 600, width: '120px' }}>
+                        <tr style={{ backgroundColor: 'var(--surface-subtle)', borderBottom: '1px solid var(--border-default)' }}>
+                          <th style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontWeight: 600 }}>Item</th>
+                          <th style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontWeight: 600 }}>Available</th>
+                          <th style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontWeight: 600 }}>Suggested</th>
+                          <th style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontWeight: 600, width: '120px' }}>
                             Order Qty
                           </th>
-                          <th style={{ padding: '8px 12px', color: '#475569', fontWeight: 600 }}>Vendor</th>
+                          <th style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontWeight: 600 }}>Vendor</th>
                           <th style={{ padding: '8px 12px', textAlign: 'center', width: '40px' }}></th>
                         </tr>
                       </thead>
@@ -777,20 +777,20 @@ export function WhatsAppReorderModal({
                           <tr
                             key={item.id}
                             style={{
-                              borderBottom: '1px solid #f1f5f9',
-                              backgroundColor: '#ffffff',
+                              borderBottom: '1px solid var(--border-default)',
+                              backgroundColor: 'var(--surface-card)',
                             }}
                           >
                             <td style={{ padding: '8px 12px' }}>
-                              <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.name}</div>
-                              <div style={{ fontSize: '0.72rem', color: '#64748b', fontFamily: 'monospace' }}>
+                              <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{item.name}</div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
                                 {item.sku}
                               </div>
                             </td>
-                            <td style={{ padding: '8px 12px', color: '#64748b' }}>
+                            <td style={{ padding: '8px 12px', color: 'var(--text-muted)' }}>
                               {item.availableQuantity} {item.unit}
                             </td>
-                            <td style={{ padding: '8px 12px', color: '#059669', fontWeight: 600 }}>
+                            <td style={{ padding: '8px 12px', color: 'var(--color-success-base)', fontWeight: 600 }}>
                               {item.suggestedQuantity} {item.unit}
                             </td>
                             <td style={{ padding: '8px 12px' }}>
@@ -806,18 +806,18 @@ export function WhatsAppReorderModal({
                                     width: '65px',
                                     padding: '4px 6px',
                                     borderRadius: '6px',
-                                    border: '1px solid #cbd5e1',
+                                    border: '1px solid var(--border-default)',
                                     fontSize: '0.82rem',
                                     fontWeight: 700,
                                     textAlign: 'center',
                                   }}
                                 />
-                                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{item.unit}</span>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.unit}</span>
                               </div>
                             </td>
                             <td style={{ padding: '8px 12px' }}>
                               <select
-                                className="select select-xs text-[11px] bg-slate-50 border-slate-200"
+                                className="select select-xs text-[11px] bg-[var(--surface-subtle)] border-[var(--border-default)] text-[var(--text-primary)]"
                                 value={item.vendorId || 'UNASSIGNED'}
                                 onChange={(e) => handleItemVendorChange(item.id, e.target.value)}
                               >
@@ -837,12 +837,12 @@ export function WhatsAppReorderModal({
                                 style={{
                                   background: 'none',
                                   border: 'none',
-                                  color: '#94a3b8',
+                                  color: 'var(--text-muted)',
                                   cursor: 'pointer',
                                   padding: 4,
                                 }}
                               >
-                                <Trash2 size={14} className="hover:text-rose-600" />
+                                <Trash2 size={14} className="hover:text-[var(--color-danger-base)]" />
                               </button>
                             </td>
                           </tr>
@@ -857,8 +857,8 @@ export function WhatsAppReorderModal({
               <div
                 style={{
                   borderRadius: '10px',
-                  backgroundColor: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  backgroundColor: 'var(--surface-subtle)',
+                  border: '1px solid var(--border-default)',
                   padding: '10px 14px',
                 }}
               >
@@ -871,7 +871,7 @@ export function WhatsAppReorderModal({
                     padding: 0,
                     fontSize: '0.82rem',
                     fontWeight: 600,
-                    color: '#0284c7',
+                    color: 'var(--color-info-base)',
                     display: 'flex',
                     alignItems: 'center',
                     gap: 6,
@@ -890,11 +890,11 @@ export function WhatsAppReorderModal({
                       gap: 12,
                       marginTop: 10,
                       paddingTop: 10,
-                      borderTop: '1px solid #e2e8f0',
+                      borderTop: '1px solid var(--border-default)',
                     }}
                   >
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#475569', marginBottom: 4 }}>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
                         Expected Delivery Date
                       </label>
                       <input
@@ -905,13 +905,13 @@ export function WhatsAppReorderModal({
                           width: '100%',
                           padding: '6px 10px',
                           borderRadius: '6px',
-                          border: '1px solid #cbd5e1',
+                          border: '1px solid var(--border-default)',
                           fontSize: '0.82rem',
                         }}
                       />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#475569', marginBottom: 4 }}>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
                         Delivery Location / Notes
                       </label>
                       <input
@@ -923,7 +923,7 @@ export function WhatsAppReorderModal({
                           width: '100%',
                           padding: '6px 10px',
                           borderRadius: '6px',
-                          border: '1px solid #cbd5e1',
+                          border: '1px solid var(--border-default)',
                           fontSize: '0.82rem',
                         }}
                       />
@@ -942,7 +942,7 @@ export function WhatsAppReorderModal({
                         fontWeight: 700,
                         textTransform: 'uppercase',
                         letterSpacing: '0.04em',
-                        color: '#475569',
+                        color: 'var(--text-secondary)',
                       }}
                     >
                       Prefilled WhatsApp Message Preview (Editable)
@@ -955,7 +955,7 @@ export function WhatsAppReorderModal({
                           background: 'none',
                           border: 'none',
                           fontSize: '0.72rem',
-                          color: '#0284c7',
+                          color: 'var(--color-info-base)',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
@@ -975,12 +975,12 @@ export function WhatsAppReorderModal({
                       width: '100%',
                       padding: '12px 14px',
                       borderRadius: '10px',
-                      border: '1px solid #cbd5e1',
+                      border: '1px solid var(--border-default)',
                       fontSize: '0.83rem',
                       fontFamily: 'inherit',
                       lineHeight: 1.5,
-                      backgroundColor: '#f8fafc',
-                      color: '#0f172a',
+                      backgroundColor: 'var(--surface-subtle)',
+                      color: 'var(--text-primary)',
                       resize: 'vertical',
                       outline: 'none',
                     }}
@@ -994,9 +994,9 @@ export function WhatsAppReorderModal({
                   style={{
                     padding: '12px 14px',
                     borderRadius: '10px',
-                    backgroundColor: '#fffbeb',
-                    border: '1px solid #fef3c7',
-                    color: '#92400e',
+                    backgroundColor: 'var(--color-warning-surface)',
+                    border: '1px solid var(--color-warning-border)',
+                    color: 'var(--color-warning-text)',
                     fontSize: '0.82rem',
                     display: 'flex',
                     alignItems: 'center',
@@ -1006,7 +1006,7 @@ export function WhatsAppReorderModal({
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                    <AlertTriangle size={16} className="text-[var(--color-warning-base)] shrink-0" />
                     <span>Your browser blocked the popup. Click here to open WhatsApp directly:</span>
                   </div>
                   <a
@@ -1015,7 +1015,7 @@ export function WhatsAppReorderModal({
                     rel="noopener noreferrer"
                     style={{
                       fontWeight: 700,
-                      color: '#047857',
+                      color: 'var(--color-success-base)',
                       textDecoration: 'underline',
                       display: 'flex',
                       alignItems: 'center',
@@ -1032,10 +1032,10 @@ export function WhatsAppReorderModal({
                 style={{
                   padding: '10px 14px',
                   borderRadius: '8px',
-                  backgroundColor: '#f1f5f9',
-                  border: '1px solid #e2e8f0',
+                  backgroundColor: 'var(--surface-subtle)',
+                  border: '1px solid var(--border-default)',
                   fontSize: '0.74rem',
-                  color: '#64748b',
+                  color: 'var(--text-muted)',
                   lineHeight: 1.4,
                 }}
               >
@@ -1056,13 +1056,13 @@ export function WhatsAppReorderModal({
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '14px 22px',
-            borderTop: '1px solid #e2e8f0',
-            backgroundColor: '#ffffff',
+            borderTop: '1px solid var(--border-default)',
+            backgroundColor: 'var(--surface-card)',
             flexWrap: 'wrap',
             gap: 10,
           }}
         >
-          <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
             {activeGroup?.items.length || 0} item(s) selected for{' '}
             <strong>{activeGroup?.vendorName || 'Vendor'}</strong>
           </div>
@@ -1076,9 +1076,9 @@ export function WhatsAppReorderModal({
               style={{
                 padding: '8px 14px',
                 borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                backgroundColor: '#ffffff',
-                color: '#334155',
+                border: '1px solid var(--border-default)',
+                backgroundColor: 'var(--surface-card)',
+                color: 'var(--text-secondary)',
                 fontSize: '0.84rem',
                 fontWeight: 600,
                 display: 'flex',
@@ -1089,7 +1089,7 @@ export function WhatsAppReorderModal({
             >
               {copiedVendorId === (activeGroup?.vendorKey || 'current') ? (
                 <>
-                  <Check size={15} className="text-emerald-600" />
+                  <Check size={15} className="text-[var(--color-success-base)]" />
                   <span>Copied!</span>
                 </>
               ) : (
@@ -1116,7 +1116,7 @@ export function WhatsAppReorderModal({
                 border: 'none',
                 backgroundColor:
                   items.length === 0 || !activeGroup?.isPhoneValid
-                    ? '#94a3b8'
+                    ? 'var(--border-default)'
                     : '#25D366',
                 color: '#ffffff',
                 fontSize: '0.86rem',

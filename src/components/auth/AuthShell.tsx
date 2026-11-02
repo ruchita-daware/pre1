@@ -2,6 +2,15 @@
 
 import React, { useEffect, useState } from 'react'
 import { Sun, Moon, Globe } from 'lucide-react'
+import {
+  type ResolvedTheme,
+  getStoredThemePreference,
+  resolveTheme,
+  getSystemPrefersDark,
+  setStoredThemePreference,
+  applyThemeToDom,
+  subscribeToSystemThemeChange,
+} from '@/lib/theme/theme-contract'
 import { AuthBackground } from './AuthBackground'
 import { AuthPageFooter } from './AuthPageFooter'
 
@@ -15,24 +24,27 @@ export interface AuthShellProps {
  * Keeps the top bar clean so AuthBrand inside AuthCard remains the primary brand anchor.
  */
 export function AuthShell({ children }: AuthShellProps) {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  const [theme, setTheme] = useState<ResolvedTheme>('light')
 
   useEffect(() => {
-    const stored = localStorage.getItem('preone_theme') || localStorage.getItem('preone-theme')
-    let isDark = false
-    if (stored === 'dark') {
-      isDark = true
-    } else if (stored === 'light') {
-      isDark = false
-    } else {
-      isDark = document.documentElement.getAttribute('data-theme') === 'dark' || document.documentElement.classList.contains('dark')
-    }
-    setTheme(isDark ? 'dark' : 'light')
+    const pref = getStoredThemePreference()
+    const resolved = resolveTheme(pref, getSystemPrefersDark())
+    setTheme(resolved)
+
+    // Subscribe to OS theme changes if in auto mode
+    const unsubscribe = subscribeToSystemThemeChange((newResolved) => {
+      setTheme(newResolved)
+    })
+    return () => unsubscribe()
   }, [])
 
   const toggleTheme = () => {
-    const nextTheme = theme === 'light' ? 'dark' : 'light'
-    
+    let nextTheme: ResolvedTheme = 'dark'
+    if (theme === 'light') nextTheme = 'dark'
+    else if (theme === 'dark') nextTheme = 'high-contrast-light'
+    else if (theme === 'high-contrast-light') nextTheme = 'high-contrast-dark'
+    else nextTheme = 'light'
+
     // Enable smooth cross-fade transition only during deliberate user toggle
     document.documentElement.classList.add('theme-transition-active')
     setTimeout(() => {
@@ -40,12 +52,8 @@ export function AuthShell({ children }: AuthShellProps) {
     }, 250)
 
     setTheme(nextTheme)
-    document.documentElement.setAttribute('data-theme', nextTheme)
-    document.documentElement.classList.toggle('dark', nextTheme === 'dark')
-    try {
-      localStorage.setItem('preone-theme', nextTheme)
-      localStorage.setItem('preone_theme', nextTheme)
-    } catch {}
+    setStoredThemePreference(nextTheme, true)
+    applyThemeToDom(nextTheme)
   }
 
   return (

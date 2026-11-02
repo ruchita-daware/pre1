@@ -10,35 +10,46 @@
 //    `fdprocessedid`, `data-lp-*`) before hydration, preventing spurious
 //    hydration-mismatch warnings on every input/button/select in the app.
 
+import {
+  getStoredThemePreference,
+  resolveTheme,
+  applyThemeToDom,
+  getSystemPrefersDark,
+  THEME_COLOR_META_ID,
+  THEME_COLOR_DARK,
+  THEME_COLOR_LIGHT,
+  THEME_COLOR_HC_LIGHT,
+  THEME_COLOR_HC_DARK,
+} from '@/lib/theme/theme-contract'
+
 if (typeof window !== 'undefined') {
   try {
-    const stored = localStorage.getItem('preone-theme') || localStorage.getItem('preone_theme')
-    let isDark = false
-    if (stored === 'dark') {
-      isDark = true
-    } else if (stored === 'light') {
-      isDark = false
-    } else {
-      isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-    }
-    const resolvedTheme = isDark ? 'dark' : 'light'
-    document.documentElement.setAttribute('data-theme', resolvedTheme)
-    document.documentElement.classList.toggle('dark', isDark)
+    const pref = getStoredThemePreference()
+    const resolved = resolveTheme(pref, getSystemPrefersDark())
+    applyThemeToDom(resolved)
 
-    const syncThemeColor = (dark: boolean) => {
-      const meta = document.getElementById('app-theme-color-meta') || document.querySelector('meta[name="theme-color"]')
+    const syncThemeColor = () => {
+      const currentTheme = document.documentElement.getAttribute('data-theme') || 'light'
+      const meta =
+        document.getElementById(THEME_COLOR_META_ID) ||
+        document.querySelector('meta[name="theme-color"]')
       if (meta) {
-        meta.setAttribute('content', dark ? '#0B0F19' : '#F7F8FC')
+        let color = THEME_COLOR_LIGHT
+        if (currentTheme === 'dark') {
+          color = THEME_COLOR_DARK
+        } else if (currentTheme === 'high-contrast-light') {
+          color = THEME_COLOR_HC_LIGHT
+        } else if (currentTheme === 'high-contrast-dark') {
+          color = THEME_COLOR_HC_DARK
+        }
+        meta.setAttribute('content', color)
       }
     }
-    syncThemeColor(isDark)
+    syncThemeColor()
 
     // Observe runtime changes to document.documentElement (data-theme or class='dark')
     const themeObserver = new MutationObserver(() => {
-      const isCurrentlyDark =
-        document.documentElement.getAttribute('data-theme') === 'dark' ||
-        document.documentElement.classList.contains('dark')
-      syncThemeColor(isCurrentlyDark)
+      syncThemeColor()
     })
     themeObserver.observe(document.documentElement, {
       attributes: true,

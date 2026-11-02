@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import PreHydration from "@/components/PreHydration";
 import { GlobalScrollbar } from "@/components/scrollbar/GlobalScrollbar";
+import { getThemeInitScript } from "@/lib/theme/theme-contract";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -26,7 +27,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#F7F8FC" },
-    { media: "(prefers-color-scheme: dark)", color: "#0B0F19" },
+    { media: "(prefers-color-scheme: dark)", color: "#131626" },
   ],
 };
 
@@ -81,30 +82,7 @@ export default function RootLayout({
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function() {
-  try {
-    var stored = localStorage.getItem('preone_theme') || localStorage.getItem('preone-theme');
-    var isDark = false;
-    if (stored === 'dark') {
-      isDark = true;
-    } else if (stored === 'light') {
-      isDark = false;
-    } else {
-      isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    var theme = isDark ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-theme', theme);
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    var meta = document.getElementById('app-theme-color-meta');
-    if (meta) {
-      meta.setAttribute('content', isDark ? '#0B0F19' : '#F7F8FC');
-    }
-  } catch (e) {}
-})();`,
+            __html: getThemeInitScript(),
           }}
         />
       </head>

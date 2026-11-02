@@ -239,22 +239,29 @@ export function HRLeaveTab({
 
   // Filter toolbar
   const filterToolbar = (
-    <div className="flex items-center gap-2 flex-wrap">
-      <select
-        className="select !w-auto min-w-[140px] max-w-[180px] text-xs py-1.5 px-3 h-9 font-medium rounded-xl bg-background/80 border border-border/80 cursor-pointer shadow-2xs hover:border-border transition-colors focus:ring-1 focus:ring-primary/30"
-        value={statusFilter}
-        onChange={(e) => onStatusFilterChange(e.target.value)}
-        aria-label="Filter by leave status"
-      >
-        <option value="ALL">All Statuses</option>
-        <option value="PENDING">Pending Review Only</option>
-        <option value="APPROVED">Approved Leaves</option>
-        <option value="REJECTED">Rejected Leaves</option>
-      </select>
+    <div className="flex items-center gap-2 shrink-0 flex-nowrap overflow-x-auto scrollbar-none py-0.5">
+      <div className="relative shrink-0">
+        <select
+          className={`select !h-9 text-xs py-1 pl-3 pr-8 font-medium rounded-xl border cursor-pointer shadow-2xs transition-colors focus:ring-1 focus:ring-primary/30 ${
+            statusFilter !== 'ALL'
+              ? 'bg-primary/10 border-primary/50 text-primary font-semibold'
+              : 'bg-background/80 border-border/80 text-foreground hover:border-border'
+          }`}
+          style={{ width: 'auto', minWidth: 150, height: 36 }}
+          value={statusFilter}
+          onChange={(e) => onStatusFilterChange(e.target.value)}
+          aria-label="Filter by leave status"
+        >
+          <option value="ALL">All Statuses</option>
+          <option value="PENDING">Pending Review Only</option>
+          <option value="APPROVED">Approved Leaves</option>
+          <option value="REJECTED">Rejected Leaves</option>
+        </select>
+      </div>
       <button
         type="button"
         onClick={() => setApplyModalOpen(true)}
-        className="btn btn-primary btn-sm h-9 px-3.5 text-xs flex items-center gap-1.5 rounded-xl shadow-xs"
+        className="btn btn-primary btn-sm h-9 px-3.5 text-xs flex items-center gap-1.5 rounded-xl shadow-xs shrink-0"
       >
         <Plus size={14} />
         <span>Apply for Leave</span>

@@ -5753,8 +5753,8 @@ export default function AdmissionsPage() {
 
       {/* ── ENROLLMENT PROGRESS OVERLAY ── */}
       {enrollmentProgressStep && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#fff', padding: 24, borderRadius: 14, textAlign: 'center', maxWidth: 360, width: '90%' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay, rgba(0,0,0,0.6))', zIndex: 'var(--z-overlay, 500)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--surface-card, #fff)', padding: 24, borderRadius: 'var(--radius-card, 14px)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-dialog)', textAlign: 'center', maxWidth: 360, width: '90%' }}>
             <RefreshCw size={28} className="spin" style={{ color: 'var(--primary)', margin: '0 auto 12px' }} />
             <h4 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 800 }}>Enrolling Student...</h4>
             <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>{enrollmentProgressStep}</p>

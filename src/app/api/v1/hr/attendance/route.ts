@@ -243,6 +243,9 @@ async function _PATCH(req: NextRequest) {
     }, punchDate)
 
     const lateMinutes = status === 'LATE' ? (calculation.lateMinutes || 30) : calculation.lateMinutes
+    const correctionNote = reason.trim().toLowerCase().startsWith('[correction]')
+      ? reason.trim()
+      : `[Correction] ${reason.trim()}`
 
     const updatedPunch = await db.$transaction(async (tx) => {
       const record = await tx.attendanceStaff.upsert({
@@ -263,8 +266,8 @@ async function _PATCH(req: NextRequest) {
           shiftHours: 8,
           workedHours: calculation.workedHours,
           lateMinutes,
-          source: 'CORRECTION',
-          notes: reason,
+          source: 'MANUAL',
+          notes: correctionNote,
           markedById: session.uid,
           markedByName: session.name,
         },
@@ -274,8 +277,8 @@ async function _PATCH(req: NextRequest) {
           checkOut: checkOut ? new Date(checkOut) : null,
           workedHours: calculation.workedHours,
           lateMinutes,
-          source: 'CORRECTION',
-          notes: reason,
+          source: 'MANUAL',
+          notes: correctionNote,
           markedById: session.uid,
           markedByName: session.name,
         },

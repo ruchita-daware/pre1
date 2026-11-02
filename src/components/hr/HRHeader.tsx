@@ -98,17 +98,7 @@ export function HRHeader({
 
       case 'staff':
       case 'employees':
-        return (
-          canWrite && onOpenOnboard && (
-            <button
-              onClick={onOpenOnboard}
-              className="btn btn-primary btn-sm h-9 px-3.5 gap-1.5 text-xs font-semibold rounded-xl shadow-xs"
-            >
-              <Plus size={14} />
-              <span>Add Staff</span>
-            </button>
-          )
-        )
+        return null
 
       case 'attendance':
         return (

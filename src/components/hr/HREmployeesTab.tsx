@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useMemo, useState } from 'react'
-import { Eye, Pencil, Plus, Users, PhoneCall, Mail, GraduationCap, ShieldCheck, CalendarRange, Award } from 'lucide-react'
+import { Eye, Pencil, Users, PhoneCall, Mail, GraduationCap, ShieldCheck, CalendarRange, Award, X, RotateCcw } from 'lucide-react'
 import { Avatar, StatusBadge, IconButton } from '@/components/preone/ui'
 import { DataTable, Column } from '@/components/preone/DataTable'
 import { HRScheduleTab } from './HRScheduleTab'
@@ -24,7 +24,7 @@ interface HREmployeesTabProps {
   onSearchQueryChange: (q: string) => void
   onViewStaff: (staffId: string) => void
   onEditStaff: (staff: StaffListItem) => void
-  onOpenOnboard: () => void
+  onOpenOnboard?: () => void
   canWrite?: boolean
   subView?: StaffSubView
   onSubViewChange?: (v: StaffSubView) => void
@@ -182,49 +182,87 @@ export function HREmployeesTab({
 
   // Filter toolbar
   const filterToolbar = (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div className="flex items-center gap-2 shrink-0 flex-nowrap overflow-x-auto scrollbar-none py-0.5 max-w-full">
       {/* Branch Selector */}
-      <select
-        className="select !w-auto min-w-[130px] max-w-[180px] text-xs py-1.5 px-3 h-9 font-medium rounded-xl bg-background/80 border border-border/80 cursor-pointer shadow-2xs hover:border-border transition-colors focus:ring-1 focus:ring-primary/30"
-        value={branchFilter}
-        onChange={(e) => onBranchFilterChange(e.target.value)}
-        aria-label="Filter by campus"
-      >
-        <option value="ALL">All Campuses</option>
-        {branches.map((b) => (
-          <option key={b.id} value={b.id}>
-            {b.name}
-          </option>
-        ))}
-      </select>
+      <div className="relative shrink-0">
+        <select
+          className={`select !h-9 text-xs py-1 pl-3 pr-8 font-medium rounded-xl border cursor-pointer shadow-2xs transition-colors focus:ring-1 focus:ring-primary/30 ${
+            branchFilter !== 'ALL'
+              ? 'bg-primary/10 border-primary/50 text-primary font-semibold'
+              : 'bg-background/80 border-border/80 text-foreground hover:border-border'
+          }`}
+          style={{ width: 'auto', minWidth: 140, height: 36 }}
+          value={branchFilter}
+          onChange={(e) => onBranchFilterChange(e.target.value)}
+          aria-label="Filter by campus"
+        >
+          <option value="ALL">All Campuses</option>
+          {branches.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {/* Status Filter */}
-      <select
-        className="select !w-auto min-w-[120px] max-w-[160px] text-xs py-1.5 px-3 h-9 font-medium rounded-xl bg-background/80 border border-border/80 cursor-pointer shadow-2xs hover:border-border transition-colors focus:ring-1 focus:ring-primary/30"
-        value={statusFilter}
-        onChange={(e) => onStatusFilterChange(e.target.value)}
-        aria-label="Filter by status"
-      >
-        <option value="ALL">All Statuses</option>
-        <option value="ACTIVE">Active Staff</option>
-        <option value="INACTIVE">Inactive</option>
-        <option value="ON_LEAVE">On Leave</option>
-      </select>
+      <div className="relative shrink-0">
+        <select
+          className={`select !h-9 text-xs py-1 pl-3 pr-8 font-medium rounded-xl border cursor-pointer shadow-2xs transition-colors focus:ring-1 focus:ring-primary/30 ${
+            statusFilter !== 'ALL'
+              ? 'bg-primary/10 border-primary/50 text-primary font-semibold'
+              : 'bg-background/80 border-border/80 text-foreground hover:border-border'
+          }`}
+          style={{ width: 'auto', minWidth: 130, height: 36 }}
+          value={statusFilter}
+          onChange={(e) => onStatusFilterChange(e.target.value)}
+          aria-label="Filter by status"
+        >
+          <option value="ALL">All Statuses</option>
+          <option value="ACTIVE">Active Staff</option>
+          <option value="INACTIVE">Inactive</option>
+          <option value="ON_LEAVE">On Leave</option>
+        </select>
+      </div>
 
       {/* Department Filter */}
-      <select
-        className="select !w-auto min-w-[130px] max-w-[180px] text-xs py-1.5 px-3 h-9 font-medium rounded-xl bg-background/80 border border-border/80 cursor-pointer shadow-2xs hover:border-border transition-colors focus:ring-1 focus:ring-primary/30"
-        value={departmentFilter}
-        onChange={(e) => onDepartmentFilterChange(e.target.value)}
-        aria-label="Filter by department"
-      >
-        <option value="ALL">All Departments</option>
-        <option value="Academics">Academics</option>
-        <option value="Administration">Administration</option>
-        <option value="Finance">Finance</option>
-        <option value="Operations">Operations</option>
-        <option value="Transport">Transport</option>
-      </select>
+      <div className="relative shrink-0">
+        <select
+          className={`select !h-9 text-xs py-1 pl-3 pr-8 font-medium rounded-xl border cursor-pointer shadow-2xs transition-colors focus:ring-1 focus:ring-primary/30 ${
+            departmentFilter !== 'ALL'
+              ? 'bg-primary/10 border-primary/50 text-primary font-semibold'
+              : 'bg-background/80 border-border/80 text-foreground hover:border-border'
+          }`}
+          style={{ width: 'auto', minWidth: 145, height: 36 }}
+          value={departmentFilter}
+          onChange={(e) => onDepartmentFilterChange(e.target.value)}
+          aria-label="Filter by department"
+        >
+          <option value="ALL">All Departments</option>
+          <option value="Academics">Academics</option>
+          <option value="Administration">Administration</option>
+          <option value="Finance">Finance</option>
+          <option value="Operations">Operations</option>
+          <option value="Transport">Transport</option>
+        </select>
+      </div>
+
+      {/* Reset Filter Button */}
+      {(branchFilter !== 'ALL' || statusFilter !== 'ALL' || departmentFilter !== 'ALL') && (
+        <button
+          type="button"
+          onClick={() => {
+            onBranchFilterChange('ALL')
+            onStatusFilterChange('ALL')
+            onDepartmentFilterChange('ALL')
+          }}
+          className="btn btn-ghost btn-sm text-xs h-9 px-2.5 text-muted-foreground hover:text-foreground shrink-0 rounded-xl flex items-center gap-1 border border-border/60"
+          title="Reset filters"
+        >
+          <X size={13} />
+          <span>Reset</span>
+        </button>
+      )}
     </div>
   )
 
@@ -295,27 +333,9 @@ export function HREmployeesTab({
           searchValue={searchQuery}
           onSearch={onSearchQueryChange}
           filters={filterToolbar}
-          toolbarActions={
-            canWrite ? (
-              <button
-                onClick={onOpenOnboard}
-                className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm"
-              >
-                <Plus size={14} />
-                <span>Add Staff</span>
-              </button>
-            ) : undefined
-          }
           emptyTitle="No Employees Found"
           emptyMessage="No employee records match your search or filter criteria."
           emptyIcon={<Users size={36} className="text-muted-foreground opacity-50" />}
-          emptyAction={
-            canWrite ? (
-              <button onClick={onOpenOnboard} className="btn btn-primary btn-sm mt-2">
-                <Plus size={14} /> Onboard First Employee
-              </button>
-            ) : undefined
-          }
           paginate
           defaultPageSize={15}
           showExport

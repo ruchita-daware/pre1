@@ -32,6 +32,8 @@ export interface AdmissionsNavigationRibbonProps {
 /**
  * PreOne Admissions Navigation Ribbon
  * Standardized on GlobalModuleNavigation with centralized typed configuration.
+ * Active indicator standardized without playful sparkles:
+ * rounded-full ${theme.activeDot} animate-pulse shrink-0
  */
 export function AdmissionsNavigationRibbon({
   moduleCounts = {},

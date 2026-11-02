@@ -17,6 +17,7 @@ import {
   resetPersistentFailedAttempts,
 } from '@/lib/auth/lockout-tracker'
 import { normalizeLocale, isSupportedLocale, DEFAULT_LOCALE } from '@/lib/i18n/types'
+import { normalizeThemePreference } from '@/lib/theme/theme-contract'
 
 export const POST = withApi(
   async (req: NextRequest) => {
@@ -85,6 +86,14 @@ export const POST = withApi(
             path: '/',
           })
         }
+        const userTheme = normalizeThemePreference((result.user as any)?.preferences?.theme)
+        res.cookies.set('preone_theme_mode', userTheme, {
+          httpOnly: false,
+          sameSite: 'lax',
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 365 * 24 * 60 * 60,
+          path: '/',
+        })
         return res
       }
 
@@ -527,6 +536,15 @@ export const POST = withApi(
           path: '/',
         })
 
+        const userTheme = normalizeThemePreference((user as any)?.preferences?.theme)
+        res.cookies.set('preone_theme_mode', userTheme, {
+          httpOnly: false,
+          sameSite: 'lax',
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 365 * 24 * 60 * 60,
+          path: '/',
+        })
+
         return res
       }
 
@@ -658,6 +676,7 @@ export const POST = withApi(
           },
           branch: branch ? { id: branch.id, name: branch.name } : null,
           mustChangePassword: effectiveMustChangePassword,
+          preferences: user.preferences,
         },
       })
 
@@ -673,6 +692,15 @@ export const POST = withApi(
         ? normalizeLocale(user.locale)
         : DEFAULT_LOCALE
       res.cookies.set('preone_locale', userLocale, {
+        httpOnly: false,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 365 * 24 * 60 * 60,
+        path: '/',
+      })
+
+      const userTheme = normalizeThemePreference((user as any)?.preferences?.theme)
+      res.cookies.set('preone_theme_mode', userTheme, {
         httpOnly: false,
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',

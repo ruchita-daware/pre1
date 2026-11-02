@@ -5,6 +5,7 @@ import type { Role } from '@/lib/auth'
 import type { BrandingConfig } from '@/lib/branding-types'
 import { homeModules, type HomeModule } from '@/lib/modules'
 import { ModuleCard, PLogoWordmark } from '@/components/preone'
+import { PreschoolSideDecorations } from '@/components/home'
 import { useI18n } from '@/lib/i18n/context'
 import { useBranding } from '@/lib/branding-context'
 
@@ -101,7 +102,10 @@ export function HomeClient({ role, branding: initialBranding, user: initialUser 
   const campusName = branding?.campusName || user?.branchName || null
 
   return (
-    <div className="home">
+    <div className="home relative">
+      {/* ── Preschool Decorative Perimeter Motifs (Hot-air Balloon, Rainbow, Garden, Schoolhouse) ── */}
+      <PreschoolSideDecorations />
+
       {/* ── Centered PreOne Brand Logo & Preschool Workspace Context ── */}
       <section className="home-center-hero" aria-label="PreOne Home">
         <div className="home-center-brand">

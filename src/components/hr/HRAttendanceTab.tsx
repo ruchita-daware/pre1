@@ -11,6 +11,7 @@ import {
   Calendar,
   AlertCircle,
   Save,
+  X,
 } from 'lucide-react'
 import { Avatar, StatusBadge, IconButton } from '@/components/preone/ui'
 import { DataTable, Column } from '@/components/preone/DataTable'
@@ -250,40 +251,6 @@ export function HRAttendanceTab({
       </div>
 
       {/* ── 2. Filters & Attendance Table ── */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {/* Campus Filter */}
-        <select
-          className="select !w-auto min-w-[130px] max-w-[180px] text-xs py-1.5 px-3 h-9 font-medium rounded-xl bg-background/80 border border-border/80 cursor-pointer shadow-2xs hover:border-border transition-colors focus:ring-1 focus:ring-primary/30"
-          value={branchFilter}
-          onChange={(e) => onBranchFilterChange(e.target.value)}
-          aria-label="Filter by campus"
-        >
-          <option value="ALL">All Campuses</option>
-          {branches.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
-
-        {/* Status Filter */}
-        <select
-          className="select !w-auto min-w-[120px] max-w-[170px] text-xs py-1.5 px-3 h-9 font-medium rounded-xl bg-background/80 border border-border/80 cursor-pointer shadow-2xs hover:border-border transition-colors focus:ring-1 focus:ring-primary/30"
-          value={statusFilter}
-          onChange={(e) => onStatusFilterChange(e.target.value)}
-          aria-label="Filter by status"
-        >
-          <option value="ALL">All Statuses</option>
-          <option value="PRESENT">Present Only</option>
-          <option value="FULL_DAY">Full-Day Staff</option>
-          <option value="LATE">Late Arrivals</option>
-          <option value="HALF_DAY">Half Day</option>
-          <option value="ON_LEAVE">On Leave</option>
-          <option value="MISSING_CHECKOUT">Missing Check-outs</option>
-          <option value="ABSENT">Absent / Unmarked</option>
-        </select>
-      </div>
-
       <DataTable
         columns={columns}
         data={recordsToDisplay}
@@ -291,6 +258,71 @@ export function HRAttendanceTab({
         searchPlaceholder="Search staff by name or code..."
         searchValue={searchQuery}
         onSearch={onSearchQueryChange}
+        filters={
+          <div className="flex items-center gap-2 shrink-0 flex-nowrap overflow-x-auto scrollbar-none py-0.5 max-w-full">
+            {/* Campus Filter */}
+            <div className="relative shrink-0">
+              <select
+                className={`select !h-9 text-xs py-1 pl-3 pr-8 font-medium rounded-xl border cursor-pointer shadow-2xs transition-colors focus:ring-1 focus:ring-primary/30 ${
+                  branchFilter !== 'ALL'
+                    ? 'bg-primary/10 border-primary/50 text-primary font-semibold'
+                    : 'bg-background/80 border-border/80 text-foreground hover:border-border'
+                }`}
+                style={{ width: 'auto', minWidth: 140, height: 36 }}
+                value={branchFilter}
+                onChange={(e) => onBranchFilterChange(e.target.value)}
+                aria-label="Filter by campus"
+              >
+                <option value="ALL">All Campuses</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status Filter */}
+            <div className="relative shrink-0">
+              <select
+                className={`select !h-9 text-xs py-1 pl-3 pr-8 font-medium rounded-xl border cursor-pointer shadow-2xs transition-colors focus:ring-1 focus:ring-primary/30 ${
+                  statusFilter !== 'ALL'
+                    ? 'bg-primary/10 border-primary/50 text-primary font-semibold'
+                    : 'bg-background/80 border-border/80 text-foreground hover:border-border'
+                }`}
+                style={{ width: 'auto', minWidth: 140, height: 36 }}
+                value={statusFilter}
+                onChange={(e) => onStatusFilterChange(e.target.value)}
+                aria-label="Filter by status"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="PRESENT">Present Only</option>
+                <option value="FULL_DAY">Full-Day Staff</option>
+                <option value="LATE">Late Arrivals</option>
+                <option value="HALF_DAY">Half Day</option>
+                <option value="ON_LEAVE">On Leave</option>
+                <option value="MISSING_CHECKOUT">Missing Check-outs</option>
+                <option value="ABSENT">Absent / Unmarked</option>
+              </select>
+            </div>
+
+            {/* Reset Button */}
+            {(branchFilter !== 'ALL' || statusFilter !== 'ALL') && (
+              <button
+                type="button"
+                onClick={() => {
+                  onBranchFilterChange('ALL')
+                  onStatusFilterChange('ALL')
+                }}
+                className="btn btn-ghost btn-sm text-xs h-9 px-2.5 text-muted-foreground hover:text-foreground shrink-0 rounded-xl flex items-center gap-1 border border-border/60"
+                title="Reset filters"
+              >
+                <X size={13} />
+                <span>Reset</span>
+              </button>
+            )}
+          </div>
+        }
         emptyTitle="No Attendance Records"
         emptyMessage={`No staff attendance entries found for ${new Date(date).toLocaleDateString('en-IN')}.`}
         emptyIcon={<CalendarCheck size={36} className="text-muted-foreground opacity-50" />}

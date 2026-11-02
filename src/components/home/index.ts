@@ -1,0 +1,1 @@
+export { PreschoolSideDecorations } from './PreschoolSideDecorations'

@@ -71,11 +71,11 @@ export function KitHandoverSlipModal({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 9999,
+        zIndex: 'var(--z-overlay, 500)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+        backgroundColor: 'var(--surface-overlay)',
         backdropFilter: 'blur(4px)',
         padding: '16px',
         overflowY: 'auto',
@@ -112,14 +112,14 @@ export function KitHandoverSlipModal({
         style={{
           width: '100%',
           maxWidth: '680px',
-          backgroundColor: '#ffffff',
+          backgroundColor: 'var(--surface-card)',
           borderRadius: '16px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          boxShadow: 'var(--shadow-3)',
           display: 'flex',
           flexDirection: 'column',
           maxHeight: '92vh',
           overflow: 'hidden',
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--border-default)',
         }}
         className="print-modal-card"
       >
@@ -131,8 +131,8 @@ export function KitHandoverSlipModal({
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '14px 20px',
-            borderBottom: '1px solid #e2e8f0',
-            backgroundColor: '#f8fafc',
+            borderBottom: '1px solid var(--border-default)',
+            backgroundColor: 'var(--surface-subtle)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -141,8 +141,8 @@ export function KitHandoverSlipModal({
                 width: 32,
                 height: 32,
                 borderRadius: '8px',
-                backgroundColor: '#ede9fe',
-                color: '#7c3aed',
+                backgroundColor: 'var(--surface-subtle)',
+                color: 'var(--color-brand-primary)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -151,10 +151,10 @@ export function KitHandoverSlipModal({
               <FileText size={17} />
             </div>
             <div>
-              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
                 Student Welcome Kit Handover Slip
               </h3>
-              <p style={{ fontSize: '0.75rem', margin: 0, color: '#64748b' }}>
+              <p style={{ fontSize: '0.75rem', margin: 0, color: 'var(--text-secondary)' }}>
                 Official acknowledgment & physical item handover receipt
               </p>
             </div>
@@ -170,13 +170,13 @@ export function KitHandoverSlipModal({
                 gap: 6,
                 padding: '7px 14px',
                 borderRadius: '8px',
-                backgroundColor: '#7c3aed',
-                color: '#ffffff',
+                backgroundColor: 'var(--color-brand-primary)',
+                color: 'var(--text-inverse)',
                 border: 'none',
                 fontWeight: 600,
                 fontSize: '0.82rem',
                 cursor: !slip || loading ? 'not-allowed' : 'pointer',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                boxShadow: 'var(--shadow-1)',
               }}
             >
               <Printer size={15} />
@@ -189,9 +189,9 @@ export function KitHandoverSlipModal({
                 width: 32,
                 height: 32,
                 borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                backgroundColor: '#ffffff',
-                color: '#64748b',
+                border: '1px solid var(--border-default)',
+                backgroundColor: 'var(--surface-card)',
+                color: 'var(--text-secondary)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -204,9 +204,9 @@ export function KitHandoverSlipModal({
         </div>
 
         {/* Modal Scrollable Body */}
-        <div style={{ overflowY: 'auto', padding: '24px', backgroundColor: '#f1f5f9' }}>
+        <div style={{ overflowY: 'auto', padding: '24px', backgroundColor: 'var(--surface-canvas)' }}>
           {loading ? (
-            <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b' }}>
+            <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
               <Loader2 size={32} className="animate-spin" style={{ margin: '0 auto 12px' }} />
               <p style={{ fontSize: '0.9rem', margin: 0 }}>Generating authoritative handover slip...</p>
             </div>
@@ -215,9 +215,9 @@ export function KitHandoverSlipModal({
               style={{
                 padding: '20px',
                 borderRadius: '12px',
-                backgroundColor: '#fef2f2',
-                border: '1px solid #fecaca',
-                color: '#991b1b',
+                backgroundColor: 'var(--color-danger-surface)',
+                border: '1px solid var(--color-danger-border)',
+                color: 'var(--color-danger-text)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 12,
@@ -230,7 +230,12 @@ export function KitHandoverSlipModal({
               </div>
             </div>
           ) : slip ? (
-            /* PRINTABLE SLIP CANVAS */
+            /* ============================================================== */
+            /* LEGITIMATE PRINT EXCEPTION: Physical Paper Document Canvas     */
+            /* Fixed light styling (#ffffff background, #0f172a text) is      */
+            /* strictly required so physical printer output renders black ink */
+            /* on white paper across all themes and dark mode OS settings.   */
+            /* ============================================================== */
             <div
               ref={printRef}
               className="print-area"
@@ -239,7 +244,7 @@ export function KitHandoverSlipModal({
                 borderRadius: '12px',
                 border: '1px solid #e2e8f0',
                 padding: '32px',
-                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
+                boxShadow: 'var(--shadow-card)',
                 color: '#0f172a',
                 fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
               }}
@@ -598,8 +603,8 @@ export function KitHandoverSlipModal({
             justifyContent: 'flex-end',
             gap: 10,
             padding: '14px 20px',
-            borderTop: '1px solid #e2e8f0',
-            backgroundColor: '#ffffff',
+            borderTop: '1px solid var(--border-default)',
+            backgroundColor: 'var(--surface-card)',
           }}
         >
           <button
@@ -608,9 +613,9 @@ export function KitHandoverSlipModal({
             style={{
               padding: '8px 16px',
               borderRadius: '8px',
-              border: '1px solid #cbd5e1',
-              backgroundColor: '#ffffff',
-              color: '#475569',
+              border: '1px solid var(--border-default)',
+              backgroundColor: 'var(--surface-card)',
+              color: 'var(--text-secondary)',
               fontWeight: 600,
               fontSize: '0.82rem',
               cursor: 'pointer',
@@ -628,8 +633,8 @@ export function KitHandoverSlipModal({
               gap: 6,
               padding: '8px 18px',
               borderRadius: '8px',
-              backgroundColor: '#7c3aed',
-              color: '#ffffff',
+              backgroundColor: 'var(--color-brand-primary)',
+              color: 'var(--text-inverse)',
               border: 'none',
               fontWeight: 600,
               fontSize: '0.82rem',

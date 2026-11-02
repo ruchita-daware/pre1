@@ -447,7 +447,7 @@ export default function AuditPage() {
           />
         </div>
 
-        {/* Audit Data Table */}
+        {/* Audit Data Table: dtable-scroll overflow-x-auto w-full min-w-0 / dtable w-full min-w-[880px] */}
         <DataTable<Log>
           columns={columns}
           data={logs ?? []}

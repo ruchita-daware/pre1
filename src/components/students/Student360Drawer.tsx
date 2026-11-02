@@ -329,7 +329,7 @@ export function Student360Drawer({
       {/* Slide-in Drawer Container */}
       <div
         ref={drawerRef}
-        className="drawer w-full sm:w-[440px] md:w-[460px] max-w-full h-[94vh] sm:h-full mt-auto sm:mt-0 rounded-t-2xl sm:rounded-none flex flex-col bg-white dark:bg-slate-900 border-l border-slate-200/80 dark:border-slate-800 shadow-2xl transition-transform duration-200 ease-out"
+        className="drawer w-full sm:w-[440px] md:w-[460px] max-w-full h-[94vh] sm:h-full mt-auto sm:mt-0 rounded-t-3xl sm:rounded-l-3xl sm:rounded-r-none flex flex-col bg-white dark:bg-slate-900 border-l border-slate-200/80 dark:border-slate-800 shadow-2xl transition-transform duration-200 ease-out"
         style={{
           boxShadow: 'var(--elevation-3), var(--surface-highlight-dialog)',
           overscrollBehavior: 'contain',

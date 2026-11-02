@@ -48,12 +48,15 @@ describe('PreOne Global Design Token System v1.0 Integrity', () => {
     expect(css).toContain('--dur-2: 250ms;')
     expect(css).toContain('--dur-3: 420ms;')
 
-    // 5. Radii Scale
-    expect(css).toContain('--r-sm: 10px;')
+    // 5. Canonical Radii Scale (PRE1-FMDS-BORDER-RADIUS-001)
+    expect(css).toContain('--r-xs: 4px;')
+    expect(css).toContain('--r-sm: 8px;')
     expect(css).toContain('--r-md: 12px;')
     expect(css).toContain('--r-lg: 16px;')
     expect(css).toContain('--r-xl: 24px;')
+    expect(css).toContain('--r-card: 20px;')
     expect(css).toContain('--r-pill: 999px;')
+    expect(css).toContain('--r-full: 999px;')
 
     // 6. Semantic Component Tokens
     expect(css).toContain('--button-primary-bg: var(--brand-600);')
@@ -73,20 +76,20 @@ describe('PreOne Global Design Token System v1.0 Integrity', () => {
   it('verifies dark theme overrides for canonical design tokens', async () => {
     const css = await Bun.file('src/app/globals.css').text()
 
-    // Dark overrides
-    expect(css).toContain('--bg: #0B0F19;')
-    expect(css).toContain('--surface: rgba(17, 24, 39, 0.78);')
-    expect(css).toContain('--surface-solid: #111827;')
-    expect(css).toContain('--surface-2: #1B2438;')
-    expect(css).toContain('--border: rgba(255, 255, 255, 0.08);')
-    expect(css).toContain('--border-strong: rgba(255, 255, 255, 0.16);')
+    // Dark overrides (Midnight Pearl Approved Baseline)
+    expect(css).toContain('--bg: #131626;')
+    expect(css).toContain('--surface: #20263A;')
+    expect(css).toContain('--surface-solid: #20263A;')
+    expect(css).toContain('--surface-2: #272E45;')
+    expect(css).toContain('--border: #343D56;')
+    expect(css).toContain('--border-strong: #46516D;')
 
-    expect(css).toContain('--text-1: #F1F5F9;')
-    expect(css).toContain('--text-2: #CBD5E1;')
-    expect(css).toContain('--text-3: #94A3B8;')
+    expect(css).toContain('--text-1: #F4F3FF;')
+    expect(css).toContain('--text-2: #C0C6D8;')
+    expect(css).toContain('--text-3: #969FB8;')
 
     // Dark shadow-2 and shadow-3
-    expect(css).toContain('rgba(124, 58, 237, 0.25)')
+    expect(css).toContain('rgba(182, 154, 255, 0.20)')
   })
 
   it('verifies Tailwind configuration exposes the canonical design tokens', async () => {
@@ -96,8 +99,14 @@ describe('PreOne Global Design Token System v1.0 Integrity', () => {
     expect(config).toContain("'600': 'var(--brand-600)'")
     expect(config).toContain("solid: 'var(--surface-solid)'")
     expect(config).toContain("'1': 'var(--text-1)'")
+    expect(config).toContain("'r-xs': 'var(--r-xs)'")
     expect(config).toContain("'r-sm': 'var(--r-sm)'")
+    expect(config).toContain("'r-md': 'var(--r-md)'")
     expect(config).toContain("'r-lg': 'var(--r-lg)'")
+    expect(config).toContain("'r-xl': 'var(--r-xl)'")
+    expect(config).toContain("'r-card': 'var(--r-card)'")
+    expect(config).toContain("'r-pill': 'var(--r-pill)'")
+    expect(config).toContain("'r-full': 'var(--r-full)'")
     expect(config).toContain("'1': 'var(--shadow-1)'")
     expect(config).toContain("'2': 'var(--shadow-2)'")
     expect(config).toContain("'3': 'var(--shadow-3)'")
@@ -119,8 +128,9 @@ describe('PreOne Global Design Token System v1.0 Integrity', () => {
     expect(actionMenu).toContain('[box-shadow:var(--shadow-2)]')
 
     const kpiCard = await Bun.file('src/components/preone/KpiMetricCard.tsx').text()
-    expect(kpiCard).toContain('[box-shadow:var(--shadow-1)]')
-    expect(kpiCard).toContain('hover:[box-shadow:var(--shadow-2)]')
+    expect(kpiCard).toContain('preone-kpi-card')
+    const css = await Bun.file('src/app/globals.css').text()
+    expect(css).toContain('.preone-kpi-card')
   })
 
   it('verifies BUG-013 + BUG-009: 404 NotFound page consumes semantic tokens (bg-background, bg-card, text-foreground) and defines --primary-foreground', async () => {

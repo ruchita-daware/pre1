@@ -293,7 +293,7 @@ export const EMPTY_STATE_CONFIG = {
 function renderIllustration(key: EmptyStateIllustration | React.ReactNode, size: number) {
   if (React.isValidElement(key)) {
     return (
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-300 border border-violet-100/80 dark:border-violet-900/40 shadow-xs">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--color-brand-surface)] text-[var(--color-brand-primary)] border border-[var(--color-brand-primary)]/30 shadow-xs">
         {key}
       </div>
     )
@@ -302,25 +302,25 @@ function renderIllustration(key: EmptyStateIllustration | React.ReactNode, size:
   switch (key) {
     case 'transport':
       return (
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-100/80 dark:border-amber-900/40 shadow-xs">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--status-warning-surface)] text-[var(--status-warning-foreground)] border border-[var(--status-warning-border)] shadow-xs">
           <Bus size={28} />
         </div>
       )
     case 'inventory':
       return (
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-100/80 dark:border-blue-900/40 shadow-xs">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--status-info-surface)] text-[var(--status-info-foreground)] border border-[var(--status-info-border)] shadow-xs">
           <Package size={28} />
         </div>
       )
     case 'observations':
       return (
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-100/80 dark:border-purple-900/40 shadow-xs">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--color-brand-surface)] text-[var(--color-brand-primary)] border border-[var(--color-brand-primary)]/30 shadow-xs">
           <Sparkles size={28} />
         </div>
       )
     case 'transactions':
       return (
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-100/80 dark:border-emerald-900/40 shadow-xs">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--status-success-surface)] text-[var(--status-success-foreground)] border border-[var(--status-success-border)] shadow-xs">
           <ReceiptText size={28} />
         </div>
       )

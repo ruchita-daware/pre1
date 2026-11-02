@@ -43,24 +43,24 @@ export function SupplyRequestDetailModal({
   const classroomName = request.classroom?.name || 'Classroom'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--surface-overlay)] backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="relative w-full max-w-2xl bg-[var(--surface-card)] rounded-2xl [box-shadow:var(--shadow-3)] border border-[var(--border-default)] flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 px-6 py-4 bg-gray-50/70 dark:bg-gray-800 rounded-t-2xl">
+        <div className="flex items-center justify-between border-b border-[var(--border-default)] px-6 py-4 bg-[var(--surface-subtle)] rounded-t-2xl">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-md">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-brand-primary)] text-[var(--text-inverse)] [box-shadow:var(--shadow-1)]">
               <FileText className="h-5 w-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-extrabold text-gray-900 dark:text-white">
+                <h3 className="text-base font-extrabold text-[var(--text-primary)]">
                   Request {request.requestNumber}
                 </h3>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-success-surface)] text-[var(--color-success-text)] border border-[var(--color-success-border)] font-bold">
                   {request.status}
                 </span>
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-[var(--text-secondary)]">
                 Submitted for {classroomName}
               </p>
             </div>
@@ -69,7 +69,7 @@ export function SupplyRequestDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 transition-colors"
+            className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-card)] hover:text-[var(--text-primary)] transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -78,61 +78,61 @@ export function SupplyRequestDetailModal({
         {/* Content */}
         <div className="p-6 space-y-5 overflow-y-auto flex-1 text-xs">
           {/* Metadata Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-xl bg-[var(--surface-subtle)] border border-[var(--border-default)]">
             <div>
-              <span className="text-gray-400 block text-[10px] uppercase font-bold">Classroom</span>
-              <span className="font-bold text-gray-900 dark:text-white">{classroomName}</span>
+              <span className="text-[var(--text-muted)] block text-[10px] uppercase font-bold">Classroom</span>
+              <span className="font-bold text-[var(--text-primary)]">{classroomName}</span>
             </div>
             <div>
-              <span className="text-gray-400 block text-[10px] uppercase font-bold">Requester</span>
-              <span className="font-bold text-gray-900 dark:text-white">{request.requestedByName}</span>
+              <span className="text-[var(--text-muted)] block text-[10px] uppercase font-bold">Requester</span>
+              <span className="font-bold text-[var(--text-primary)]">{request.requestedByName}</span>
             </div>
             <div>
-              <span className="text-gray-400 block text-[10px] uppercase font-bold">Needed Date</span>
-              <span className="font-bold text-gray-900 dark:text-white">
+              <span className="text-[var(--text-muted)] block text-[10px] uppercase font-bold">Needed Date</span>
+              <span className="font-bold text-[var(--text-primary)]">
                 {new Date(request.requiredDate).toLocaleDateString('en-IN')}
               </span>
             </div>
             <div>
-              <span className="text-gray-400 block text-[10px] uppercase font-bold">Priority</span>
-              <span className="font-bold text-gray-900 dark:text-white">{request.priority}</span>
+              <span className="text-[var(--text-muted)] block text-[10px] uppercase font-bold">Priority</span>
+              <span className="font-bold text-[var(--text-primary)]">{request.priority}</span>
             </div>
           </div>
 
           {/* Purpose / Remarks */}
           {request.reason && (
-            <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 space-y-0.5">
-              <span className="text-[10px] font-bold text-gray-400 uppercase">Teacher Remarks / Purpose</span>
-              <p className="text-gray-800 dark:text-gray-200 font-medium">{request.reason}</p>
+            <div className="p-3 rounded-xl bg-[var(--surface-subtle)] border border-[var(--border-default)] space-y-0.5">
+              <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase">Teacher Remarks / Purpose</span>
+              <p className="text-[var(--text-primary)] font-medium">{request.reason}</p>
             </div>
           )}
 
           {/* Decision Notes */}
           {request.status === 'REJECTED' && request.rejectionReason && (
-            <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 text-red-800 dark:text-red-300 space-y-0.5">
-              <span className="text-[10px] font-bold uppercase text-red-600 dark:text-red-400">Rejection Reason</span>
+            <div className="p-3 rounded-xl bg-[var(--color-danger-surface)] border border-[var(--color-danger-border)] text-[var(--color-danger-text)] space-y-0.5">
+              <span className="text-[10px] font-bold uppercase text-[var(--color-danger-base)]">Rejection Reason</span>
               <p className="font-semibold">{request.rejectionReason}</p>
               {request.rejectedByName && (
-                <span className="text-[10px] text-red-500 block pt-0.5">Reviewed by {request.rejectedByName} on {request.rejectedAt ? new Date(request.rejectedAt).toLocaleDateString('en-IN') : 'recently'}</span>
+                <span className="text-[10px] text-[var(--color-danger-base)] block pt-0.5">Reviewed by {request.rejectedByName} on {request.rejectedAt ? new Date(request.rejectedAt).toLocaleDateString('en-IN') : 'recently'}</span>
               )}
             </div>
           )}
 
           {request.status === 'APPROVED' && request.approvedByName && (
-            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-300">
+            <div className="p-3 rounded-xl bg-[var(--color-success-surface)] border border-[var(--color-success-border)] text-[var(--color-success-text)]">
               <span className="font-bold">Approved by {request.approvedByName}</span> on {request.approvedAt ? new Date(request.approvedAt).toLocaleDateString('en-IN') : 'recently'}. Ready for warehouse stock disbursement.
             </div>
           )}
 
           {/* Requested Items Table */}
           <div className="space-y-2">
-            <h4 className="font-bold text-gray-800 dark:text-gray-200">
+            <h4 className="font-bold text-[var(--text-primary)]">
               Requested Materials ({request.items.length})
             </h4>
 
-            <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="rounded-xl border border-[var(--border-default)] overflow-hidden">
               <table className="w-full text-left">
-                <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 font-semibold border-b border-gray-200 dark:border-gray-700">
+                <thead className="bg-[var(--surface-subtle)] text-[var(--text-secondary)] font-semibold border-b border-[var(--border-default)]">
                   <tr>
                     <th className="p-2.5">Item Name</th>
                     <th className="p-2.5 text-center">Requested</th>
@@ -141,25 +141,25 @@ export function SupplyRequestDetailModal({
                     <th className="p-2.5 text-right">Unit</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                <tbody className="divide-y divide-[var(--border-subtle)]">
                   {request.items.map((line) => (
-                    <tr key={line.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
-                      <td className="p-2.5 font-bold text-gray-900 dark:text-white">
+                    <tr key={line.id} className="hover:bg-[var(--surface-subtle)]">
+                      <td className="p-2.5 font-bold text-[var(--text-primary)]">
                         <div>{line.item?.name}</div>
-                        <div className="font-mono text-[10px] text-gray-400 font-normal">{line.item?.sku}</div>
+                        <div className="font-mono text-[10px] text-[var(--text-muted)] font-normal">{line.item?.sku}</div>
                       </td>
-                      <td className="p-2.5 text-center font-bold text-gray-700 dark:text-gray-300">
+                      <td className="p-2.5 text-center font-bold text-[var(--text-secondary)]">
                         {Number(line.requestedQuantity)}
                       </td>
-                      <td className="p-2.5 text-center font-bold text-emerald-600">
+                      <td className="p-2.5 text-center font-bold text-[var(--color-success-base)]">
                         {line.approvedQuantity !== null && line.approvedQuantity !== undefined
                           ? Number(line.approvedQuantity)
                           : '—'}
                       </td>
-                      <td className="p-2.5 text-center font-bold text-indigo-600">
+                      <td className="p-2.5 text-center font-bold text-[var(--color-brand-primary)]">
                         {Number(line.issuedQuantity)}
                       </td>
-                      <td className="p-2.5 text-right text-gray-500 font-medium">
+                      <td className="p-2.5 text-right text-[var(--text-muted)] font-medium">
                         {line.item?.unit?.symbol || line.item?.unit?.name || 'Pack'}
                       </td>
                     </tr>
@@ -171,11 +171,11 @@ export function SupplyRequestDetailModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-800 p-4 bg-gray-50 dark:bg-gray-800 rounded-b-2xl">
+        <div className="flex items-center justify-between border-t border-[var(--border-default)] p-4 bg-[var(--surface-subtle)] rounded-b-2xl">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-200/60 rounded-lg dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+            className="px-4 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-card)] rounded-lg transition-colors"
           >
             Close
           </button>
@@ -189,7 +189,7 @@ export function SupplyRequestDetailModal({
                     onClose()
                     onReject?.(request)
                   }}
-                  className="px-3.5 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg dark:bg-red-950/30 dark:hover:bg-red-950/50 transition-colors"
+                  className="px-3.5 py-2 text-xs font-bold text-[var(--color-danger-text)] bg-[var(--color-danger-surface)] hover:bg-[var(--color-danger-border)] border border-[var(--color-danger-border)] rounded-lg transition-colors"
                 >
                   Reject Request
                 </button>
@@ -199,7 +199,7 @@ export function SupplyRequestDetailModal({
                     onClose()
                     onApprove?.(request.id)
                   }}
-                  className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors flex items-center gap-1.5"
+                  className="px-4 py-2 text-xs font-bold text-[var(--text-inverse)] bg-[var(--color-success-base)] hover:opacity-90 rounded-lg [box-shadow:var(--shadow-1)] transition-colors flex items-center gap-1.5"
                 >
                   <Check className="h-4 w-4" />
                   <span>Approve Request</span>
@@ -214,7 +214,7 @@ export function SupplyRequestDetailModal({
                   onClose()
                   onFulfill?.(request)
                 }}
-                className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors flex items-center gap-1.5"
+                className="px-4 py-2 text-xs font-bold text-[var(--text-inverse)] bg-[var(--color-success-base)] hover:opacity-90 rounded-lg [box-shadow:var(--shadow-1)] transition-colors flex items-center gap-1.5"
               >
                 <Truck className="h-4 w-4" />
                 <span>Issue Supplies Now</span>

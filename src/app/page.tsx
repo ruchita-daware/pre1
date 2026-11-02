@@ -25,6 +25,7 @@ import {
   AuthActions,
   AuthMeta
 } from '@/components/auth'
+import { syncThemeWithDatabase } from '@/lib/theme/theme-contract'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -269,6 +270,10 @@ export default function LoginPage() {
         return
       }
 
+      if (json.data?.user?.preferences?.theme) {
+        syncThemeWithDatabase(json.data.user.preferences.theme)
+      }
+
       if (json.data?.user?.role === 'PLATFORM_ADMIN') {
         router.push('/onboard')
       } else {
@@ -330,6 +335,10 @@ export default function LoginPage() {
         setGeneralError(errorMsg)
         setLoading(false)
         return
+      }
+
+      if (json.data?.user?.preferences?.theme) {
+        syncThemeWithDatabase(json.data.user.preferences.theme)
       }
 
       if (json.data?.user?.role === 'PLATFORM_ADMIN') {
@@ -825,7 +834,7 @@ export default function LoginPage() {
           aria-modal="true"
           aria-labelledby="forgot-modal-title"
         >
-          <div className="relative w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-6">
+          <div className="relative w-full max-w-sm rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-6">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200/60 dark:border-purple-800/50 text-purple-600 dark:text-purple-400">

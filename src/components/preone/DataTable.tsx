@@ -402,7 +402,7 @@ export function DataTable<T extends { id?: string | number }>({
     <div className="dtable-wrap" ref={wrapRef}>
       {showToolbar && (searchPlaceholder || filters || toolbarActions || rowSelection || showExport) && (
         <div className="table-toolbar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, flexWrap: 'wrap' }}>
+          <div className="table-toolbar-main flex items-center gap-2.5 flex-1 flex-wrap min-w-0">
             {(searchPlaceholder || showToolbar) && (
               <div className="input-search relative flex items-center" style={{ maxWidth: 280, width: '100%' }}>
                 <Search size={15} />

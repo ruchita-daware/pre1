@@ -63,6 +63,7 @@ export function AnimatedModuleIcon({
             width: 'auto',
             height: 'auto',
             objectFit: 'contain',
+            borderRadius: '14px',
             transform: triggerAnimation ? 'scale(1.08) translateY(-1px)' : 'scale(1)',
             transition: 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.22s ease',
             filter: triggerAnimation

@@ -337,8 +337,8 @@ export function FastRollCall({
 
             <div className="flex items-center gap-2 shrink-0">
               {hasUnsavedChanges && (
-                <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-medium">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-[var(--status-warning-foreground)] font-medium">
+                  <span className="w-2 h-2 rounded-full bg-[var(--status-warning-foreground)] animate-pulse" />
                   Unsaved changes
                 </span>
               )}
@@ -399,20 +399,20 @@ export function FastRollCall({
 
             {/* Quick Metrics */}
             <div className="flex items-center gap-3 text-xs">
-              <span className="flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="flex items-center gap-1 font-semibold text-[var(--status-success-foreground)] tabular-nums">
+                <span className="w-2 h-2 rounded-full bg-[var(--status-success-foreground)]" />
                 {presentCount} Present
               </span>
-              <span className="flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400 tabular-nums">
-                <span className="w-2 h-2 rounded-full bg-amber-500" />
+              <span className="flex items-center gap-1 font-semibold text-[var(--status-warning-foreground)] tabular-nums">
+                <span className="w-2 h-2 rounded-full bg-[var(--status-warning-foreground)]" />
                 {lateCount} Late
               </span>
-              <span className="flex items-center gap-1 font-semibold text-rose-600 dark:text-rose-400 tabular-nums">
-                <span className="w-2 h-2 rounded-full bg-rose-500" />
+              <span className="flex items-center gap-1 font-semibold text-[var(--status-danger-foreground)] tabular-nums">
+                <span className="w-2 h-2 rounded-full bg-[var(--status-danger-foreground)]" />
                 {absentCount} Absent
               </span>
               <span className="flex items-center gap-1 font-semibold text-muted-foreground tabular-nums">
-                <span className="w-2 h-2 rounded-full bg-slate-400" />
+                <span className="w-2 h-2 rounded-full bg-[var(--color-text-muted)]" />
                 {remainingCount} Left
               </span>
             </div>
@@ -425,7 +425,7 @@ export function FastRollCall({
                 <b>{markedCount}</b> of <b>{totalCount}</b> marked ({percentComplete}%)
               </span>
               {remainingCount === 0 ? (
-                <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                <span className="text-[var(--status-success-foreground)] font-semibold flex items-center gap-1">
                   <CheckCircle2 size={13} /> Complete
                 </span>
               ) : (
@@ -435,7 +435,7 @@ export function FastRollCall({
             <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-300 ${
-                  percentComplete === 100 ? 'bg-emerald-500' : 'bg-primary'
+                  percentComplete === 100 ? 'bg-[var(--status-success-foreground)]' : 'bg-primary'
                 }`}
                 style={{ width: `${percentComplete}%` }}
               />
@@ -461,7 +461,7 @@ export function FastRollCall({
                 onClick={() => setFilter('UNMARKED')}
                 className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
                   filter === 'UNMARKED'
-                    ? 'bg-slate-700 text-white dark:bg-slate-300 dark:text-slate-900 shadow-xs'
+                    ? 'bg-[var(--color-surface-subtle)] text-[var(--color-text-primary)] shadow-xs'
                     : 'bg-muted/70 text-muted-foreground hover:bg-muted'
                 }`}
               >
@@ -472,7 +472,7 @@ export function FastRollCall({
                 onClick={() => setFilter('PRESENT')}
                 className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
                   filter === 'PRESENT'
-                    ? 'bg-emerald-600 text-white shadow-xs'
+                    ? 'bg-[var(--status-success-foreground)] text-[var(--color-primary-button-text,#ffffff)] shadow-xs'
                     : 'bg-muted/70 text-muted-foreground hover:bg-muted'
                 }`}
               >
@@ -483,7 +483,7 @@ export function FastRollCall({
                 onClick={() => setFilter('LATE')}
                 className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
                   filter === 'LATE'
-                    ? 'bg-amber-600 text-white shadow-xs'
+                    ? 'bg-[var(--status-warning-foreground)] text-[var(--color-primary-button-text,#ffffff)] shadow-xs'
                     : 'bg-muted/70 text-muted-foreground hover:bg-muted'
                 }`}
               >
@@ -494,7 +494,7 @@ export function FastRollCall({
                 onClick={() => setFilter('ABSENT')}
                 className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
                   filter === 'ABSENT'
-                    ? 'bg-rose-600 text-white shadow-xs'
+                    ? 'bg-[var(--status-danger-foreground)] text-[var(--color-primary-button-text,#ffffff)] shadow-xs'
                     : 'bg-muted/70 text-muted-foreground hover:bg-muted'
                 }`}
               >
@@ -527,7 +527,7 @@ export function FastRollCall({
               ))}
             </div>
           ) : error ? (
-            <div className="p-4 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-3">
+            <div className="p-4 rounded-xl border border-[var(--status-danger-border)] bg-[var(--status-danger-surface)] text-[var(--status-danger-foreground)] text-xs flex items-start gap-3">
               <AlertCircle size={16} className="shrink-0 mt-0.5" />
               <div>
                 <p className="font-semibold">Unable to load classroom register</p>
@@ -591,7 +591,7 @@ export function FastRollCall({
               onClick={handleMarkAllPresent}
               title="Mark all unmarked students as Present"
             >
-              <CheckSquare size={14} className="text-emerald-600" />
+              <CheckSquare size={14} className="text-[var(--status-success-foreground)]" />
               <span className="hidden sm:inline">Set Unmarked to Present</span>
               <span className="sm:hidden">All Present</span>
             </button>
@@ -626,7 +626,7 @@ export function FastRollCall({
           <div className="modal" style={{ width: 'min(440px, 92vw)' }}>
             <div className="modal-head">
               <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center">
+                <span className="w-8 h-8 rounded-lg bg-[var(--status-success-surface)] text-[var(--status-success-foreground)] flex items-center justify-center">
                   <CheckCircle2 size={18} />
                 </span>
                 <div>
@@ -649,22 +649,22 @@ export function FastRollCall({
               </p>
 
               <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="p-3 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800">
-                  <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 block">PRESENT</span>
-                  <span className="text-xl font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{presentCount}</span>
+                <div className="p-3 rounded-xl bg-[var(--status-success-surface)] border border-[var(--status-success-border)]">
+                  <span className="text-[11px] font-semibold text-[var(--status-success-foreground)] block">PRESENT</span>
+                  <span className="text-xl font-bold text-[var(--status-success-foreground)] tabular-nums">{presentCount}</span>
                 </div>
-                <div className="p-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
-                  <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-300 block">LATE</span>
-                  <span className="text-xl font-bold text-amber-700 dark:text-amber-300 tabular-nums">{lateCount}</span>
+                <div className="p-3 rounded-xl bg-[var(--status-warning-surface)] border border-[var(--status-warning-border)]">
+                  <span className="text-[11px] font-semibold text-[var(--status-warning-foreground)] block">LATE</span>
+                  <span className="text-xl font-bold text-[var(--status-warning-foreground)] tabular-nums">{lateCount}</span>
                 </div>
-                <div className="p-3 rounded-xl bg-rose-50/60 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800">
-                  <span className="text-[11px] font-semibold text-rose-700 dark:text-rose-300 block">ABSENT</span>
-                  <span className="text-xl font-bold text-rose-700 dark:text-rose-300 tabular-nums">{absentCount}</span>
+                <div className="p-3 rounded-xl bg-[var(--status-danger-surface)] border border-[var(--status-danger-border)]">
+                  <span className="text-[11px] font-semibold text-[var(--status-danger-foreground)] block">ABSENT</span>
+                  <span className="text-xl font-bold text-[var(--status-danger-foreground)] tabular-nums">{absentCount}</span>
                 </div>
               </div>
 
               {remainingCount > 0 && (
-                <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 text-xs flex items-center gap-2">
+                <div className="p-2.5 rounded-lg bg-[var(--status-warning-surface)] text-[var(--status-warning-foreground)] text-xs flex items-center gap-2">
                   <AlertCircle size={15} className="shrink-0" />
                   <span>Notice: {remainingCount} child{remainingCount === 1 ? '' : 'ren'} remain unmarked for this session.</span>
                 </div>
@@ -772,11 +772,11 @@ function FastRollCallCard({
         isActive ? 'border-primary ring-1 ring-primary' : 'border-border'
       } ${
         isPresent
-          ? 'bg-emerald-50/30 dark:bg-emerald-950/15 border-emerald-300 dark:border-emerald-800/60'
+          ? 'bg-[var(--status-success-surface)] border-[var(--status-success-border)]'
           : isAbsent
-          ? 'bg-rose-50/30 dark:bg-rose-950/15 border-rose-300 dark:border-rose-800/60'
+          ? 'bg-[var(--status-danger-surface)] border-[var(--status-danger-border)]'
           : isLate
-          ? 'bg-amber-50/30 dark:bg-amber-950/15 border-amber-300 dark:border-amber-800/60'
+          ? 'bg-[var(--status-warning-surface)] border-[var(--status-warning-border)]'
           : 'bg-card'
       }`}
     >
@@ -787,7 +787,7 @@ function FastRollCallCard({
           <div className="flex items-center gap-2">
             <h4 className="font-bold text-sm text-foreground truncate">{student.name}</h4>
             {isPending && (
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Pending save" />
+              <span className="w-2 h-2 rounded-full bg-[var(--status-warning-foreground)] animate-pulse" title="Pending save" />
             )}
             {isFailed && (
               <span className="badge b-danger text-[10px]">Save Failed</span>
@@ -813,12 +813,12 @@ function FastRollCallCard({
           onClick={() => onSelectStatus('PRESENT')}
           className={`h-9 px-3 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-[color,background-color,border-color,transform,box-shadow] duration-150 active:scale-95 ${
             isPresent
-              ? 'bg-emerald-600 text-white shadow-xs scale-100 ring-2 ring-emerald-500/40'
-              : 'bg-muted/70 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 text-muted-foreground hover:text-emerald-700'
+              ? 'bg-[var(--status-success-foreground)] text-[var(--color-primary-button-text,#ffffff)] shadow-xs scale-100 ring-2 ring-[var(--status-success-foreground)]/40'
+              : 'bg-muted/70 hover:bg-[var(--status-success-surface)] text-muted-foreground hover:text-[var(--status-success-foreground)]'
           }`}
           title="Mark Present (P)"
         >
-          <Check size={14} className={isPresent ? 'text-white' : 'text-emerald-600'} />
+          <Check size={14} className={isPresent ? 'text-white' : 'text-[var(--status-success-foreground)]'} />
           <span>Present</span>
         </button>
 
@@ -828,12 +828,12 @@ function FastRollCallCard({
           onClick={() => onSelectStatus('LATE')}
           className={`h-9 px-3 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-[color,background-color,border-color,transform,box-shadow] duration-150 active:scale-95 ${
             isLate
-              ? 'bg-amber-600 text-white shadow-xs scale-100 ring-2 ring-amber-500/40'
-              : 'bg-muted/70 hover:bg-amber-100 dark:hover:bg-amber-950/50 text-muted-foreground hover:text-amber-700'
+              ? 'bg-[var(--status-warning-foreground)] text-[var(--color-primary-button-text,#ffffff)] shadow-xs scale-100 ring-2 ring-[var(--status-warning-foreground)]/40'
+              : 'bg-muted/70 hover:bg-[var(--status-warning-surface)] text-muted-foreground hover:text-[var(--status-warning-foreground)]'
           }`}
           title="Mark Late (L)"
         >
-          <Clock size={14} className={isLate ? 'text-white' : 'text-amber-600'} />
+          <Clock size={14} className={isLate ? 'text-white' : 'text-[var(--status-warning-foreground)]'} />
           <span>Late</span>
         </button>
 
@@ -843,12 +843,12 @@ function FastRollCallCard({
           onClick={() => onSelectStatus('ABSENT')}
           className={`h-9 px-3 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-[color,background-color,border-color,transform,box-shadow] duration-150 active:scale-95 ${
             isAbsent
-              ? 'bg-rose-600 text-white shadow-xs scale-100 ring-2 ring-rose-500/40'
-              : 'bg-muted/70 hover:bg-rose-100 dark:hover:bg-rose-950/50 text-muted-foreground hover:text-rose-700'
+              ? 'bg-[var(--status-danger-foreground)] text-[var(--color-primary-button-text,#ffffff)] shadow-xs scale-100 ring-2 ring-[var(--status-danger-foreground)]/40'
+              : 'bg-muted/70 hover:bg-[var(--status-danger-surface)] text-muted-foreground hover:text-[var(--status-danger-foreground)]'
           }`}
           title="Mark Absent (A)"
         >
-          <X size={14} className={isAbsent ? 'text-white' : 'text-rose-600'} />
+          <X size={14} className={isAbsent ? 'text-white' : 'text-[var(--status-danger-foreground)]'} />
           <span>Absent</span>
         </button>
       </div>

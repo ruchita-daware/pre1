@@ -502,8 +502,8 @@ export function TestTemplateModal({
                       style={{
                         padding: 12,
                         borderRadius: 8,
-                        border: isSelected ? '2px solid #7C3AED' : '1px solid var(--border-color)',
-                        background: isSelected ? '#F5F3FF' : 'var(--surface-panel)',
+                        border: isSelected ? '2px solid var(--color-brand-primary)' : '1px solid var(--border-default)',
+                        background: isSelected ? 'var(--color-brand-100)' : 'var(--surface-card)',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
@@ -518,8 +518,8 @@ export function TestTemplateModal({
                             width: 36,
                             height: 36,
                             borderRadius: '50%',
-                            background: r.type === 'STAFF' ? '#EEF2FF' : '#F3E8FF',
-                            color: r.type === 'STAFF' ? '#4F46E5' : '#7C3AED',
+                            background: r.type === 'STAFF' ? 'var(--color-info-surface, #EEF2FF)' : 'var(--surface-subtle)',
+                            color: r.type === 'STAFF' ? 'var(--color-info-base)' : 'var(--color-brand-primary)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -535,7 +535,7 @@ export function TestTemplateModal({
                             style={{
                               fontSize: 13,
                               fontWeight: 700,
-                              color: isSelected ? '#5B21B6' : 'var(--text-primary)',
+                              color: isSelected ? 'var(--color-brand-primary)' : 'var(--text-primary)',
                               whiteSpace: 'nowrap',
                               textOverflow: 'ellipsis',
                               overflow: 'hidden',
@@ -555,8 +555,8 @@ export function TestTemplateModal({
                             width: 22,
                             height: 22,
                             borderRadius: '50%',
-                            background: '#7C3AED',
-                            color: '#FFFFFF',
+                            background: 'var(--color-brand-primary)',
+                            color: 'var(--text-inverse)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -576,8 +576,8 @@ export function TestTemplateModal({
             {selectedRecord && (
               <div
                 style={{
-                  background: '#ECFDF5',
-                  border: '1px solid #A7F3D0',
+                  background: 'var(--color-success-surface)',
+                  border: '1px solid var(--color-success-border)',
                   borderRadius: 8,
                   padding: '10px 14px',
                   display: 'flex',
@@ -587,8 +587,8 @@ export function TestTemplateModal({
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <CheckCircle2 size={16} style={{ color: '#059669' }} />
-                  <span style={{ fontSize: 13, color: '#065F46', fontWeight: 600 }}>
+                  <CheckCircle2 size={16} style={{ color: 'var(--color-success-base)' }} />
+                  <span style={{ fontSize: 13, color: 'var(--color-success-text)', fontWeight: 600 }}>
                     Selected Record: <strong>{selectedRecord.title}</strong> ({selectedRecord.subtitle})
                   </span>
                 </div>
@@ -620,8 +620,8 @@ export function TestTemplateModal({
                   style={{
                     padding: '12px 16px',
                     borderRadius: 8,
-                    background: validationResult.ready ? '#ECFDF5' : '#FFFBEB',
-                    border: validationResult.ready ? '1px solid #A7F3D0' : '1px solid #FDE68A',
+                    background: validationResult.ready ? 'var(--color-success-surface)' : 'var(--color-warning-surface)',
+                    border: validationResult.ready ? '1px solid var(--color-success-border)' : '1px solid var(--color-warning-border)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
@@ -629,23 +629,23 @@ export function TestTemplateModal({
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     {validationResult.ready ? (
-                      <CheckCircle2 size={20} style={{ color: '#059669' }} />
+                      <CheckCircle2 size={20} style={{ color: 'var(--color-success-base)' }} />
                     ) : (
-                      <AlertTriangle size={20} style={{ color: '#D97706' }} />
+                      <AlertTriangle size={20} style={{ color: 'var(--color-warning-base)' }} />
                     )}
                     <div>
                       <div
                         style={{
                           fontSize: 14,
                           fontWeight: 700,
-                          color: validationResult.ready ? '#065F46' : '#92400E',
+                          color: validationResult.ready ? 'var(--color-success-text)' : 'var(--color-warning-text)',
                         }}
                       >
                         {validationResult.ready
                           ? '✓ Ready to Preview & Generate'
                           : '⚠️ Attention Needed: Missing Required Fields'}
                       </div>
-                      <div style={{ fontSize: 12, color: validationResult.ready ? '#047857' : '#B45309' }}>
+                      <div style={{ fontSize: 12, color: validationResult.ready ? 'var(--color-success-text)' : 'var(--color-warning-text)' }}>
                         {validationResult.mappedCount} live fields resolved • {validationResult.fallbackCount} sample fallbacks • {validationResult.missingCount} missing
                       </div>
                     </div>
@@ -673,7 +673,7 @@ export function TestTemplateModal({
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <ShieldCheck size={20} style={{ color: validationResult.moduleAssignment.isDefault ? '#7C3AED' : '#64748B' }} />
+                    <ShieldCheck size={20} style={{ color: validationResult.moduleAssignment.isDefault ? 'var(--color-brand-primary)' : 'var(--text-muted)' }} />
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
                         Module Workflow Assignment
@@ -723,7 +723,7 @@ export function TestTemplateModal({
                     <tbody>
                       {validationResult.fields.map((f) => (
                         <tr key={f.key} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                          <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontWeight: 600, color: '#4338CA' }}>
+                          <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontWeight: 600, color: 'var(--color-brand-primary)' }}>
                             {`{{${f.key}}}`}
                           </td>
                           <td style={{ padding: '8px 12px', color: 'var(--text-primary)' }}>
@@ -830,7 +830,7 @@ export function TestTemplateModal({
                 height: 380,
                 border: '1px solid var(--border-color)',
                 borderRadius: 8,
-                background: '#475569',
+                background: 'var(--surface-canvas)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -839,7 +839,7 @@ export function TestTemplateModal({
               }}
             >
               {loadingPreview ? (
-                <div style={{ color: '#FFFFFF', textAlign: 'center' }}>
+                <div style={{ color: 'var(--text-primary)', textAlign: 'center' }}>
                   <Loader2 size={28} className="animate-spin" style={{ margin: '0 auto 8px auto' }} />
                   Rendering production HTML with real record data...
                 </div>
@@ -849,7 +849,7 @@ export function TestTemplateModal({
                     transform: `scale(${previewScale})`,
                     transformOrigin: 'center center',
                     transition: 'transform 0.15s ease',
-                    boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+                    boxShadow: 'var(--shadow-dialog)',
                     background: '#FFFFFF',
                   }}
                 >
@@ -916,7 +916,7 @@ export function TestTemplateModal({
               >
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <Download size={20} style={{ color: '#7C3AED' }} />
+                    <Download size={20} style={{ color: 'var(--color-brand-primary)' }} />
                     <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
                       Download Production PDF
                     </span>
@@ -932,8 +932,8 @@ export function TestTemplateModal({
                   onClick={handleDownloadPdf}
                   disabled={generatingPdf}
                   style={{
-                    background: '#7C3AED',
-                    borderColor: '#7C3AED',
+                    background: 'var(--color-brand-primary)',
+                    borderColor: 'var(--color-brand-primary)',
                     padding: '10px 16px',
                     fontWeight: 600,
                   }}
@@ -965,7 +965,7 @@ export function TestTemplateModal({
               >
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <Printer size={20} style={{ color: '#2563EB' }} />
+                    <Printer size={20} style={{ color: 'var(--color-info-base)' }} />
                     <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
                       Print Document
                     </span>
@@ -998,7 +998,7 @@ export function TestTemplateModal({
               }}
             >
               <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <CheckCircle2 size={15} style={{ color: '#059669' }} />
+                <CheckCircle2 size={15} style={{ color: 'var(--color-success-base)' }} />
                 Test Verification Outcome
                 <span className="badge b-success" style={{ fontSize: 10 }}>PASS</span>
               </div>

@@ -1973,7 +1973,7 @@ export function CommunicationClient({ session }: { session: SessionProps }) {
             left: 0 !important;
             right: 0 !important;
             bottom: 0 !important;
-            z-index: 1000 !important;
+            z-index: var(--z-drawer, 400) !important;
             background: var(--c-surface, #ffffff) !important;
             overflow-y: auto !important;
             padding: 16px !important;

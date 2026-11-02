@@ -358,7 +358,7 @@ export function RecordInspector({
                     }}
                     title="Edit Staff Member"
                   >
-                    <Pencil size={13} className="text-sky-500" />
+                    <Pencil size={13} className="text-[var(--status-info-foreground)]" />
                     <span>Edit</span>
                   </button>
                   <button
@@ -492,7 +492,7 @@ export function RecordInspector({
                   }}
                   title="Edit Staff Member"
                 >
-                  <Pencil size={13} className="text-sky-500" />
+                  <Pencil size={13} className="text-[var(--status-info-foreground)]" />
                   <span>Edit</span>
                 </button>
                 <button
@@ -547,7 +547,7 @@ export function RecordInspector({
               <div className="h-32 bg-muted/60 rounded-xl animate-pulse" />
             </div>
           ) : error ? (
-            <div className="p-4 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-3">
+            <div className="p-4 rounded-xl border border-[var(--status-danger-border)] bg-[var(--status-danger-surface)] text-[var(--status-danger-foreground)] text-xs flex items-start gap-3">
               <AlertCircle size={16} className="shrink-0 mt-0.5" />
               <div>
                 <p className="font-semibold">Unable to load details</p>
@@ -737,7 +737,7 @@ function StudentInspectorContent({
                     className="btn btn-sm btn-outline flex items-center gap-1.5 text-xs text-foreground"
                     title={`Call ${primaryGuardian.fullName || 'guardian'}`}
                   >
-                    <Phone size={13} className="text-emerald-500" />
+                    <Phone size={13} className="text-[var(--status-success-foreground)]" />
                     <span>Call</span>
                   </a>
 
@@ -749,7 +749,7 @@ function StudentInspectorContent({
                       className="btn btn-sm btn-outline flex items-center gap-1.5 text-xs text-foreground"
                       title="Open WhatsApp chat"
                     >
-                      <MessageCircle size={13} className="text-emerald-600" />
+                      <MessageCircle size={13} className="text-[var(--status-success-foreground)]" />
                       <span>WhatsApp</span>
                     </a>
                   ) : null}
@@ -765,7 +765,7 @@ function StudentInspectorContent({
                   href={`mailto:${primaryGuardian.email}`}
                   className="btn btn-sm btn-outline flex items-center gap-1.5 text-xs text-foreground"
                 >
-                  <Mail size={13} className="text-sky-500" />
+                  <Mail size={13} className="text-[var(--status-info-foreground)]" />
                   <span>Email</span>
                 </a>
               )}
@@ -782,7 +782,7 @@ function StudentInspectorContent({
       <div className="card p-4 rounded-xl space-y-2.5">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-            <Clock size={14} className="text-amber-500" /> Attendance Summary
+            <Clock size={14} className="text-[var(--status-warning-foreground)]" /> Attendance Summary
           </span>
           {attendanceRate !== null && (
             <span
@@ -803,7 +803,7 @@ function StudentInspectorContent({
           <div className="space-y-2">
             <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
               <div
-                className="bg-emerald-500 h-full rounded-full transition-all"
+                className="bg-[var(--status-success-foreground)] h-full rounded-full transition-all"
                 style={{ width: `${Math.min(100, attendanceRate || 0)}%` }}
               />
             </div>
@@ -823,7 +823,7 @@ function StudentInspectorContent({
       <div className="card p-4 rounded-xl space-y-2.5">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-            <ShieldCheck size={14} className="text-indigo-500" /> Pickup Authorization
+            <ShieldCheck size={14} className="text-[var(--color-brand-primary)]" /> Pickup Authorization
           </span>
           <span className="text-[11px] text-muted-foreground">
             {guardianLinks.length} authorized
@@ -850,7 +850,7 @@ function StudentInspectorContent({
                       </span>
                     </div>
                   </div>
-                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-[11px] flex items-center gap-1">
+                  <span className="text-[var(--status-success-foreground)] font-semibold text-[11px] flex items-center gap-1">
                     <CheckCircle2 size={12} /> Authorized
                   </span>
                 </div>
@@ -872,11 +872,11 @@ function StudentInspectorContent({
         <div className="card p-4 rounded-xl space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <CreditCard size={14} className="text-emerald-500" /> Fees & Balance
+              <CreditCard size={14} className="text-[var(--status-success-foreground)]" /> Fees & Balance
             </span>
             <span
               className={`font-bold tabular-nums ${
-                balanceOutstanding > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600'
+                balanceOutstanding > 0 ? 'text-[var(--status-warning-foreground)]' : 'text-[var(--status-success-foreground)]'
               }`}
             >
               Balance: {inr(balanceOutstanding)}
@@ -890,11 +890,11 @@ function StudentInspectorContent({
             </div>
             <div className="p-2 rounded bg-muted/40">
               <span className="text-[10px] text-muted-foreground block font-semibold">PAID</span>
-              <span className="font-bold tabular-nums text-emerald-600">{inr(totalPaid)}</span>
+              <span className="font-bold tabular-nums text-[var(--status-success-foreground)]">{inr(totalPaid)}</span>
             </div>
             <div className="p-2 rounded bg-muted/40">
               <span className="text-[10px] text-muted-foreground block font-semibold">DUE</span>
-              <span className="font-bold tabular-nums text-rose-600">{inr(balanceOutstanding)}</span>
+              <span className="font-bold tabular-nums text-[var(--status-danger-foreground)]">{inr(balanceOutstanding)}</span>
             </div>
           </div>
         </div>
@@ -983,7 +983,7 @@ function StaffInspectorContent({
       {/* Direct Contact Options */}
       <div className="card p-4 rounded-xl space-y-3">
         <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-          <Phone size={14} className="text-sky-500" /> Staff Communication
+          <Phone size={14} className="text-[var(--status-info-foreground)]" /> Staff Communication
         </span>
 
         <div className="flex flex-wrap gap-2">
@@ -993,7 +993,7 @@ function StaffInspectorContent({
                 href={`tel:${phone}`}
                 className="btn btn-sm btn-outline flex items-center gap-1.5 text-xs text-foreground"
               >
-                <Phone size={13} className="text-emerald-500" />
+                <Phone size={13} className="text-[var(--status-success-foreground)]" />
                 <span>Call ({phone})</span>
               </a>
 
@@ -1004,7 +1004,7 @@ function StaffInspectorContent({
                   rel="noopener noreferrer"
                   className="btn btn-sm btn-outline flex items-center gap-1.5 text-xs text-foreground"
                 >
-                  <MessageCircle size={13} className="text-emerald-600" />
+                  <MessageCircle size={13} className="text-[var(--status-success-foreground)]" />
                   <span>WhatsApp</span>
                 </a>
               )}
@@ -1020,7 +1020,7 @@ function StaffInspectorContent({
               href={`mailto:${email}`}
               className="btn btn-sm btn-outline flex items-center gap-1.5 text-xs text-foreground"
             >
-              <Mail size={13} className="text-sky-500" />
+              <Mail size={13} className="text-[var(--status-info-foreground)]" />
               <span>Email ({email})</span>
             </a>
           )}
@@ -1031,7 +1031,7 @@ function StaffInspectorContent({
       <div className="card p-4 rounded-xl space-y-2.5">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-            <Building size={14} className="text-purple-500" /> Assigned Classrooms
+            <Building size={14} className="text-[var(--color-brand-primary)]" /> Assigned Classrooms
           </span>
           <span className="badge b-neutral text-[11px] font-semibold">
             {taughtClasses.length} Classes
@@ -1064,7 +1064,7 @@ function StaffInspectorContent({
       {(profile.employmentType || profile.joiningDate || profile.qualification || profile.bloodGroup || profile.emergencyContactName) && (
         <div className="card p-4 rounded-xl space-y-2.5">
           <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-            <Briefcase size={14} className="text-amber-500" /> Employment &amp; HR Snapshot
+            <Briefcase size={14} className="text-[var(--status-warning-foreground)]" /> Employment &amp; HR Snapshot
           </span>
 
           <div className="grid grid-cols-2 gap-2 text-xs">
@@ -1089,7 +1089,7 @@ function StaffInspectorContent({
             {profile.bloodGroup && (
               <div className="p-2 rounded bg-muted/40">
                 <span className="text-[10px] text-muted-foreground block">BLOOD GROUP</span>
-                <span className="font-bold text-red-600 dark:text-red-400">{profile.bloodGroup}</span>
+                <span className="font-bold text-[var(--status-danger-foreground)]">{profile.bloodGroup}</span>
               </div>
             )}
             {profile.emergencyContactName && (
@@ -1107,7 +1107,7 @@ function StaffInspectorContent({
       {/* Security & Access Overview */}
       <div className="card p-4 rounded-xl space-y-2.5">
         <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-          <Shield size={14} className="text-indigo-500" /> System Role & Security
+          <Shield size={14} className="text-[var(--color-brand-primary)]" /> System Role & Security
         </span>
 
         <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-muted/40">
@@ -1200,7 +1200,7 @@ function InvoiceInspectorContent({
           </div>
           <div className="p-2 rounded bg-muted/40">
             <span className="text-[10px] text-muted-foreground font-semibold block">PAID</span>
-            <span className="font-bold tabular-nums text-emerald-600">
+            <span className="font-bold tabular-nums text-[var(--status-success-foreground)]">
               {inr(data.paidCents || 0)}
             </span>
           </div>
@@ -1208,7 +1208,7 @@ function InvoiceInspectorContent({
             <span className="text-[10px] text-muted-foreground font-semibold block">BALANCE</span>
             <span
               className={`font-bold tabular-nums ${
-                (data.balanceCents || 0) > 0 ? 'text-rose-600' : 'text-foreground'
+                (data.balanceCents || 0) > 0 ? 'text-[var(--status-danger-foreground)]' : 'text-foreground'
               }`}
             >
               {inr(data.balanceCents || 0)}
@@ -1246,7 +1246,7 @@ function InvoiceInspectorContent({
       <div className="card p-4 rounded-xl space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-            <DollarSign size={14} className="text-emerald-500" /> Verified Payment Records
+            <DollarSign size={14} className="text-[var(--status-success-foreground)]" /> Verified Payment Records
           </span>
           <span className="text-[11px] text-muted-foreground">
             {payments.length} transactions
