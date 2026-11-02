@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { ok, Errors } from '@/lib/api'
 import { requireApi, isResponse, getAuthorizedBranchIds, requireBranchAccess } from '@/lib/auth-api'
 import { FeeService } from '@/lib/fees/fee-service'
+import { parsePaymentMetadata } from '@/lib/fees/payment-status-types'
 
 async function _GET(req: NextRequest) {
   const session = await requireApi(req, 'finance:read')
@@ -15,6 +16,10 @@ async function _GET(req: NextRequest) {
     const studentId = sp.get('studentId') || undefined
     const method = sp.get('method') || undefined
     const requestedBranchId = sp.get('branchId') || undefined
+    const filterProviderStatus = sp.get('providerStatus') || undefined
+    const filterInternalStatus = sp.get('internalStatus') || undefined
+    const filterReconciliationStatus = sp.get('reconciliationStatus') || undefined
+    const filterDiscrepancies = sp.get('discrepanciesOnly') === 'true'
     const page = Math.max(1, parseInt(sp.get('page') || '1'))
     const pageSize = Math.min(100, parseInt(sp.get('pageSize') || '50'))
 
@@ -69,26 +74,56 @@ async function _GET(req: NextRequest) {
       }),
     ])
 
-    return ok(
-      payments.map((p) => ({
-        id: p.id,
-        paymentNumber: p.paymentNumber,
-        amountCents: p.amountCents ?? 0,
-        amountRupees: ((p.amountCents ?? 0) / 100).toFixed(2),
-        method: p.method,
-        status: p.status,
-        transactionRef: p.transactionRef,
-        notes: p.notes,
-        paymentDate: p.paymentDate,
-        studentName: p.student ? `${p.student.firstName} ${p.student.lastName || ''}`.trim() : 'N/A',
-        admissionNo: p.student?.admissionNo ?? 'N/A',
-        invoiceNumber: p.invoice?.invoiceNumber ?? null,
-        feeItemName: p.feeSchedule?.feeItem?.name ?? null,
-        receiptId: p.receipt?.id ?? null,
-        receiptNumber: p.receipt?.receiptNumber ?? null,
-      })),
-      { page, pageSize, total, totalPages: Math.ceil(total / pageSize) }
-    )
+    const formattedPayments = payments
+      .map((p) => {
+        const meta = parsePaymentMetadata(p)
+        return {
+          id: p.id,
+          paymentNumber: p.paymentNumber,
+          amountCents: p.amountCents ?? 0,
+          amountRupees: ((p.amountCents ?? 0) / 100).toFixed(2),
+          method: p.method,
+          status: p.status,
+          providerStatus: meta.providerStatus,
+          rawProviderStatus: meta.rawProviderStatus || null,
+          internalPaymentStatus: meta.internalPaymentStatus,
+          reconciliationStatus: meta.reconciliationStatus,
+          provider: meta.provider,
+          gatewayOrderId: meta.gatewayOrderId,
+          gatewayPaymentId: meta.gatewayPaymentId,
+          lastReconciledAt: meta.lastReconciledAt,
+          transactionRef: p.transactionRef,
+          notes: p.notes,
+          paymentDate: p.paymentDate,
+          studentName: p.student ? `${p.student.firstName} ${p.student.lastName || ''}`.trim() : 'N/A',
+          admissionNo: p.student?.admissionNo ?? 'N/A',
+          invoiceNumber: p.invoice?.invoiceNumber ?? null,
+          feeItemName: p.feeSchedule?.feeItem?.name ?? null,
+          receiptId: p.receipt?.id ?? null,
+          receiptNumber: p.receipt?.receiptNumber ?? null,
+        }
+      })
+      .filter((p) => {
+        if (filterProviderStatus && p.providerStatus !== filterProviderStatus) return false
+        if (filterInternalStatus && p.internalPaymentStatus !== filterInternalStatus) return false
+        if (filterReconciliationStatus && p.reconciliationStatus !== filterReconciliationStatus) return false
+        if (filterDiscrepancies) {
+          // Provider CAPTURED but internal not SUCCESS, or MISMATCH
+          const isDiscrepancy =
+            (p.providerStatus === 'CAPTURED' && p.internalPaymentStatus !== 'SUCCESS') ||
+            p.reconciliationStatus === 'MISMATCH' ||
+            p.internalPaymentStatus === 'VERIFICATION_PENDING'
+          if (!isDiscrepancy) return false
+        }
+        return true
+      })
+
+    return ok(formattedPayments, {
+      page,
+      pageSize,
+      total: formattedPayments.length,
+      totalPages: Math.ceil(formattedPayments.length / pageSize),
+    })
   } catch (e: any) {
     return Errors.system(e)
   }

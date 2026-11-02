@@ -3,6 +3,20 @@ import crypto from 'crypto'
 import { recordAudit } from '@/lib/audit'
 import { FeeService } from '@/lib/fees/fee-service'
 import { EncryptionService } from '@/lib/security/encryption-service'
+import {
+  ProviderPaymentStatus,
+  InternalPaymentStatus,
+  ReconciliationStatus,
+  ThreeDimensionTimelineEvent,
+  ReconciliationExecutionRecord,
+  PaymentAttemptMetadata,
+  parsePaymentMetadata,
+  encodePaymentMetadata,
+  normalizeProviderStatus,
+  normalizeRazorpayStatus,
+  normalizeCashfreeStatus,
+  normalizePayUStatus,
+} from '@/lib/fees/payment-status-types'
 
 export type DetailedPaymentStatus =
   | 'CREATED'
@@ -122,6 +136,7 @@ export function mapToDbPaymentStatus(detailed: DetailedPaymentStatus): 'PENDING'
 export interface ProviderQueryResponse {
   settled: boolean
   status: 'SUCCESS' | 'FAILED' | 'PENDING' | 'UNCERTAIN'
+  providerStatus?: ProviderPaymentStatus
   providerPaymentId?: string
   providerOrderId?: string
   amountCents?: number
@@ -353,7 +368,10 @@ export class PaymentRecoveryService {
   /**
    * STEP 3 & 4: CRITICAL RECOVERY WORKFLOW
    * Discovers inconsistent or unverified payments, checks provider, authoritatively verifies identity,
-   * and settles atomically and idempotently.
+   * and settles atomically and idempotently across the 3 independent status dimensions:
+   * 1. providerStatus
+   * 2. internalPaymentStatus
+   * 3. reconciliationStatus
    */
   static async recoverTransaction(
     ctx: ScopeActorContext,
@@ -378,25 +396,32 @@ export class PaymentRecoveryService {
       throw new Error(`Payment attempt ${paymentId} not found`)
     }
 
-    let notesData: any = {}
-    try {
-      notesData = payment.notes ? JSON.parse(payment.notes) : {}
-    } catch {
-      notesData = { rawNotes: payment.notes }
-    }
-
-    const currentDetailedStatus: DetailedPaymentStatus =
-      notesData.detailedStatus || (payment.status as DetailedPaymentStatus) || 'PENDING'
-    const timeline: StructuredTimelineEvent[] = Array.isArray(notesData.timeline) ? notesData.timeline : []
+    const meta = parsePaymentMetadata(payment)
+    const prevProviderStatus = meta.providerStatus
+    const prevInternalStatus = meta.internalPaymentStatus
+    const prevReconciliationStatus = meta.reconciliationStatus
 
     // If already in terminal SUCCESS state with receipt, return idempotent success
     if (payment.status === 'SUCCESS' && payment.receipt) {
+      if (meta.reconciliationStatus !== 'MATCHED') {
+        meta.providerStatus = 'CAPTURED'
+        meta.internalPaymentStatus = 'SUCCESS'
+        meta.reconciliationStatus = 'MATCHED'
+        meta.lastReconciledAt = new Date().toISOString()
+        await db.payment.update({
+          where: { id: payment.id },
+          data: { notes: encodePaymentMetadata(meta) },
+        })
+      }
       return {
         success: true,
         action: 'ALREADY_SETTLED',
         payment,
         receipt: payment.receipt,
         detailedStatus: 'SUCCESS',
+        providerStatus: meta.providerStatus,
+        internalPaymentStatus: meta.internalPaymentStatus,
+        reconciliationStatus: meta.reconciliationStatus,
         message: 'Payment has already been authoritatively verified and settled.',
       }
     }
@@ -408,40 +433,110 @@ export class PaymentRecoveryService {
     } else {
       providerRes = await this.queryProviderStatus(
         ctx.tenantId,
-        notesData.provider || 'RAZORPAY',
-        notesData.gatewayOrderId,
-        notesData.gatewayPaymentId,
+        meta.provider || 'RAZORPAY',
+        meta.gatewayOrderId,
+        meta.gatewayPaymentId,
         payment.transactionRef
       )
     }
 
-    // STEP 3: Verify Financial & Transaction Identity
-    if (providerRes.status === 'SUCCESS') {
-      // 1. Amount Verification
-      if (providerRes.amountCents !== undefined && providerRes.amountCents !== payment.amountCents) {
-        // Discrepancy detected! Must reject settlement and log security alert
-        const mismatchError = `AMOUNT_MISMATCH: Expected ₹${payment.amountCents / 100}, but provider captured ₹${
-          providerRes.amountCents / 100
-        }`
-        timeline.push({
-          eventId: crypto.randomUUID(),
-          previousStatus: currentDetailedStatus,
-          newStatus: 'DISPUTED',
-          event: 'PAYMENT_VERIFICATION_FAILED',
-          source: 'RECONCILIATION',
-          failureCode: 'AMOUNT_MISMATCH',
-          failureReason: mismatchError,
-          diagnostics: `Provider payment ${providerRes.providerPaymentId} amount differs from attempt`,
-          at: new Date().toISOString(),
-          by: ctx.actorName || ctx.actorId,
-        })
-        notesData.timeline = timeline
-        notesData.detailedStatus = 'DISPUTED'
-        notesData.disputeReason = mismatchError
+    const normProviderStatus: ProviderPaymentStatus =
+      providerRes.providerStatus ||
+      (providerRes.status === 'SUCCESS'
+        ? 'CAPTURED'
+        : providerRes.status === 'FAILED'
+        ? 'FAILED'
+        : providerRes.status === 'PENDING'
+        ? 'PENDING'
+        : 'UNKNOWN')
 
-        await db.payment.update({
+    const reconId = crypto.randomUUID()
+    const nowIso = new Date().toISOString()
+
+    // 1. PROVIDER CONFIRMED CAPTURED (SUCCESS)
+    if (normProviderStatus === 'CAPTURED' || providerRes.status === 'SUCCESS') {
+      const expectedCents = payment.amountCents
+      const providerCents = providerRes.amountCents !== undefined ? providerRes.amountCents : expectedCents
+      const amountMatched = providerCents === expectedCents
+
+      const expectedCurrency = 'INR'
+      const providerCurrency = (providerRes.currency || 'INR').toUpperCase()
+      const currencyMatched = providerCurrency === expectedCurrency
+
+      // Check Amount or Currency Mismatch:
+      if (!amountMatched || !currencyMatched) {
+        const mismatchReason = !amountMatched
+          ? `AMOUNT_MISMATCH: Expected ₹${(expectedCents / 100).toFixed(2)}, but provider captured ₹${(providerCents / 100).toFixed(2)}`
+          : `CURRENCY_MISMATCH: Expected INR, but provider returned ${providerCurrency}`
+
+        meta.providerStatus = 'CAPTURED'
+        meta.internalPaymentStatus = 'MANUAL_REVIEW'
+        meta.reconciliationStatus = 'MISMATCH'
+        meta.discrepancyDetails = [
+          ...(!amountMatched ? [{ field: 'amount', expected: expectedCents, actual: providerCents }] : []),
+          ...(!currencyMatched ? [{ field: 'currency', expected: 'INR', actual: providerCurrency }] : []),
+        ]
+        meta.failureReason = mismatchReason
+        meta.lastReconciledAt = nowIso
+        meta.reconciliationCount = (meta.reconciliationCount || 0) + 1
+
+        const timelineEvent: ThreeDimensionTimelineEvent = {
+          eventId: crypto.randomUUID(),
+          paymentAttemptId: payment.id,
+          tenantId: ctx.tenantId,
+          eventType: 'RECONCILIATION_MISMATCH',
+          source: 'RECONCILIATION',
+          previousProviderStatus: prevProviderStatus,
+          newProviderStatus: 'CAPTURED',
+          previousInternalStatus: prevInternalStatus,
+          newInternalStatus: 'MANUAL_REVIEW',
+          previousReconciliationStatus: prevReconciliationStatus,
+          newReconciliationStatus: 'MISMATCH',
+          providerEventId: providerRes.providerPaymentId || null,
+          timestamp: nowIso,
+          actorType: 'SYSTEM',
+          actorId: ctx.actorId,
+          safeDiagnosticCode: !amountMatched ? 'AMOUNT_MISMATCH' : 'CURRENCY_MISMATCH',
+          diagnostics: mismatchReason,
+        }
+        meta.timeline.push(timelineEvent)
+
+        const reconExec: ReconciliationExecutionRecord = {
+          reconciliationId: reconId,
+          paymentAttemptId: payment.id,
+          provider: meta.provider,
+          reconciliationTrigger: 'ADMIN_ACTION',
+          providerStatusBefore: prevProviderStatus,
+          providerStatusAfter: 'CAPTURED',
+          internalStatusBefore: prevInternalStatus,
+          internalStatusAfter: 'MANUAL_REVIEW',
+          reconciliationStatus: 'MISMATCH',
+          amountComparison: {
+            expectedCents,
+            providerCents,
+            matched: amountMatched,
+          },
+          currencyComparison: {
+            expected: expectedCurrency,
+            provider: providerCurrency,
+            matched: currencyMatched,
+          },
+          orderReferenceComparison: {
+            expected: meta.gatewayOrderId || payment.transactionRef || '',
+            provider: providerRes.providerOrderId || meta.gatewayOrderId || '',
+            matched: true,
+          },
+          startedAt: nowIso,
+          completedAt: new Date().toISOString(),
+          retryCount: meta.reconciliationCount,
+          errorCode: !amountMatched ? 'AMOUNT_MISMATCH' : 'CURRENCY_MISMATCH',
+          resolution: 'FLAGGED_FOR_MANUAL_REVIEW',
+        }
+        meta.reconciliationHistory.push(reconExec)
+
+        const updated = await db.payment.update({
           where: { id: payment.id },
-          data: { notes: JSON.stringify(notesData) },
+          data: { notes: encodePaymentMetadata(meta) },
         })
 
         await recordAudit({
@@ -454,34 +549,47 @@ export class PaymentRecoveryService {
           entity: 'Payment',
           entityId: payment.id,
           module: 'Fees',
-          summary: `Security Alert: ${mismatchError} on payment ${payment.paymentNumber}`,
+          summary: `Security Alert: ${mismatchReason} on payment ${payment.paymentNumber}`,
         })
 
         return {
           success: false,
           action: 'REJECTED_MISMATCH',
-          detailedStatus: 'DISPUTED',
-          error: mismatchError,
+          detailedStatus: 'MANUAL_REVIEW',
+          providerStatus: 'CAPTURED',
+          internalPaymentStatus: 'MANUAL_REVIEW',
+          reconciliationStatus: 'MISMATCH',
+          payment: updated,
+          error: mismatchReason,
         }
       }
 
-      // 2. Currency Verification
-      if (providerRes.currency && providerRes.currency.toUpperCase() !== 'INR') {
-        const currError = `CURRENCY_MISMATCH: Expected INR, got ${providerRes.currency}`
-        notesData.detailedStatus = 'DISPUTED'
-        await db.payment.update({
-          where: { id: payment.id },
-          data: { notes: JSON.stringify(notesData) },
-        })
-        return {
-          success: false,
-          action: 'REJECTED_CURRENCY',
-          detailedStatus: 'DISPUTED',
-          error: currError,
-        }
-      }
+      // Amount & currency MATCHED:
+      meta.providerStatus = 'CAPTURED'
+      meta.internalPaymentStatus = 'PROCESSING'
+      meta.reconciliationStatus = 'IN_PROGRESS'
+      meta.providerVerifiedAt = nowIso
+      if (providerRes.providerPaymentId) meta.gatewayPaymentId = providerRes.providerPaymentId
 
-      // STEP 4: Atomic Payment Recovery
+      meta.timeline.push({
+        eventId: crypto.randomUUID(),
+        paymentAttemptId: payment.id,
+        tenantId: ctx.tenantId,
+        eventType: 'INTERNAL_PAYMENT_PROCESSING_STARTED',
+        source: 'RECONCILIATION',
+        previousProviderStatus: prevProviderStatus,
+        newProviderStatus: 'CAPTURED',
+        previousInternalStatus: prevInternalStatus,
+        newInternalStatus: 'PROCESSING',
+        previousReconciliationStatus: prevReconciliationStatus,
+        newReconciliationStatus: 'IN_PROGRESS',
+        timestamp: nowIso,
+        actorType: 'SYSTEM',
+        actorId: ctx.actorId,
+        diagnostics: 'Provider capture confirmed; starting ledger allocation and receipt generation',
+      })
+
+      // Settle internally via FeeService.verifyPayment
       const verifyResult = await FeeService.verifyPayment(
         {
           tenantId: ctx.tenantId,
@@ -493,34 +601,74 @@ export class PaymentRecoveryService {
           paymentId: payment.id,
           paymentNumber: payment.paymentNumber,
           transactionRef: payment.transactionRef || undefined,
-          gatewayPaymentId: providerRes.providerPaymentId || notesData.gatewayPaymentId,
-          gatewayOrderId: providerRes.providerOrderId || notesData.gatewayOrderId,
+          gatewayPaymentId: providerRes.providerPaymentId || meta.gatewayPaymentId || undefined,
+          gatewayOrderId: providerRes.providerOrderId || meta.gatewayOrderId || undefined,
           gatewayStatus: 'SUCCESS',
           eventSource: 'RECONCILIATION',
           diagnostics: 'Recovered via authoritative provider status reconciliation',
         }
       )
 
-      // Update notes with detailedStatus = SUCCESS
-      const refreshedPayment = await db.payment.findUnique({
+      // Post-settlement update
+      meta.internalPaymentStatus = 'SUCCESS'
+      meta.reconciliationStatus = 'MATCHED'
+      meta.internalSettledAt = new Date().toISOString()
+      meta.lastReconciledAt = new Date().toISOString()
+      meta.reconciliationCount = (meta.reconciliationCount || 0) + 1
+
+      meta.timeline.push({
+        eventId: crypto.randomUUID(),
+        paymentAttemptId: payment.id,
+        tenantId: ctx.tenantId,
+        eventType: 'RECONCILIATION_MATCHED',
+        source: 'RECONCILIATION',
+        previousProviderStatus: 'CAPTURED',
+        newProviderStatus: 'CAPTURED',
+        previousInternalStatus: 'PROCESSING',
+        newInternalStatus: 'SUCCESS',
+        previousReconciliationStatus: 'IN_PROGRESS',
+        newReconciliationStatus: 'MATCHED',
+        timestamp: new Date().toISOString(),
+        actorType: 'SYSTEM',
+        actorId: ctx.actorId,
+        diagnostics: `Payment reconciled and matched. Receipt #${verifyResult.receipt?.receiptNumber || 'N/A'} issued`,
+      })
+
+      meta.reconciliationHistory.push({
+        reconciliationId: reconId,
+        paymentAttemptId: payment.id,
+        provider: meta.provider,
+        reconciliationTrigger: 'ADMIN_ACTION',
+        providerStatusBefore: prevProviderStatus,
+        providerStatusAfter: 'CAPTURED',
+        internalStatusBefore: prevInternalStatus,
+        internalStatusAfter: 'SUCCESS',
+        reconciliationStatus: 'MATCHED',
+        amountComparison: {
+          expectedCents,
+          providerCents,
+          matched: true,
+        },
+        currencyComparison: {
+          expected: expectedCurrency,
+          provider: providerCurrency,
+          matched: true,
+        },
+        orderReferenceComparison: {
+          expected: meta.gatewayOrderId || payment.transactionRef || '',
+          provider: providerRes.providerOrderId || meta.gatewayOrderId || '',
+          matched: true,
+        },
+        startedAt: nowIso,
+        completedAt: new Date().toISOString(),
+        retryCount: meta.reconciliationCount,
+      })
+
+      const refreshedPayment = await db.payment.update({
         where: { id: payment.id },
+        data: { notes: encodePaymentMetadata(meta) },
         include: { receipt: true, invoice: true, feeSchedule: true },
       })
-      if (refreshedPayment) {
-        let refreshedNotes: any = {}
-        try {
-          refreshedNotes = refreshedPayment.notes ? JSON.parse(refreshedPayment.notes) : {}
-        } catch {
-          refreshedNotes = {}
-        }
-        refreshedNotes.detailedStatus = 'SUCCESS'
-        refreshedNotes.recoveredAt = new Date().toISOString()
-        refreshedNotes.reconciliationSource = 'PROVIDER_API_SYNC'
-        await db.payment.update({
-          where: { id: payment.id },
-          data: { notes: JSON.stringify(refreshedNotes) },
-        })
-      }
 
       await recordAudit({
         tenantId: ctx.tenantId,
@@ -532,7 +680,7 @@ export class PaymentRecoveryService {
         entity: 'Payment',
         entityId: payment.id,
         module: 'Fees',
-        summary: `Authoritatively recovered payment ${payment.paymentNumber} from provider ${notesData.provider}. Receipt: ${
+        summary: `Authoritatively recovered payment ${payment.paymentNumber} from provider ${meta.provider}. Receipt: ${
           verifyResult.receipt?.receiptNumber || 'N/A'
         }`,
       })
@@ -541,15 +689,76 @@ export class PaymentRecoveryService {
         success: true,
         action: 'RECOVERED_SUCCESS',
         detailedStatus: 'SUCCESS',
-        payment: refreshedPayment || verifyResult.payment,
+        providerStatus: 'CAPTURED',
+        internalPaymentStatus: 'SUCCESS',
+        reconciliationStatus: 'MATCHED',
+        payment: refreshedPayment,
         receipt: verifyResult.receipt,
         invoice: verifyResult.invoice,
         message: 'Payment verified and recovered successfully from provider records.',
       }
     }
 
-    // STEP 6: If Provider Confirms Definite Failure
-    if (providerRes.status === 'FAILED') {
+    // 2. PROVIDER CONFIRMED DEFINITE FAILURE
+    if (normProviderStatus === 'FAILED' || providerRes.status === 'FAILED') {
+      meta.providerStatus = 'FAILED'
+      meta.internalPaymentStatus = 'FAILED'
+      meta.reconciliationStatus = 'RESOLVED'
+      meta.lastReconciledAt = nowIso
+      meta.failureCode = providerRes.failureCode || 'PROVIDER_DECLINED'
+      meta.failureReason = providerRes.failureReason || 'Declined by payment provider'
+
+      meta.timeline.push({
+        eventId: crypto.randomUUID(),
+        paymentAttemptId: payment.id,
+        tenantId: ctx.tenantId,
+        eventType: 'PROVIDER_PAYMENT_FAILED',
+        source: 'RECONCILIATION',
+        previousProviderStatus: prevProviderStatus,
+        newProviderStatus: 'FAILED',
+        previousInternalStatus: prevInternalStatus,
+        newInternalStatus: 'FAILED',
+        previousReconciliationStatus: prevReconciliationStatus,
+        newReconciliationStatus: 'RESOLVED',
+        timestamp: nowIso,
+        actorType: 'SYSTEM',
+        actorId: ctx.actorId,
+        safeDiagnosticCode: meta.failureCode,
+        diagnostics: meta.failureReason,
+      })
+
+      meta.reconciliationHistory.push({
+        reconciliationId: reconId,
+        paymentAttemptId: payment.id,
+        provider: meta.provider,
+        reconciliationTrigger: 'ADMIN_ACTION',
+        providerStatusBefore: prevProviderStatus,
+        providerStatusAfter: 'FAILED',
+        internalStatusBefore: prevInternalStatus,
+        internalStatusAfter: 'FAILED',
+        reconciliationStatus: 'RESOLVED',
+        amountComparison: {
+          expectedCents: payment.amountCents,
+          providerCents: providerRes.amountCents ?? 0,
+          matched: false,
+        },
+        currencyComparison: {
+          expected: 'INR',
+          provider: providerRes.currency || 'INR',
+          matched: true,
+        },
+        orderReferenceComparison: {
+          expected: meta.gatewayOrderId || payment.transactionRef || '',
+          provider: providerRes.providerOrderId || meta.gatewayOrderId || '',
+          matched: true,
+        },
+        startedAt: nowIso,
+        completedAt: new Date().toISOString(),
+        retryCount: (meta.reconciliationCount || 0) + 1,
+        errorCode: meta.failureCode,
+        resolution: 'CONFIRMED_FAILED_SAFE_FOR_RETRY',
+      })
+
       const verifyResult = await FeeService.verifyPayment(
         {
           tenantId: ctx.tenantId,
@@ -561,56 +770,103 @@ export class PaymentRecoveryService {
           paymentId: payment.id,
           paymentNumber: payment.paymentNumber,
           transactionRef: payment.transactionRef || undefined,
-          gatewayPaymentId: providerRes.providerPaymentId || notesData.gatewayPaymentId,
-          gatewayOrderId: providerRes.providerOrderId || notesData.gatewayOrderId,
+          gatewayPaymentId: providerRes.providerPaymentId || meta.gatewayPaymentId || undefined,
+          gatewayOrderId: providerRes.providerOrderId || meta.gatewayOrderId || undefined,
           gatewayStatus: 'FAILED',
-          failureCode: providerRes.failureCode || 'PROVIDER_DECLINED',
-          failureReason: providerRes.failureReason || 'Declined by payment provider',
+          failureCode: meta.failureCode,
+          failureReason: meta.failureReason,
           eventSource: 'RECONCILIATION',
           diagnostics: 'Authoritatively confirmed FAILED by provider status check',
         }
       )
 
+      const updated = await db.payment.update({
+        where: { id: payment.id },
+        data: { notes: encodePaymentMetadata(meta) },
+      })
+
       return {
         success: false,
         action: 'CONFIRMED_FAILED',
         detailedStatus: 'FAILED',
-        payment: verifyResult.payment,
+        providerStatus: 'FAILED',
+        internalPaymentStatus: 'FAILED',
+        reconciliationStatus: 'RESOLVED',
+        payment: updated,
         receipt: null,
-        error: providerRes.failureReason || 'Transaction confirmed failed by provider',
+        error: meta.failureReason,
       }
     }
 
-    // STEP 5: If Provider Status is Still Uncertain
-    // Never mark FAILED! Retain in VERIFICATION_PENDING or RECONCILIATION_PENDING.
-    const newStatus: DetailedPaymentStatus = 'RECONCILIATION_PENDING'
-    timeline.push({
+    // 3. PROVIDER STILL PENDING OR UNCERTAIN (TIMEOUT / NETWORK DROP)
+    // NEVER MARK FAILED! Retain in VERIFICATION_PENDING and RETRY_PENDING
+    meta.providerStatus = normProviderStatus === 'PENDING' ? 'PENDING' : meta.providerStatus || 'ORDER_CREATED'
+    meta.internalPaymentStatus = 'VERIFICATION_PENDING'
+    meta.reconciliationStatus = 'RETRY_PENDING'
+    meta.lastReconciledAt = nowIso
+    meta.reconciliationCount = (meta.reconciliationCount || 0) + 1
+
+    meta.timeline.push({
       eventId: crypto.randomUUID(),
-      previousStatus: currentDetailedStatus,
-      newStatus,
-      event: 'PAYMENT_RECONCILIATION_STARTED',
+      paymentAttemptId: payment.id,
+      tenantId: ctx.tenantId,
+      eventType: 'PAYMENT_VERIFICATION_TIMEOUT',
       source: 'RECONCILIATION',
-      diagnostics: providerRes.failureReason || 'Provider status currently uncertain; scheduled for follow-up verification',
-      at: new Date().toISOString(),
-      by: ctx.actorName || ctx.actorId,
+      previousProviderStatus: prevProviderStatus,
+      newProviderStatus: meta.providerStatus,
+      previousInternalStatus: prevInternalStatus,
+      newInternalStatus: 'VERIFICATION_PENDING',
+      previousReconciliationStatus: prevReconciliationStatus,
+      newReconciliationStatus: 'RETRY_PENDING',
+      timestamp: nowIso,
+      actorType: 'SYSTEM',
+      actorId: ctx.actorId,
+      diagnostics: providerRes.failureReason || 'Provider status uncertain/pending; held safely under retry without double charge',
     })
-    notesData.timeline = timeline
-    notesData.detailedStatus = newStatus
-    notesData.lastCheckedAt = new Date().toISOString()
-    notesData.verificationNotice =
-      'We are checking your payment status with the bank/gateway. Please do not re-attempt payment yet.'
+
+    meta.reconciliationHistory.push({
+      reconciliationId: reconId,
+      paymentAttemptId: payment.id,
+      provider: meta.provider,
+      reconciliationTrigger: 'ADMIN_ACTION',
+      providerStatusBefore: prevProviderStatus,
+      providerStatusAfter: meta.providerStatus,
+      internalStatusBefore: prevInternalStatus,
+      internalStatusAfter: 'VERIFICATION_PENDING',
+      reconciliationStatus: 'RETRY_PENDING',
+      amountComparison: {
+        expectedCents: payment.amountCents,
+        providerCents: 0,
+        matched: false,
+      },
+      currencyComparison: {
+        expected: 'INR',
+        provider: 'INR',
+        matched: true,
+      },
+      orderReferenceComparison: {
+        expected: meta.gatewayOrderId || payment.transactionRef || '',
+        provider: meta.gatewayOrderId || '',
+        matched: true,
+      },
+      startedAt: nowIso,
+      completedAt: new Date().toISOString(),
+      retryCount: meta.reconciliationCount,
+      resolution: 'HELD_FOR_SCHEDULED_RETRY',
+    })
 
     const updated = await db.payment.update({
       where: { id: payment.id },
-      data: {
-        notes: JSON.stringify(notesData),
-      },
+      data: { notes: encodePaymentMetadata(meta) },
     })
 
     return {
       success: false,
       action: 'HELD_PENDING_VERIFICATION',
-      detailedStatus: newStatus,
+      detailedStatus: 'VERIFICATION_PENDING',
+      providerStatus: meta.providerStatus,
+      internalPaymentStatus: 'VERIFICATION_PENDING',
+      reconciliationStatus: 'RETRY_PENDING',
       payment: updated,
       receipt: null,
       message: 'Provider status is pending or uncertain. Transaction held under reconciliation without double charge.',

@@ -2,7 +2,8 @@ import { withApi } from '@/lib/with-api'
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { ok, Errors } from '@/lib/api'
-import { requireApi, isResponse, requireBranchAccess } from '@/lib/auth-api'
+import { requireApi, isResponse } from '@/lib/auth-api'
+import { parsePaymentMetadata } from '@/lib/fees/payment-status-types'
 
 async function _GET(req: NextRequest, ctx: { params?: Promise<{ id: string }> | { id: string } }) {
   const session = await requireApi(req, 'finance:read')
@@ -28,6 +29,8 @@ async function _GET(req: NextRequest, ctx: { params?: Promise<{ id: string }> | 
       return Errors.notFound('Payment record not found')
     }
 
+    const meta = parsePaymentMetadata(p)
+
     return ok({
       id: p.id,
       paymentNumber: p.paymentNumber,
@@ -35,6 +38,16 @@ async function _GET(req: NextRequest, ctx: { params?: Promise<{ id: string }> | 
       amountRupees: ((p.amountCents ?? 0) / 100).toFixed(2),
       method: p.method,
       status: p.status,
+      provider: meta.provider,
+      providerStatus: meta.providerStatus,
+      rawProviderStatus: meta.rawProviderStatus || null,
+      internalPaymentStatus: meta.internalPaymentStatus,
+      reconciliationStatus: meta.reconciliationStatus,
+      gatewayOrderId: meta.gatewayOrderId,
+      gatewayPaymentId: meta.gatewayPaymentId,
+      providerVerifiedAt: meta.providerVerifiedAt,
+      internalSettledAt: meta.internalSettledAt,
+      lastReconciledAt: meta.lastReconciledAt,
       transactionRef: p.transactionRef,
       notes: p.notes,
       paymentDate: p.paymentDate,
@@ -44,6 +57,8 @@ async function _GET(req: NextRequest, ctx: { params?: Promise<{ id: string }> | 
       feeItemName: p.feeSchedule?.feeItem?.name ?? null,
       receiptId: p.receipt?.id ?? null,
       receiptNumber: p.receipt?.receiptNumber ?? null,
+      timeline: meta.timeline,
+      reconciliationHistory: meta.reconciliationHistory,
     })
   } catch (e: any) {
     return Errors.system(e)

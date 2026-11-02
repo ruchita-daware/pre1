@@ -262,12 +262,39 @@ export default function SetupPage() {
       const activeBId = bId !== undefined ? bId : selectedBranchId
       const q = activeBId && activeBId !== 'ALL' ? `?branchId=${activeBId}` : ''
       const res = await fetch(`/api/v1/setup/status${q}`)
+
+      // Handle unauthenticated session or redirection
+      if (res.status === 401 || (res.redirected && res.url.endsWith('/'))) {
+        document.cookie = 'preone_session=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;'
+        window.location.href = '/'
+        return
+      }
+
+      // Handle forbidden / non-admin role
+      if (res.status === 403) {
+        setLoadError('Access Restricted: Setup Wizard requires an Administrator or School Owner account. If you are logged in as a Driver, Staff, or Parent, please switch to an administrator account.')
+        return
+      }
+
+      // Check content-type before attempting to parse JSON
+      const contentType = res.headers.get('content-type') || ''
+      if (!contentType.includes('application/json')) {
+        if (!res.ok) {
+          setLoadError(`Setup service temporarily unavailable (HTTP ${res.status}). Please retry in a moment.`)
+        } else {
+          setLoadError('Setup service returned an unexpected response format. Please retry.')
+        }
+        return
+      }
+
       const j = await res.json()
       if (j.success) {
         setStatus(j.data)
       } else if (res.status === 401 || j.error?.code === 'AUTH_001') {
         document.cookie = 'preone_session=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;'
         window.location.href = '/'
+      } else if (j.error?.code === 'PERMISSION_001' || res.status === 403) {
+        setLoadError('Access Restricted: Setup Wizard requires an Administrator or School Owner account. If you are logged in as a Driver, Staff, or Parent, please switch to an administrator account.')
       } else {
         setLoadError(j.error?.message || 'Failed to load preschool setup status')
       }
@@ -501,18 +528,33 @@ export default function SetupPage() {
               <p style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 440, margin: '0 auto 20px' }}>
                 {loadError}
               </p>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => {
-                  setLoadError(null)
-                  load()
-                  loadHubData()
-                  loadDeps()
-                }}
-              >
-                <RefreshCw size={14} /> Retry
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setLoadError(null)
+                    load()
+                    loadHubData()
+                    loadDeps()
+                  }}
+                >
+                  <RefreshCw size={14} /> Retry
+                </button>
+                <a href="/app/dashboard" className="btn btn-ghost">
+                  Go to Dashboard
+                </a>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => {
+                    document.cookie = 'preone_session=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;'
+                    window.location.href = '/'
+                  }}
+                >
+                  Switch Account
+                </button>
+              </div>
             </div>
           </div>
         </div>

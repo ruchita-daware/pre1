@@ -228,7 +228,9 @@ export default function SetupStepPage() {
     try {
       const activeBId = bId !== undefined ? bId : selectedBranchId
       const q = activeBId && activeBId !== 'ALL' ? `?branchId=${encodeURIComponent(activeBId)}` : ''
-      const j = await fetch(`/api/v1/setup/status${q}`, { cache: 'no-store' }).then((r) => r.json())
+      const res = await fetch(`/api/v1/setup/status${q}`, { cache: 'no-store' })
+      if (!res.ok || !res.headers.get('content-type')?.includes('application/json')) return
+      const j = await res.json()
       if (j.success) {
         setStatus(j.data)
         setMe(j.data.steps.find((s: StepRow) => s.key === stepKey) ?? null)

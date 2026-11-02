@@ -115,6 +115,9 @@ interface PaymentRecord {
   amountRupees: string
   method: string
   status: string
+  providerStatus?: string
+  internalPaymentStatus?: string
+  reconciliationStatus?: string
   transactionRef?: string | null
   notes?: string | null
   paymentDate: string
@@ -192,6 +195,7 @@ export function FinanceConsole() {
   const [payments, setPayments] = useState<PaymentRecord[]>([])
   const [followUps, setFollowUps] = useState<FollowUpRecord[]>([])
   const [auditLogs, setAuditLogs] = useState<AuditRecord[]>([])
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState('ALL')
 
   // Reports State
   const [selectedReportType, setSelectedReportType] = useState('DAILY_COLLECTION')
@@ -1555,38 +1559,62 @@ export function FinanceConsole() {
                 <CreditCard size={13} /> Gateway Setup
               </Link>
             </div>
-            <button
-              onClick={() =>
-                handleExportCSV(
-                  'Payment-Transactions',
-                  ['Receipt Number', 'Payment ID', 'Student', 'Admission No', 'Date', 'Method', 'Amount (INR)', 'Invoice Ref'],
-                  payments.map((p) => [
-                    p.receiptNumber || '—',
-                    p.paymentNumber,
-                    p.studentName,
-                    p.admissionNo,
-                    new Date(p.paymentDate).toISOString().slice(0, 10),
-                    p.method,
-                    p.amountRupees,
-                    p.invoiceNumber || '—',
-                  ])
-                )
-              }
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '6px 14px',
-                borderRadius: 6,
-                border: '1px solid var(--border-color)',
-                background: 'var(--surface)',
-                fontSize: 12,
-                cursor: 'pointer',
-                fontWeight: 500,
-              }}
-            >
-              <Download size={14} /> Export CSV
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 12, color: 'var(--foreground-muted)' }}>Status Filter:</span>
+                <select
+                  value={paymentStatusFilter}
+                  onChange={(e) => setPaymentStatusFilter(e.target.value)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 6,
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--surface)',
+                    fontSize: 12,
+                    color: 'var(--foreground)',
+                  }}
+                >
+                  <option value="ALL">All Payments</option>
+                  <option value="CAPTURED_PENDING">Provider CAPTURED / Internal PENDING</option>
+                  <option value="VERIFICATION_PENDING">Verification Pending</option>
+                  <option value="RECONCILIATION_PENDING">Reconciliation Pending</option>
+                  <option value="MISMATCH">Mismatch</option>
+                  <option value="FAILED">Failed Transactions</option>
+                </select>
+              </div>
+              <button
+                onClick={() =>
+                  handleExportCSV(
+                    'Payment-Transactions',
+                    ['Receipt Number', 'Payment ID', 'Student', 'Admission No', 'Date', 'Method', 'Amount (INR)', 'Invoice Ref'],
+                    payments.map((p) => [
+                      p.receiptNumber || '—',
+                      p.paymentNumber,
+                      p.studentName,
+                      p.admissionNo,
+                      new Date(p.paymentDate).toISOString().slice(0, 10),
+                      p.method,
+                      p.amountRupees,
+                      p.invoiceNumber || '—',
+                    ])
+                  )
+                }
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 14px',
+                  borderRadius: 6,
+                  border: '1px solid var(--border-color)',
+                  background: 'var(--surface)',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                }}
+              >
+                <Download size={14} /> Export CSV
+              </button>
+            </div>
           </div>
 
           {reconcileFeedback && (
@@ -1614,30 +1642,64 @@ export function FinanceConsole() {
                 <tr style={{ background: 'var(--surface-subtle)', borderBottom: '1px solid var(--border-color)', color: 'var(--foreground-muted)' }}>
                   <th style={{ padding: '12px 16px', fontWeight: 600 }}>Receipt #</th>
                   <th style={{ padding: '12px 16px', fontWeight: 600 }}>Payment Ref / UTR</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600 }}>Student & Admission</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600 }}>Date</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600 }}>Method</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 600 }}>Student</th>
                   <th style={{ padding: '12px 16px', fontWeight: 600 }}>Amount</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600 }}>Status / Substate</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 600 }}>Provider Status</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 600 }}>PreOne Status</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 600 }}>Reconciliation</th>
                   <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {payments.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} style={{ padding: 40, textAlign: 'center', color: 'var(--foreground-muted)' }}>
-                      No verified payments recorded.
-                    </td>
-                  </tr>
-                ) : (
-                  payments.map((p) => {
+                {(() => {
+                  const filteredPayments = payments.filter((p) => {
                     let notesData: any = {}
                     try {
                       notesData = p.notes ? JSON.parse(p.notes) : {}
                     } catch {}
-                    const detailed = notesData.detailedStatus || p.status
+                    const prov = p.providerStatus || notesData.providerStatus || (p.status === 'SUCCESS' ? 'CAPTURED' : p.status === 'FAILED' ? 'FAILED' : 'PENDING')
+                    const intnl = p.internalPaymentStatus || notesData.internalPaymentStatus || p.status
+                    const recon = p.reconciliationStatus || notesData.reconciliationStatus || (intnl === 'SUCCESS' && prov === 'CAPTURED' ? 'MATCHED' : 'PENDING')
+
+                    if (paymentStatusFilter === 'CAPTURED_PENDING') {
+                      return prov === 'CAPTURED' && intnl !== 'SUCCESS'
+                    }
+                    if (paymentStatusFilter === 'VERIFICATION_PENDING') {
+                      return intnl === 'VERIFICATION_PENDING' || notesData.detailedStatus === 'VERIFICATION_PENDING'
+                    }
+                    if (paymentStatusFilter === 'RECONCILIATION_PENDING') {
+                      return recon === 'RETRY_PENDING' || recon === 'PENDING' || recon === 'IN_PROGRESS'
+                    }
+                    if (paymentStatusFilter === 'MISMATCH') {
+                      return recon === 'MISMATCH' || intnl === 'MANUAL_REVIEW'
+                    }
+                    if (paymentStatusFilter === 'FAILED') {
+                      return intnl === 'FAILED' || prov === 'FAILED'
+                    }
+                    return true
+                  })
+
+                  if (filteredPayments.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={8} style={{ padding: 40, textAlign: 'center', color: 'var(--foreground-muted)' }}>
+                          No payment attempts match the selected filter.
+                        </td>
+                      </tr>
+                    )
+                  }
+
+                  return filteredPayments.map((p) => {
+                    let notesData: any = {}
+                    try {
+                      notesData = p.notes ? JSON.parse(p.notes) : {}
+                    } catch {}
+                    const provStatus = p.providerStatus || notesData.providerStatus || (p.status === 'SUCCESS' ? 'CAPTURED' : p.status === 'FAILED' ? 'FAILED' : 'PENDING')
+                    const intnlStatus = p.internalPaymentStatus || notesData.internalPaymentStatus || p.status
+                    const reconStatus = p.reconciliationStatus || notesData.reconciliationStatus || (intnlStatus === 'SUCCESS' && provStatus === 'CAPTURED' ? 'MATCHED' : 'PENDING')
+
                     const isPending = p.status === 'PENDING'
-                    const isUnderVerification = detailed === 'VERIFICATION_PENDING' || detailed === 'RECONCILIATION_PENDING'
+                    const isUnderVerification = intnlStatus === 'VERIFICATION_PENDING' || notesData.detailedStatus === 'VERIFICATION_PENDING'
 
                     return (
                       <tr key={p.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
@@ -1649,73 +1711,110 @@ export function FinanceConsole() {
                           {p.transactionRef && (
                             <div style={{ fontSize: 10, color: '#64748b' }}>UTR: {p.transactionRef}</div>
                           )}
+                          <div style={{ fontSize: 10, color: '#64748b' }}>
+                            {p.method} • {new Date(p.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                          </div>
                         </td>
                         <td style={{ padding: '12px 16px' }}>
                           <div style={{ fontWeight: 600 }}>{p.studentName}</div>
                           <div style={{ fontSize: 11, color: 'var(--foreground-muted)' }}>{p.admissionNo}</div>
                         </td>
-                        <td style={{ padding: '12px 16px', color: 'var(--foreground-muted)' }}>
-                          {new Date(p.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </td>
-                        <td style={{ padding: '12px 16px' }}>
-                          <span
-                            style={{
-                              padding: '2px 8px',
-                              borderRadius: 6,
-                              background: 'var(--surface-subtle)',
-                              border: '1px solid var(--border-color)',
-                              fontSize: 11,
-                            }}
-                          >
-                            {p.method}
-                          </span>
-                        </td>
                         <td style={{ padding: '12px 16px', fontWeight: 700, color: '#16a34a' }}>
                           ₹{parseFloat(p.amountRupees).toLocaleString('en-IN')}
                         </td>
+                        {/* Column 1: Provider Status */}
                         <td style={{ padding: '12px 16px' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <span
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 4,
-                                padding: '3px 8px',
-                                borderRadius: 12,
-                                fontSize: 11,
-                                fontWeight: 600,
-                                background:
-                                  p.status === 'SUCCESS'
-                                    ? '#dcfce7'
-                                    : isUnderVerification
-                                    ? '#fef3c7'
-                                    : p.status === 'FAILED'
-                                    ? '#fee2e2'
-                                    : p.status === 'REFUNDED'
-                                    ? '#f3e8ff'
-                                    : '#fef9c3',
-                                color:
-                                  p.status === 'SUCCESS'
-                                    ? '#15803d'
-                                    : isUnderVerification
-                                    ? '#b45309'
-                                    : p.status === 'FAILED'
-                                    ? '#b91c1c'
-                                    : p.status === 'REFUNDED'
-                                    ? '#7e22ce'
-                                    : '#a16207',
-                              }}
-                            >
-                              {detailed}
-                            </span>
-                            {notesData.provider && (
-                              <span style={{ fontSize: 10, color: '#64748b' }}>via {notesData.provider}</span>
-                            )}
-                          </div>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              background:
+                                provStatus === 'CAPTURED'
+                                  ? '#dcfce7'
+                                  : provStatus === 'AUTHORIZED'
+                                  ? '#e0f2fe'
+                                  : provStatus === 'FAILED'
+                                  ? '#fee2e2'
+                                  : '#fef3c7',
+                              color:
+                                provStatus === 'CAPTURED'
+                                  ? '#15803d'
+                                  : provStatus === 'AUTHORIZED'
+                                  ? '#0369a1'
+                                  : provStatus === 'FAILED'
+                                  ? '#b91c1c'
+                                  : '#b45309',
+                            }}
+                          >
+                            {provStatus}
+                          </span>
+                        </td>
+                        {/* Column 2: PreOne Status */}
+                        <td style={{ padding: '12px 16px' }}>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              background:
+                                intnlStatus === 'SUCCESS'
+                                  ? '#dcfce7'
+                                  : intnlStatus === 'MANUAL_REVIEW'
+                                  ? '#fed7aa'
+                                  : intnlStatus === 'FAILED'
+                                  ? '#fee2e2'
+                                  : '#fef3c7',
+                              color:
+                                intnlStatus === 'SUCCESS'
+                                  ? '#15803d'
+                                  : intnlStatus === 'MANUAL_REVIEW'
+                                  ? '#c2410c'
+                                  : intnlStatus === 'FAILED'
+                                  ? '#b91c1c'
+                                  : '#b45309',
+                            }}
+                          >
+                            {intnlStatus}
+                          </span>
+                        </td>
+                        {/* Column 3: Reconciliation Status */}
+                        <td style={{ padding: '12px 16px' }}>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              background:
+                                reconStatus === 'MATCHED'
+                                  ? '#dcfce7'
+                                  : reconStatus === 'MISMATCH'
+                                  ? '#fecaca'
+                                  : reconStatus === 'RETRY_PENDING'
+                                  ? '#fef3c7'
+                                  : '#f1f5f9',
+                              color:
+                                reconStatus === 'MATCHED'
+                                  ? '#15803d'
+                                  : reconStatus === 'MISMATCH'
+                                  ? '#991b1b'
+                                  : reconStatus === 'RETRY_PENDING'
+                                  ? '#b45309'
+                                  : '#475569',
+                            }}
+                          >
+                            {reconStatus}
+                          </span>
                         </td>
                         <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            {(isPending || isUnderVerification) && (
+                            {(isPending || isUnderVerification || reconStatus === 'RETRY_PENDING' || reconStatus === 'MISMATCH') && (
                               <button
                                 onClick={() => handleCheckProviderStatus(p.id)}
                                 disabled={checkingPaymentId === p.id}
@@ -1734,7 +1833,7 @@ export function FinanceConsole() {
                                 }}
                               >
                                 <RefreshCw size={11} className={checkingPaymentId === p.id ? 'animate-spin' : ''} />
-                                {checkingPaymentId === p.id ? 'Checking...' : 'Check Provider'}
+                                {checkingPaymentId === p.id ? 'Reconciling...' : 'Reconcile'}
                               </button>
                             )}
                             <button
@@ -1751,7 +1850,7 @@ export function FinanceConsole() {
                                 gap: 4,
                               }}
                             >
-                              <Clock size={12} /> Timeline
+                              <Clock size={12} /> 3D Timeline
                             </button>
                             {p.receiptId && (
                               <button
@@ -1776,7 +1875,7 @@ export function FinanceConsole() {
                       </tr>
                     )
                   })
-                )}
+                })()}
               </tbody>
             </table>
           </div>
@@ -3285,17 +3384,44 @@ export function FinanceConsole() {
                           <div style={{ background: 'var(--surface-subtle)', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-color)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                               <span style={{ fontWeight: 600, fontSize: 12, color: isSuccess ? '#15803d' : isFail ? '#b91c1c' : 'var(--foreground)' }}>
-                                {evt.event}
+                                {evt.eventType || evt.event}
                               </span>
                               <span style={{ fontSize: 11, color: 'var(--foreground-muted)' }}>
-                                {evt.at ? new Date(evt.at).toLocaleString('en-IN') : '—'}
+                                {evt.timestamp ? new Date(evt.timestamp).toLocaleString('en-IN') : evt.at ? new Date(evt.at).toLocaleString('en-IN') : '—'}
                               </span>
                             </div>
+
+                            {/* 3D State Transitions */}
+                            {(evt.newProviderStatus || evt.newInternalStatus || evt.newReconciliationStatus) && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0', fontSize: 11 }}>
+                                {evt.newProviderStatus && (
+                                  <span style={{ padding: '2px 6px', borderRadius: 4, background: '#e0f2fe', color: '#0369a1', fontWeight: 600 }}>
+                                    Provider: {evt.previousProviderStatus || '—'} → {evt.newProviderStatus}
+                                  </span>
+                                )}
+                                {evt.newInternalStatus && (
+                                  <span style={{ padding: '2px 6px', borderRadius: 4, background: '#fef3c7', color: '#b45309', fontWeight: 600 }}>
+                                    PreOne: {evt.previousInternalStatus || '—'} → {evt.newInternalStatus}
+                                  </span>
+                                )}
+                                {evt.newReconciliationStatus && (
+                                  <span style={{ padding: '2px 6px', borderRadius: 4, background: '#f3e8ff', color: '#7e22ce', fontWeight: 600 }}>
+                                    Recon: {evt.previousReconciliationStatus || '—'} → {evt.newReconciliationStatus}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
                             {evt.orderId && <div style={{ fontSize: 11, color: 'var(--foreground-muted)' }}>Gateway Order: {evt.orderId}</div>}
                             {evt.gatewayPaymentId && <div style={{ fontSize: 11, color: 'var(--foreground-muted)' }}>Gateway Payment ID: {evt.gatewayPaymentId}</div>}
                             {evt.receiptNumber && <div style={{ fontSize: 11, color: '#0891b2', fontWeight: 600 }}>Receipt Issued: {evt.receiptNumber}</div>}
                             {evt.reason && <div style={{ fontSize: 11, color: '#dc2626' }}>Failure Reason: {evt.reason}</div>}
-                            {evt.by && <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Triggered by: {evt.by}</div>}
+                            {evt.diagnostics && <div style={{ fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>Note: {evt.diagnostics}</div>}
+                            {(evt.by || evt.source) && (
+                              <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
+                                Source: {evt.source || 'API'} {evt.by ? `• by ${evt.by}` : ''}
+                              </div>
+                            )}
                           </div>
                         </div>
                       )

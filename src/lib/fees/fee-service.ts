@@ -1013,6 +1013,9 @@ export class FeeService {
         at: new Date().toISOString(),
         by: ctx.actorName || ctx.actorId,
       })
+      notesData.providerStatus = 'FAILED'
+      notesData.internalPaymentStatus = 'FAILED'
+      notesData.reconciliationStatus = 'RESOLVED'
       notesData.timeline = timeline
       notesData.failureCode = failureCode || 'PAYMENT_FAILED'
       notesData.failureReason = failureReason || 'Gateway failure'
@@ -1088,6 +1091,10 @@ export class FeeService {
         receiptNumber,
         at: new Date().toISOString(),
       })
+      notesData.providerStatus = 'CAPTURED'
+      notesData.internalPaymentStatus = 'SUCCESS'
+      notesData.reconciliationStatus = 'MATCHED'
+      notesData.internalSettledAt = new Date().toISOString()
       notesData.timeline = timeline
       notesData.verifiedAt = new Date().toISOString()
       notesData.completedAt = new Date().toISOString()

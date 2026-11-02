@@ -212,6 +212,9 @@ async function _POST(req: NextRequest) {
         receivedById: session.uid,
         notes: JSON.stringify({
           provider: gwConfig.provider,
+          providerStatus: 'ORDER_CREATED',
+          internalPaymentStatus: 'INITIATED',
+          reconciliationStatus: 'NOT_STARTED',
           gatewayOrderId,
           checkoutMode,
           currency: 'INR',
