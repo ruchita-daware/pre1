@@ -109,10 +109,13 @@ export function StudentRosterCard({
       : null
 
   const preschoolAge = formatPreschoolAge(student.dob)
-  const attendanceRate = student.attendance?.rate ?? 100
+  const hasAttendanceRecords = (student.attendance?.totalTracked ?? 0) > 0
+  const attendanceRate = student.attendance?.rate ?? 0
   const isGoodAttendance = attendanceRate >= 85
   const isWarningAttendance = attendanceRate >= 70 && attendanceRate < 85
-  const attendanceDotBg = isGoodAttendance
+  const attendanceDotBg = !hasAttendanceRecords
+    ? 'bg-slate-400'
+    : isGoodAttendance
     ? 'bg-emerald-500'
     : isWarningAttendance
     ? 'bg-amber-500'
@@ -192,7 +195,7 @@ export function StudentRosterCard({
           {/* Mini Attendance Indicator Dot */}
           <div
             className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-xs border border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1 shadow-2xs"
-            title={`30-day attendance: ${attendanceRate}%`}
+            title={hasAttendanceRecords ? `30-day attendance: ${attendanceRate}%` : 'No attendance recorded yet (0%)'}
           >
             <span className={`w-2 h-2 rounded-full ${attendanceDotBg}`} />
             <span className="font-mono text-[10px] font-bold text-slate-700 dark:text-slate-300">

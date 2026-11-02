@@ -87,6 +87,8 @@ async function _PATCH(
       photoUrl,
       seatNumber,
       generateSeatNumber,
+      classroomId,
+      teacherId,
     } = body
 
     const updated = await StudentService.updateStudent(
@@ -112,6 +114,8 @@ async function _PATCH(
         photoUrl,
         seatNumber,
         generateSeatNumber,
+      classroomId,
+      teacherId,
       }
     )
 

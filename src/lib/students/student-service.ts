@@ -302,7 +302,7 @@ export class StudentService {
     const formatted = students.map((s) => {
       const totalDays = s.attendances.length
       const presentDays = s.attendances.filter((a) => ['PRESENT', 'LATE', 'HALF_DAY'].includes(a.status)).length
-      const attendancePct = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 100
+      const attendancePct = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0
 
       const totalBilledCents = s.invoices.reduce((acc, i) => acc + (i.totalCents || 0), 0)
       const totalPaidCents = s.invoices.reduce((acc, i) => acc + (i.paidCents || 0), 0)
@@ -584,7 +584,7 @@ export class StudentService {
       absent: student.attendances.filter((a) => a.status === 'ABSENT').length,
       late: student.attendances.filter((a) => a.status === 'LATE').length,
       totalTracked: totalDays,
-      percentage: totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 100,
+      percentage: totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0,
       recent: student.attendances.slice(0, 15).map((a) => ({
         id: a.id,
         date: a.date,
@@ -1650,6 +1650,8 @@ export class StudentService {
       photoUrl?: string
       seatNumber?: string
       generateSeatNumber?: boolean
+      classroomId?: string | null
+      teacherId?: string | null
     }
   ) {
     const scope = await this.verifyScope(ctx.tenantId, ctx.branchId, ctx.academicSessionId)
@@ -1759,6 +1761,158 @@ export class StudentService {
       },
     })
 
+    // Classroom reallocation or assignment
+    let targetClassroomId = student.currentClassroomId
+    if (input.classroomId !== undefined) {
+      const cleanClassId = input.classroomId?.trim() || null
+      if (cleanClassId !== student.currentClassroomId) {
+        if (!cleanClassId) {
+          if (student.currentClassroomId) {
+            await db.studentAllocation.updateMany({
+              where: { studentId: student.id, status: 'ACTIVE' },
+              data: {
+                status: 'TRANSFERRED',
+                endedAt: new Date(),
+                reason: 'Class Unassigned via Profile Edit',
+              },
+            })
+            await db.student.update({
+              where: { id: student.id },
+              data: { currentClassroomId: null, seatNumber: null },
+            })
+            targetClassroomId = null
+          }
+        } else {
+          const targetClass = await db.classroom.findFirst({
+            where: { id: cleanClassId, tenantId: scope.tenantId, isActive: true },
+          })
+          if (!targetClass) throw new Error('Target classroom not found or inactive')
+
+          const seats = await classroomSeats(targetClass.id)
+          if (seats.available <= 0) {
+            throw new Error(`Classroom "${targetClass.name}" is at full capacity (${seats.current}/${seats.capacity}). Reallocation blocked.`)
+          }
+
+          const now = new Date()
+          if (student.currentClassroomId) {
+            await db.studentAllocation.updateMany({
+              where: { studentId: student.id, status: 'ACTIVE' },
+              data: {
+                status: 'TRANSFERRED',
+                endedAt: now,
+                reason: 'Classroom Changed via Profile Edit',
+              },
+            })
+          }
+
+          await db.studentAllocation.create({
+            data: {
+              tenantId: scope.tenantId,
+              studentId: student.id,
+              academicSessionId: targetClass.academicSessionId || scope.academicSessionId,
+              classroomId: targetClass.id,
+              programType: targetClass.programType,
+              status: 'ACTIVE',
+              startedAt: now,
+              reason: 'Assigned via Profile Edit',
+              createdById: ctx.actorId,
+              createdByName: ctx.actorName,
+            },
+          })
+
+          const autoSeat = normalizedSeatNumber || (await this.generateSeatNumber(scope.tenantId, targetClass.id))
+          await db.student.update({
+            where: { id: student.id },
+            data: {
+              currentClassroomId: targetClass.id,
+              seatNumber: autoSeat,
+            },
+          })
+          targetClassroomId = targetClass.id
+
+          await db.timelineEntry.create({
+            data: {
+              tenantId: scope.tenantId,
+              studentId: student.id,
+              classroomId: targetClass.id,
+              academicSessionId: scope.academicSessionId,
+              type: 'NOTE',
+              title: 'Classroom Assigned',
+              body: `Assigned to classroom ${targetClass.name} (${targetClass.code}).`,
+              authorId: ctx.actorId,
+            },
+          })
+        }
+      }
+    }
+
+    // Teacher / Educator assignment
+    if (input.teacherId !== undefined) {
+      const cleanTeacherId = input.teacherId?.trim() || null
+      if (targetClassroomId) {
+        if (cleanTeacherId) {
+          const teacher = await db.user.findFirst({
+            where: {
+              id: cleanTeacherId,
+              memberships: { some: { tenantId: scope.tenantId } },
+              status: 'ACTIVE',
+            },
+            select: { id: true, fullName: true },
+          })
+          if (!teacher) throw new Error('Selected educator not found or inactive')
+
+          await db.classroom.update({
+            where: { id: targetClassroomId },
+            data: { primaryTeacherId: teacher.id },
+          })
+
+          await audit({
+            tenantId: scope.tenantId,
+            actorId: ctx.actorId,
+            actorName: ctx.actorName,
+            actorRole: ctx.actorRole,
+            action: 'ASSIGN_TEACHER',
+            entity: 'Classroom',
+            entityId: targetClassroomId,
+            summary: `Assigned educator ${teacher.fullName} to classroom`,
+          })
+        } else {
+          await db.classroom.update({
+            where: { id: targetClassroomId },
+            data: { primaryTeacherId: null },
+          })
+        }
+      } else if (cleanTeacherId) {
+        const teacherClass = await db.classroom.findFirst({
+          where: { tenantId: scope.tenantId, primaryTeacherId: cleanTeacherId, isActive: true },
+        })
+        if (teacherClass) {
+          await db.studentAllocation.create({
+            data: {
+              tenantId: scope.tenantId,
+              studentId: student.id,
+              academicSessionId: teacherClass.academicSessionId || scope.academicSessionId,
+              classroomId: teacherClass.id,
+              programType: teacherClass.programType,
+              status: 'ACTIVE',
+              startedAt: new Date(),
+              reason: 'Assigned via Teacher Selection',
+              createdById: ctx.actorId,
+              createdByName: ctx.actorName,
+            },
+          })
+          const autoSeat = normalizedSeatNumber || (await this.generateSeatNumber(scope.tenantId, teacherClass.id))
+          await db.student.update({
+            where: { id: student.id },
+            data: { currentClassroomId: teacherClass.id, seatNumber: autoSeat },
+          })
+          targetClassroomId = teacherClass.id
+        } else {
+          throw new Error('Please select a classroom first to assign this teacher to the student')
+        }
+      }
+    }
+
     await audit({
       tenantId: scope.tenantId,
       actorId: ctx.actorId,
@@ -1770,7 +1924,11 @@ export class StudentService {
       summary: `Updated student record for ${updated.firstName} ${updated.lastName || ''}`,
     })
 
-    return updated
+    const finalStudent = await db.student.findUnique({
+      where: { id: student.id },
+      include: { currentClassroom: { include: { primaryTeacher: true } } },
+    })
+    return finalStudent || updated
   }
 
   // =========================================================================
@@ -2770,7 +2928,7 @@ export class StudentService {
     })
 
     const presentCount = recentAttendances.filter((a) => ['PRESENT', 'LATE', 'HALF_DAY'].includes(a.status)).length
-    const attendanceRate = recentAttendances.length > 0 ? Math.round((presentCount / recentAttendances.length) * 100) : 95
+    const attendanceRate = recentAttendances.length > 0 ? Math.round((presentCount / recentAttendances.length) * 100) : 0
 
     return {
       totalStudents: total,

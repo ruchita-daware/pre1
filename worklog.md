@@ -213,3 +213,20 @@ Work Log:
 Stage Summary:
 - New brand logo deployed across the entire application (header, taskbar start menu, login cards, platform onboarding console, favicons, and documentation assets)
 
+
+---
+Task ID: 12
+Agent: main (Antigravity)
+Task: Environment initialization, Windows PostgreSQL migration, database sync, and dev server launch
+
+Work Log:
+- Resolved root directory discrepancy: added root `package.json` proxying dev/build scripts to `pre1`
+- Resolved dependencies: installed 837 packages cleanly and generated Prisma Client
+- Configured local environment `.env` for PostgreSQL database and JWT authentication
+- Embedded PostgreSQL on Windows: initialized clean Windows data cluster (`db/pgdata_win`), applied schema migrations via `prisma db push`, and bootstrapped canonical PREONE tenant + administrator (`admin@preone.com` / `Preone@2311`)
+- Updated `pre1/package.json` `dev` script to automatically ensure PostgreSQL is running before launching Next.js dev server
+- Started Next.js development server on port 3000; all 10 project tasks verified complete
+
+Stage Summary:
+- PostgreSQL 18.4 + Next.js 16.3.4 running live on http://localhost:3000
+- All tasks in `.agent-tasks.json` marked as done (10/10)

@@ -11,7 +11,7 @@ import {
   AlertTriangle, Upload, UserPlus, ArrowRightLeft, GraduationCap,
   ExternalLink, Check, X, AlertCircle, RefreshCw, ArrowLeft,
   Calendar, CheckCircle, Clock, Eye, Lock, Download,
-  Briefcase, Package, Send, CheckCheck, Printer, Copy
+  Briefcase, Package, Send, CheckCheck, Printer, Copy, RotateCw, Award
 } from 'lucide-react'
 import { Avatar, StatusBadge, Segmented, EmptyState, Breadcrumbs } from '@/components/preone'
 import { Modal } from '@/components/preone/Modal'
@@ -98,7 +98,8 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
   const [busy, setBusy] = useState(false)
 
   // Master options
-  const [classrooms, setClassrooms] = useState<{ id: string; name: string; capacity: number; programType: string; branchId?: string }[]>([])
+  const [classrooms, setClassrooms] = useState<{ id: string; name: string; capacity: number; programType: string; branchId?: string; primaryTeacherId?: string | null; teacher?: string | null }[]>([])
+  const [teachers, setTeachers] = useState<{ id: string; fullName: string; email?: string }[]>([])
   const [branches, setBranches] = useState<{ id: string; name: string; code?: string }[]>([])
   const [sessions, setSessions] = useState<{ id: string; name: string }[]>([])
   const [history, setHistory] = useState<any[]>(academic?.allocations || [])
@@ -156,6 +157,8 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
     photoUrl: student?.photoUrl || '',
     seatNumber: student?.seatNumber || '',
     generateSeatNumber: false,
+    classroomId: academic?.classroom?.id || student?.currentClassroomId || '',
+    teacherId: academic?.classroom?.primaryTeacher?.id || '',
   })
 
   // Synchronize editForm whenever student prop updates or modal opens (Fix STU-EDIT-003)
@@ -175,9 +178,11 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
         photoUrl: student.photoUrl || '',
         seatNumber: student.seatNumber || '',
         generateSeatNumber: false,
+    classroomId: academic?.classroom?.id || student?.currentClassroomId || '',
+    teacherId: academic?.classroom?.primaryTeacher?.id || '',
       })
     }
-  }, [student, editStudentOpen])
+  }, [student, academic, editStudentOpen])
 
   // Report Card State
   const [reportCards, setReportCards] = useState<any[]>(profile.reportCards || [])
@@ -191,7 +196,7 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
     templateId: '',
     overallGrade: 'A',
     remarks: '',
-    attendancePct: '95',
+    attendancePct: '0',
     status: 'DRAFT',
     domainMotor: 'Meeting Expectations',
     domainLanguage: 'Meeting Expectations',
@@ -376,11 +381,40 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
       fetch('/api/v1/classrooms?pageSize=100').then((r) => r.json()),
       fetch('/api/v1/branches').then((r) => r.json()),
       fetch('/api/v1/academic-years').then((r) => r.json()),
+      fetch('/api/v1/users?role=TEACHER&pageSize=100').then((r) => r.json()).catch(() => ({ data: [] })),
+      fetch('/api/v1/staff').then((r) => r.json()).catch(() => ({ data: [] })),
     ])
-      .then(([cJson, bJson, sJson]) => {
+      .then(([cJson, bJson, sJson, uJson, staffJson]: any[]) => {
         if (cJson.success && Array.isArray(cJson.data)) setClassrooms(cJson.data)
         if (bJson.success && Array.isArray(bJson.data)) setBranches(bJson.data)
         if (sJson.success && Array.isArray(sJson.data)) setSessions(sJson.data)
+
+        const teacherMap = new Map<string, { id: string; fullName: string; email?: string }>()
+        if (uJson?.success && Array.isArray(uJson.data)) {
+          uJson.data.forEach((u: any) => {
+            if (u.id) teacherMap.set(u.id, { id: u.id, fullName: u.fullName || u.name, email: u.email })
+          })
+        }
+        if (staffJson?.success && Array.isArray(staffJson.data)) {
+          staffJson.data.forEach((s: any) => {
+            const uid = s.userId || s.id
+            if (uid && !teacherMap.has(uid)) {
+              teacherMap.set(uid, { id: uid, fullName: s.name || s.fullName, email: s.email })
+            }
+          })
+        }
+        if (cJson?.success && Array.isArray(cJson.data)) {
+          cJson.data.forEach((c: any) => {
+            if (c.primaryTeacherId && c.teacher) {
+              teacherMap.set(c.primaryTeacherId, { id: c.primaryTeacherId, fullName: c.teacher })
+            }
+          })
+        }
+        if (academic?.classroom?.primaryTeacher?.id) {
+          const pt = academic.classroom.primaryTeacher
+          teacherMap.set(pt.id, { id: pt.id, fullName: pt.fullName, email: pt.email })
+        }
+        setTeachers(Array.from(teacherMap.values()))
       })
       .catch(() => {})
     loadHistory()
@@ -1104,17 +1138,49 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
 
               {/* Program, Classroom & Educator Pill Row */}
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 text-xs">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold border border-slate-200/60 dark:border-slate-700">
-                  <School size={13} className="text-purple-600 dark:text-purple-400" />
-                  <span>{academic?.classroom ? `${academic.classroom.name} (${enumLabel(academic.classroom.programType)})` : 'Unassigned Class'}</span>
-                </span>
+                {canEdit ? (
+                  <button
+                    type="button"
+                    onClick={() => setEditStudentOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold border border-slate-200/60 dark:border-slate-700 hover:border-purple-400 dark:hover:border-purple-600 transition-colors cursor-pointer group"
+                    title="Click to assign or change classroom and teacher"
+                  >
+                    <School size={13} className="text-purple-600 dark:text-purple-400" />
+                    <span>{academic?.classroom ? `${academic.classroom.name} (${enumLabel(academic.classroom.programType)})` : '+ Assign Classroom'}</span>
+                    <Edit3 size={11} className="text-slate-400 opacity-60 group-hover:opacity-100" />
+                  </button>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold border border-slate-200/60 dark:border-slate-700">
+                    <School size={13} className="text-purple-600 dark:text-purple-400" />
+                    <span>{academic?.classroom ? `${academic.classroom.name} (${enumLabel(academic.classroom.programType)})` : 'Unassigned Class'}</span>
+                  </span>
+                )}
 
-                {academic?.classroom?.primaryTeacher && (
+                {canEdit ? (
+                  <button
+                    type="button"
+                    onClick={() => setEditStudentOpen(true)}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-semibold border transition-colors cursor-pointer group ${
+                      academic?.classroom?.primaryTeacher
+                        ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200/60 dark:border-slate-700 hover:border-emerald-400'
+                        : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/80 dark:border-amber-800/60 hover:border-amber-400'
+                    }`}
+                    title="Click to assign or change educator / teacher"
+                  >
+                    <UserCheck size={13} className={academic?.classroom?.primaryTeacher ? 'text-emerald-500' : 'text-amber-500'} />
+                    <span>
+                      {academic?.classroom?.primaryTeacher
+                        ? `Educator: ${academic.classroom.primaryTeacher.fullName}`
+                        : '+ Assign Teacher'}
+                    </span>
+                    <Edit3 size={11} className="text-slate-400 opacity-60 group-hover:opacity-100" />
+                  </button>
+                ) : academic?.classroom?.primaryTeacher ? (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700">
                     <UserCheck size={13} className="text-emerald-500" />
                     <span>Educator: {academic.classroom.primaryTeacher.fullName}</span>
                   </span>
-                )}
+                ) : null}
 
                 {/* ── NEXT YEAR PROMOTION STATUS PILL ── */}
                 {nextSessionAllocation ? (
@@ -1211,7 +1277,9 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
                 type="button"
                 onClick={() => handleTabChange('attendance')}
                 className={`p-3 rounded-xl border text-center transition-all hover:scale-[1.02] cursor-pointer group min-w-[95px] ${
-                  attendanceRate >= 80
+                  (attendance?.totalTracked ?? 0) === 0
+                    ? 'bg-slate-50/70 hover:bg-slate-100/70 border-slate-200/80 dark:bg-slate-800/40 dark:border-slate-700/60'
+                    : attendanceRate >= 80
                     ? 'bg-emerald-50/70 hover:bg-emerald-100/70 border-emerald-200/80 dark:bg-emerald-950/30 dark:border-emerald-800/40'
                     : 'bg-amber-50/70 hover:bg-amber-100/70 border-amber-200/80 dark:bg-amber-950/30 dark:border-amber-800/40'
                 }`}
@@ -1220,13 +1288,27 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
                 <div className="flex items-center justify-center gap-1 mb-1">
                   <CheckCircle2
                     size={13}
-                    className={attendanceRate >= 80 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}
+                    className={
+                      (attendance?.totalTracked ?? 0) === 0
+                        ? 'text-slate-400 dark:text-slate-500'
+                        : attendanceRate >= 80
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-amber-600 dark:text-amber-400'
+                    }
                   />
                   <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 dark:text-slate-400">
                     Attendance
                   </span>
                 </div>
-                <div className={`text-lg font-extrabold ${attendanceRate >= 80 ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                <div
+                  className={`text-lg font-extrabold ${
+                    (attendance?.totalTracked ?? 0) === 0
+                      ? 'text-slate-700 dark:text-slate-300'
+                      : attendanceRate >= 80
+                      ? 'text-emerald-700 dark:text-emerald-300'
+                      : 'text-amber-700 dark:text-amber-300'
+                  }`}
+                >
                   {attendanceRate}%
                 </div>
               </button>
@@ -2256,6 +2338,16 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
                   <Shuffle size={13} />
                   <span>Reallocate Class</span>
                 </button>
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => setEditStudentOpen(true)}
+                    className="px-3 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50/50 hover:bg-purple-100 dark:bg-purple-950/40 text-xs font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-1.5"
+                  >
+                    <UserCheck size={13} />
+                    <span>Assign / Change Educator</span>
+                  </button>
+                )}
                 <button
                   onClick={() => setTransferOpen(true)}
                   className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5"
@@ -2279,7 +2371,19 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
               <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
-                <div className="text-[11px] uppercase font-bold text-slate-400">Classroom Section</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] uppercase font-bold text-slate-400">Classroom Section</span>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setEditStudentOpen(true)}
+                      className="text-[11px] font-semibold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Edit3 size={11} />
+                      <span>Edit</span>
+                    </button>
+                  )}
+                </div>
                 <div className="text-base font-bold text-slate-900 dark:text-white mt-1">
                   {academic?.classroom?.name || 'Unassigned'}
                 </div>
@@ -2289,7 +2393,19 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
               </div>
 
               <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
-                <div className="text-[11px] uppercase font-bold text-slate-400">Assigned Educator</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] uppercase font-bold text-slate-400">Assigned Educator</span>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setEditStudentOpen(true)}
+                      className="text-[11px] font-semibold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Edit3 size={11} />
+                      <span>Edit</span>
+                    </button>
+                  )}
+                </div>
                 <div className="text-base font-bold text-slate-900 dark:text-white mt-1">
                   {academic?.classroom?.primaryTeacher?.fullName || 'Not assigned'}
                 </div>
@@ -2403,7 +2519,7 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
                       status: 'DRAFT',
                       overallGrade: 'A',
                       remarks: '',
-                      attendancePct: '95',
+                      attendancePct: String(attendanceRate),
                       domainMotor: 'Meeting Expectations',
                       domainLanguage: 'Meeting Expectations',
                       domainSocial: 'Meeting Expectations',
@@ -2656,7 +2772,7 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
                       status: 'DRAFT',
                       overallGrade: 'A',
                       remarks: '',
-                      attendancePct: '95',
+                      attendancePct: String(attendanceRate),
                       domainMotor: 'Meeting Expectations',
                       domainLanguage: 'Meeting Expectations',
                       domainSocial: 'Meeting Expectations',
@@ -3678,6 +3794,79 @@ export function StudentDetailClient({ profile, currentUserRole, currentUserRoles
                 onChange={(e) => setEditForm((p) => ({ ...p, seatNumber: e.target.value, generateSeatNumber: false }))}
                 placeholder="e.g. NUR-A-001"
               />
+            </div>
+          </div>
+
+          {/* ── Classroom & Teacher Assignment Section ── */}
+          <div className="p-4 rounded-xl bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200/80 dark:border-purple-800/50 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-purple-900 dark:text-purple-300">
+                <School size={15} className="text-purple-600 dark:text-purple-400" />
+                <span>Classroom &amp; Teacher Assignment</span>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300">
+                Academic Placement
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Classroom Section Field */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>Assigned Classroom</span>
+                  {editForm.classroomId && (
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold">
+                      {classrooms.find((c: any) => c.id === editForm.classroomId)?.programType ? enumLabel(classrooms.find((c: any) => c.id === editForm.classroomId)?.programType) : ''}
+                    </span>
+                  )}
+                </label>
+                <select
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                  value={editForm.classroomId}
+                  onChange={(e) => {
+                    const newClassId = e.target.value
+                    const selectedCls = classrooms.find((c: any) => c.id === newClassId)
+                    setEditForm((p) => ({
+                      ...p,
+                      classroomId: newClassId,
+                      teacherId: selectedCls?.primaryTeacherId || p.teacherId || '',
+                    }))
+                  }}
+                >
+                  <option value="">- Unassigned Class -</option>
+                  {classrooms.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({enumLabel(c.programType)}) {c.teacher ? `· Educator: ${c.teacher}` : '· No Educator'}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Select the classroom section to include the child in class rosters &amp; diaries.
+                </p>
+              </div>
+
+              {/* Assigned Educator / Teacher Field */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>Assigned Teacher / Educator</span>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">In-Charge</span>
+                </label>
+                <select
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                  value={editForm.teacherId}
+                  onChange={(e) => setEditForm((p) => ({ ...p, teacherId: e.target.value }))}
+                >
+                  <option value="">- No Teacher Assigned -</option>
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.fullName} {t.email ? `(${t.email})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Assign or change the primary teacher responsible for this child.
+                </p>
+              </div>
             </div>
           </div>
 

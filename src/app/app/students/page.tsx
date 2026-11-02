@@ -596,12 +596,13 @@ export default function StudentsPage() {
       key: 'attendance',
       header: t('students.attendance'),
       sortable: true,
-      sortValue: (s) => s.attendance?.rate ?? 100,
+      sortValue: (s) => s.attendance?.rate ?? 0,
       render: (s) => {
-        const rate = s.attendance?.rate ?? 100
+        const rate = s.attendance?.rate ?? 0
+        const hasRecords = (s.attendance?.totalTracked ?? 0) > 0
         const isGood = rate >= 85
         const isWarning = rate >= 70 && rate < 85
-        const dotBg = isGood ? 'bg-emerald-500' : isWarning ? 'bg-amber-500' : 'bg-rose-500'
+        const dotBg = !hasRecords ? 'bg-slate-400' : isGood ? 'bg-emerald-500' : isWarning ? 'bg-amber-500' : 'bg-rose-500'
         return (
           <div className="flex flex-col gap-1 w-20">
             <div className="flex items-center gap-1.5">
@@ -1164,7 +1165,8 @@ export default function StudentsPage() {
                       </div>
                     )
                   }
-                  const rate = s.attendance?.rate ?? 100
+                  const rate = s.attendance?.rate ?? 0
+        const hasRecords = (s.attendance?.totalTracked ?? 0) > 0
                   return (
                     <div className="space-y-5">
                       {/* Top Header Card */}
@@ -1218,7 +1220,7 @@ export default function StudentsPage() {
                             <span className="font-bold text-lg text-slate-900 dark:text-white font-mono">
                               {rate}%
                             </span>
-                            <span className={`w-2 h-2 rounded-full ${rate >= 85 ? 'bg-emerald-500' : rate >= 70 ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                            <span className={`w-2 h-2 rounded-full ${!hasRecords ? 'bg-slate-400' : rate >= 85 ? 'bg-emerald-500' : rate >= 70 ? 'bg-amber-500' : 'bg-rose-500'}`} />
                           </div>
                           <div className="w-full bg-slate-100 dark:bg-slate-700 h-1.5 rounded-full mt-1.5 overflow-hidden">
                             <div className="bg-purple-600 h-full rounded-full" style={{ width: `${rate}%` }} />
@@ -1393,7 +1395,8 @@ export default function StudentsPage() {
                 </div>
               ) : rows && rows.length > 0 ? (
                 rows.map((s) => {
-                  const rate = s.attendance?.rate ?? 100
+                  const rate = s.attendance?.rate ?? 0
+        const hasRecords = (s.attendance?.totalTracked ?? 0) > 0
                   return (
                     <div
                       key={s.id}
@@ -1475,7 +1478,7 @@ export default function StudentsPage() {
                         <div>
                           <div className="text-[10px] uppercase font-bold text-slate-400">Attendance</div>
                           <div className="font-bold text-slate-900 dark:text-white mt-0.5 flex items-center gap-1.5">
-                            <span className={`w-2 h-2 rounded-full ${rate >= 85 ? 'bg-emerald-500' : rate >= 70 ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                            <span className={`w-2 h-2 rounded-full ${!hasRecords ? 'bg-slate-400' : rate >= 85 ? 'bg-emerald-500' : rate >= 70 ? 'bg-amber-500' : 'bg-rose-500'}`} />
                             <span>{rate}%</span>
                           </div>
                         </div>

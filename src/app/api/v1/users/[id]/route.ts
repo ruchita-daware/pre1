@@ -697,14 +697,14 @@ async function _PATCH(req: NextRequest, { params }: { params: Promise<{ id: stri
     let lifecycleStatusToApply: UserStatus | undefined
     if (status !== undefined) {
       const upperStatus = String(status).toUpperCase() as UserStatus
-      if (!['ACTIVE', 'SUSPENDED', 'LOCKED', 'DEACTIVATED', 'ARCHIVED'].includes(upperStatus)) {
-        return bad(
-          `Invalid status: ${status}. Allowed: ACTIVE, SUSPENDED, LOCKED, DEACTIVATED, ARCHIVED`,
-          'INVALID_STATUS'
-        )
-      }
-
       if (upperStatus !== member.status) {
+        if (!['ACTIVE', 'SUSPENDED', 'LOCKED', 'DEACTIVATED', 'ARCHIVED', 'PENDING', 'INACTIVE'].includes(upperStatus)) {
+          return bad(
+            `Invalid status: ${status}. Allowed: ACTIVE, SUSPENDED, LOCKED, DEACTIVATED, ARCHIVED, PENDING`,
+            'INVALID_STATUS'
+          )
+        }
+
         const validation = UserLifecycleService.validateTransition(
           member.status as string,
           upperStatus,
@@ -1141,6 +1141,7 @@ async function _PATCH(req: NextRequest, { params }: { params: Promise<{ id: stri
               ...(fullName !== undefined ? { fullName: fullName.trim() } : {}),
               ...(phone !== undefined ? { phone: phone ? phone.trim() : existingGuardian.phone } : {}),
               ...(cleanEmail !== undefined ? { email: cleanEmail } : {}),
+              ...(avatarUrl !== undefined ? { photoUrl: avatarUrl ? avatarUrl.trim() : null } : {}),
               ...(mappedRel ? { relationship: mappedRel } : {}),
               ...(occupation !== undefined ? { occupation: occupation ? occupation.trim() : null } : {}),
               ...(isPrimaryContact !== undefined ? { isPrimaryContact: Boolean(isPrimaryContact) } : {}),

@@ -25,11 +25,12 @@ async function _GET(req: NextRequest) {
     }
 
     const authorizedBranches = await getAuthorizedBranchIds(session)
-    if (authorizedBranches !== 'ALL' && authorizedBranches.length === 0) {
+    const isInstitutionWide = authorizedBranches === null || (authorizedBranches as any) === 'ALL'
+    if (!isInstitutionWide && authorizedBranches.length === 0) {
       return ok([])
     }
 
-    const branchToUse = requestedBranchId || (authorizedBranches === 'ALL' ? undefined : session.branchId)
+    const branchToUse = requestedBranchId || (isInstitutionWide ? undefined : session.branchId)
 
     const context = {
       tenantId: session.tenantId,

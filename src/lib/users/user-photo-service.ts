@@ -82,6 +82,10 @@ export class UserPhotoService {
       where: { id: params.userId },
       data: { avatarUrl, updatedAt: new Date() },
     })
+    await db.guardian.updateMany({
+      where: { userId: params.userId, tenantId: params.tenantId },
+      data: { photoUrl: avatarUrl, updatedAt: new Date() },
+    })
 
     // 5. Audit event
     await recordAudit({
@@ -130,6 +134,10 @@ export class UserPhotoService {
     await db.user.update({
       where: { id: params.userId },
       data: { avatarUrl: null, updatedAt: new Date() },
+    })
+    await db.guardian.updateMany({
+      where: { userId: params.userId, tenantId: params.tenantId },
+      data: { photoUrl: null, updatedAt: new Date() },
     })
 
     await recordAudit({

@@ -62,6 +62,7 @@ async function main() {
   }
 
   const hash = await bcrypt.hash(PASSWORD, 10)
+  const fy = new Date().getFullYear()
   const preoneAdminPassword = process.env.PREONE_ADMIN_PASSWORD || 'Preone@2311'
   const hashPreoneAdmin = await bcrypt.hash(preoneAdminPassword, 10)
 

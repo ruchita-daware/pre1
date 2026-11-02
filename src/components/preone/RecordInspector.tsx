@@ -787,14 +787,16 @@ function StudentInspectorContent({
           {attendanceRate !== null && (
             <span
               className={`badge font-bold ${
-                attendanceRate >= 85
+                totalTracked === 0
+                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                  : attendanceRate >= 85
                   ? 'b-success'
                   : attendanceRate >= 70
                   ? 'b-warning'
                   : 'b-danger'
               }`}
             >
-              {attendanceRate}% Present
+              {totalTracked === 0 ? '0% (No Records)' : `${attendanceRate}% Present`}
             </span>
           )}
         </div>

@@ -181,7 +181,7 @@ export function BulkReportCardModal({
         initialMap[s.id] = {
           overallGrade: existing?.overallGrade || 'A',
           remarks: existing?.remarks || '',
-          attendancePct: existing?.attendancePct ? String(existing.attendancePct) : '95',
+          attendancePct: existing?.attendancePct != null ? String(existing.attendancePct) : s.attendance?.rate != null ? String(s.attendance.rate) : '0',
           customFields: customMap,
         }
       })

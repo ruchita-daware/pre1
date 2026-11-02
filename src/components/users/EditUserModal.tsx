@@ -316,6 +316,7 @@ export function EditUserModal({
         email: email.trim().toLowerCase() || null,
         phone: phone.trim() || null,
         username: username.trim() || null,
+        avatarUrl: avatarUrl || null,
         locale: locale ? normalizeLocale(locale) : DEFAULT_LOCALE,
         role,
         primaryRole: role,
@@ -353,7 +354,12 @@ export function EditUserModal({
 
       const json = await res.json()
       if (!res.ok) {
-        throw new Error(json.error || json.message || 'Failed to update user profile')
+        const errorMsg =
+          json.error?.message ||
+          (typeof json.error === 'string' ? json.error : null) ||
+          json.message ||
+          'Failed to update user profile'
+        throw new Error(errorMsg)
       }
 
       toast.success('User Profile Updated', `Successfully updated profile for ${fullName}.`)

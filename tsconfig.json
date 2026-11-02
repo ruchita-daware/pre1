@@ -42,6 +42,12 @@
     ".next",
     ".git",
     "examples",
-    "tests"
+    "tests",
+    "scripts",
+    "mini-services",
+    "scratch",
+    "docs",
+    "tool-results",
+    ".zscripts"
   ]
 }
