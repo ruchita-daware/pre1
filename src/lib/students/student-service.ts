@@ -180,6 +180,21 @@ export class StudentService {
       }
     }
 
+    const isDriverOrAttendant = effectiveRoles.some((r) => ['DRIVER', 'ATTENDANT'].includes(r)) && !effectiveRoles.some((r) => ['OWNER', 'PRINCIPAL', 'SUPER_ADMIN', 'PLATFORM_ADMIN', 'TEACHER', 'COORDINATOR'].includes(r))
+    if (isDriverOrAttendant && ctx.actorId) {
+      where.transportAssignments = {
+        some: {
+          status: 'ACTIVE',
+          route: {
+            OR: [
+              { driverProfile: { userId: ctx.actorId } },
+              { attendantProfile: { userId: ctx.actorId } },
+            ],
+          },
+        },
+      }
+    }
+
     if (filters.programType) {
       where.currentClassroom = { programType: filters.programType }
     }
@@ -414,6 +429,12 @@ export class StudentService {
   static async getStudentProfile(ctx: ScopeContext, studentId: string) {
     const scope = await this.verifyScope(ctx.tenantId, ctx.branchId, ctx.academicSessionId)
 
+    const effectiveRoles = (ctx.actorRoles && ctx.actorRoles.length > 0 ? ctx.actorRoles : [ctx.actorRole]).filter(Boolean) as string[]
+    const isDriverOrAttendant = effectiveRoles.some((r) => ['DRIVER', 'ATTENDANT'].includes(r)) && !effectiveRoles.some((r) => ['OWNER', 'PRINCIPAL', 'SUPER_ADMIN', 'PLATFORM_ADMIN', 'TEACHER', 'COORDINATOR'].includes(r))
+    if (isDriverOrAttendant) {
+      throw new Error('Unauthorized: Driver access is restricted to assigned transit routes and passenger manifests')
+    }
+
     const student = await db.student.findFirst({
       where: { id: studentId, tenantId: scope.tenantId, deletedAt: null },
       include: {
@@ -498,7 +519,6 @@ export class StudentService {
     }
 
     // Teacher permission check: Only allowed to view students in assigned classrooms
-    const effectiveRoles = (ctx.actorRoles && ctx.actorRoles.length > 0 ? ctx.actorRoles : [ctx.actorRole]).filter(Boolean) as string[]
     const isTeacher = effectiveRoles.includes('TEACHER') && !effectiveRoles.some((r) => ['OWNER', 'PRINCIPAL', 'PLATFORM_ADMIN'].includes(r))
     if (isTeacher && ctx.actorId) {
       const isPrimary = student.currentClassroom?.primaryTeacher?.id === ctx.actorId

@@ -145,6 +145,8 @@ export function TransportClient({ session }: { session: SessionProps }) {
   const [startTripStep, setStartTripStep] = useState(1)
   const [startTripRouteId, setStartTripRouteId] = useState('')
   const [startTripType, setStartTripType] = useState<'MORNING' | 'EVENING'>('MORNING')
+  const [driverPassengerSearch, setDriverPassengerSearch] = useState('')
+  const [driverSubTab, setDriverSubTab] = useState<'passengers' | 'trips'>('passengers')
 
   const [addAuthStep, setAddAuthStep] = useState(1)
   const [addAuthStudentId, setAddAuthStudentId] = useState('')
@@ -436,11 +438,11 @@ export function TransportClient({ session }: { session: SessionProps }) {
       loadDashboard()
       loadTrips()
       loadRoutes()
+      loadVehicles()
+      loadAssignments()
     }
     if (isAdmin) {
-      loadVehicles()
       loadDrivers()
-      loadAssignments()
       loadIncidents()
       loadStaff()
       loadStudents()
@@ -2132,85 +2134,391 @@ export function TransportClient({ session }: { session: SessionProps }) {
       {/* ========================================================================= */}
       {/* TAB: DRIVER — HUB & BUS OPERATIONS */}
       {/* ========================================================================= */}
-      {tab === 'DRIVER' && (
-        <div style={{ marginTop: 16 }}>
-          <div className="card" style={{ marginBottom: 20, background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(59, 130, 246, 0.02) 100%)', border: '1px solid var(--primary)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                  Driver Operational Console
+      {tab === 'DRIVER' && (() => {
+        const myDriverRoute = routes.find((r: any) => r.driverProfile?.userId === session?.uid || r.driverProfileId === session?.uid) || routes[0]
+        const myDriverVehicle = vehicles.find((v: any) => v.id === myDriverRoute?.vehicleId) || myDriverRoute?.vehicle || vehicles[0]
+        const myRouteAssignments = assignments.filter((a: any) => !myDriverRoute || a.routeId === myDriverRoute.id)
+        const activeTrip = trips.find((t: any) => (!myDriverRoute || t.routeId === myDriverRoute.id) && t.status !== 'COMPLETED')
+        const filteredAssignments = myRouteAssignments.filter((a: any) => {
+          if (!driverPassengerSearch.trim()) return true
+          const q = driverPassengerSearch.toLowerCase()
+          const name = `${a.student?.firstName || ''} ${a.student?.lastName || ''}`.toLowerCase()
+          const pickup = (a.pickupStop?.name || '').toLowerCase()
+          const drop = (a.dropStop?.name || '').toLowerCase()
+          const guardian = (a.student?.guardians?.[0]?.guardian?.fullName || '').toLowerCase()
+          const phone = (a.student?.guardians?.[0]?.guardian?.phone || '').toLowerCase()
+          return name.includes(q) || pickup.includes(q) || drop.includes(q) || guardian.includes(q) || phone.includes(q)
+        })
+
+        return (
+          <div style={{ marginTop: 16 }}>
+            {/* Top Operational Summary Card */}
+            <div className="card" style={{ marginBottom: 20, background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(59, 130, 246, 0.02) 100%)', border: '1px solid var(--primary)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.08em', background: 'rgba(37, 99, 235, 0.12)', padding: '2px 8px', borderRadius: 6 }}>
+                      Driver Operational Console
+                    </span>
+                    {activeTrip ? (
+                      <span className="badge b-success font-bold text-xs flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        Trip Live ({enumLabel(activeTrip.type || 'PICKUP')})
+                      </span>
+                    ) : (
+                      <span className="badge font-bold text-xs text-slate-500 bg-slate-100 dark:bg-slate-800">
+                        Standby
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 20, fontWeight: 800, marginTop: 4 }}>
+                    Assigned Vehicle: {myDriverVehicle ? `${myDriverVehicle.registrationNumber || myDriverVehicle.name} (${myDriverVehicle.model || myDriverVehicle.type || 'Bus'})` : 'No Vehicle Assigned'}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
+                    Assigned Route: <b>{myDriverRoute ? `${myDriverRoute.name} (${myDriverRoute.code})` : 'No Route Assigned'}</b> · Driver: <b>{session?.name || 'Alex Driver'}</b> · <b>{myRouteAssignments.length}</b> Assigned Passengers
+                  </div>
                 </div>
-                <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>Assigned Vehicle: BUS-01 (Tata Starbus)</div>
-                <div style={{ fontSize: 13, color: 'var(--muted)' }}>Route: <b>Route 001 — Kothrud Express</b> (Driver: Suresh Patil)</div>
-              </div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button className="btn btn-primary" onClick={() => handleGenerateDriverQr(routes[0]?.id || 'r1', vehicles[0]?.id || 'v1')}>
-                  <QrCode size={15} /> Display Driver Transport QR
-                </button>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      loadRoutes()
+                      loadVehicles()
+                      loadAssignments()
+                      loadTrips()
+                    }}
+                    title="Refresh route and passenger manifest"
+                  >
+                    <RefreshCw size={14} /> Refresh Roster
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleGenerateDriverQr(myDriverRoute?.id || routes[0]?.id || 'r1', myDriverVehicle?.id || vehicles[0]?.id || 'v1')}
+                  >
+                    <QrCode size={15} /> Display Bus QR
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="card">
-            <div className="card-head">
-              <div>
-                <div className="card-title">Today's Route Roster & Bus Arrival Submission</div>
-                <div className="card-sub">Select arrived students and submit arrival to notify Class Teachers</div>
+            {/* Quick KPI Strip */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 20 }}>
+              <div className="card" style={{ padding: '14px 18px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>Assigned Students</div>
+                <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span>{myRouteAssignments.length}</span>
+                  <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500 }}>Passengers on Route</span>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 4 }}>Assigned by Parents & School</div>
+              </div>
+              <div className="card" style={{ padding: '14px 18px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>Route Stops</div>
+                <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span>{myDriverRoute?.stops?.length || 0}</span>
+                  <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500 }}>Scheduled Stops</span>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>Morning & Evening Sequence</div>
+              </div>
+              <div className="card" style={{ padding: '14px 18px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>Vehicle Capacity</div>
+                <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span>{myDriverVehicle?.capacity || 20}</span>
+                  <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500 }}>Total Seats</span>
+                </div>
+                <div style={{ fontSize: 11, color: (myDriverVehicle?.capacity || 20) >= myRouteAssignments.length ? 'var(--success)' : 'var(--danger)', marginTop: 4 }}>
+                  {Math.max(0, (myDriverVehicle?.capacity || 20) - myRouteAssignments.length)} Seats Available
+                </div>
               </div>
             </div>
 
-            {trips.length > 0 && trips[0]?.manifest ? (
-              <div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-                  {trips[0].manifest.map((m: any) => {
-                    const isChecked = driverArrivedStudents.includes(m.studentId)
-                    return (
-                      <div
-                        key={m.id}
-                        onClick={() => {
-                          setDriverArrivedStudents((prev) =>
-                            prev.includes(m.studentId) ? prev.filter((id) => id !== m.studentId) : [...prev, m.studentId]
-                          )
-                        }}
-                        style={{
-                          padding: '12px 16px',
-                          borderRadius: 8,
-                          background: isChecked ? 'rgba(34, 197, 94, 0.08)' : 'var(--c-surface-hover)',
-                          border: isChecked ? '1px solid var(--success)' : '1px solid var(--border)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <input type="checkbox" checked={isChecked} onChange={() => {}} style={{ width: 18, height: 18 }} />
+            {/* Sub-tab view toggle: Passengers vs Active Trip Check-in */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <button
+                type="button"
+                onClick={() => setDriverSubTab('passengers')}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  border: driverSubTab === 'passengers' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                  background: driverSubTab === 'passengers' ? 'rgba(37, 99, 235, 0.1)' : 'var(--c-surface)',
+                  color: driverSubTab === 'passengers' ? 'var(--primary)' : 'var(--c-text)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <Users size={15} />
+                <span>Assigned Route Students ({myRouteAssignments.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDriverSubTab('trips')}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  border: driverSubTab === 'trips' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                  background: driverSubTab === 'trips' ? 'rgba(37, 99, 235, 0.1)' : 'var(--c-surface)',
+                  color: driverSubTab === 'trips' ? 'var(--primary)' : 'var(--c-text)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <Bus size={15} />
+                <span>Today's Trip Run & Arrival</span>
+                {activeTrip && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />}
+              </button>
+            </div>
+
+            {/* TAB CONTENT 1: ASSIGNED PASSENGERS */}
+            {driverSubTab === 'passengers' && (
+              <div className="card">
+                <div className="card-head" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                  <div>
+                    <div className="card-title" style={{ fontSize: 16 }}>Assigned Route Students ({myRouteAssignments.length})</div>
+                    <div className="card-sub">
+                      Children officially assigned to your route by parents or school administrators with pickup/drop locations and emergency contacts.
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div className="input-group" style={{ minWidth: 260 }}>
+                      <input
+                        type="text"
+                        className="input"
+                        placeholder="Search student, stop, or guardian phone..."
+                        value={driverPassengerSearch}
+                        onChange={(e) => setDriverPassengerSearch(e.target.value)}
+                        style={{ paddingLeft: 12 }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {filteredAssignments.length === 0 ? (
+                  <EmptyState
+                    title={myRouteAssignments.length === 0 ? 'No students assigned yet' : 'No matching students'}
+                    message={myRouteAssignments.length === 0 ? 'When parents or school administrators allocate students to this route, their transit details will appear here.' : 'No students matched your search criteria.'}
+                    icon={<Users size={32} />}
+                  />
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+                    {filteredAssignments.map((a: any) => {
+                      const primaryGuardian = a.student?.guardians?.[0]?.guardian
+                      const guardianPhone = primaryGuardian?.phone || ''
+                      const guardianName = primaryGuardian?.fullName || 'Registered Guardian'
+                      const relationship = primaryGuardian?.relationship || 'Guardian'
+                      const tripTypeLabel = a.tripType === 'MORNING_ONLY' ? 'Morning Pickup Only' : a.tripType === 'EVENING_ONLY' ? 'Evening Drop Only' : 'Two-Way Daily Transit'
+
+                      return (
+                        <div
+                          key={a.id}
+                          className="card"
+                          style={{
+                            padding: 16,
+                            border: '1px solid var(--border)',
+                            borderRadius: 12,
+                            background: 'var(--c-surface)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            gap: 12,
+                          }}
+                        >
                           <div>
-                            <div style={{ fontSize: 15, fontWeight: 700 }}>
-                              {m.student.firstName} {m.student.lastName}
+                            {/* Student Header */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div
+                                  style={{
+                                    width: 42,
+                                    height: 42,
+                                    borderRadius: '50%',
+                                    background: 'var(--primary)',
+                                    color: '#fff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontWeight: 700,
+                                    fontSize: 16,
+                                    overflow: 'hidden',
+                                  }}
+                                >
+                                  {a.student?.photoUrl ? (
+                                    <img src={a.student.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  ) : (
+                                    `${a.student?.firstName?.[0] || 'S'}${a.student?.lastName?.[0] || ''}`
+                                  )}
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 15, fontWeight: 800 }}>
+                                    {a.student?.firstName} {a.student?.lastName || ''}
+                                  </div>
+                                  <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>
+                                    Admission: {a.student?.admissionNo || 'STU'} {a.student?.currentClassroom?.name ? `· ${a.student.currentClassroom.name}` : ''}
+                                  </div>
+                                </div>
+                              </div>
+                              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: 'rgba(34, 197, 94, 0.1)', color: 'var(--success)' }}>
+                                {enumLabel(a.status || 'ACTIVE')}
+                              </span>
                             </div>
-                            <div style={{ fontSize: 12, color: 'var(--muted)' }}>Stop: {m.stop?.name || 'Assigned Stop'}</div>
+
+                            {/* Stop Details */}
+                            <div style={{ background: 'var(--c-surface-hover)', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <MapPin size={12} style={{ color: 'var(--primary)' }} /> Pickup Stop:
+                                </span>
+                                <span style={{ fontWeight: 700 }}>
+                                  {a.pickupStop?.name || 'Assigned Stop'} {a.pickupStop?.morningPickupTime ? `(${a.pickupStop.morningPickupTime})` : ''}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <MapPin size={12} style={{ color: 'var(--success)' }} /> Drop Stop:
+                                </span>
+                                <span style={{ fontWeight: 700 }}>
+                                  {a.dropStop?.name || 'Assigned Stop'} {a.dropStop?.eveningDropTime ? `(${a.dropStop.eveningDropTime})` : ''}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px dashed var(--border)', paddingTop: 6, marginTop: 2 }}>
+                                <span style={{ color: 'var(--muted)', fontWeight: 600 }}>Transit Schedule:</span>
+                                <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{tripTypeLabel}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Guardian Emergency Contact & Quick Call */}
+                          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                            <div>
+                              <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>Emergency Contact ({relationship})</div>
+                              <div style={{ fontSize: 13, fontWeight: 700 }}>{guardianName}</div>
+                            </div>
+                            {guardianPhone ? (
+                              <a
+                                href={`tel:${guardianPhone}`}
+                                className="btn btn-sm"
+                                style={{
+                                  background: 'rgba(34, 197, 94, 0.12)',
+                                  color: 'var(--success)',
+                                  border: '1px solid var(--success)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  textDecoration: 'none',
+                                  fontWeight: 700,
+                                  padding: '5px 10px',
+                                  borderRadius: 8,
+                                }}
+                              >
+                                <Phone size={13} />
+                                <span>Call {guardianPhone}</span>
+                              </a>
+                            ) : (
+                              <span style={{ fontSize: 11, color: 'var(--muted)', fontStyle: 'italic' }}>No phone listed</span>
+                            )}
                           </div>
                         </div>
-                        <StatusBadge status={m.status} />
-                      </div>
-                    )
-                  })}
-                </div>
-                <button
-                  className="btn btn-success"
-                  onClick={() => handleDriverSubmitArrival(trips[0].id, driverArrivedStudents)}
-                  disabled={busy || driverArrivedStudents.length === 0}
-                >
-                  <CheckCircle2 size={15} /> Submit Bus Arrival ({driverArrivedStudents.length} Students)
-                </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-            ) : (
-              <EmptyState title="No active trip found" message="Dispatch a trip to view today's student roster" icon={<Bus size={32} />} />
+            )}
+
+            {/* TAB CONTENT 2: TRIP RUN & ARRIVAL */}
+            {driverSubTab === 'trips' && (
+              <div className="card">
+                <div className="card-head">
+                  <div>
+                    <div className="card-title">Today's Route Roster & Bus Arrival Submission</div>
+                    <div className="card-sub">Select arrived students and submit arrival to notify Class Teachers</div>
+                  </div>
+                </div>
+
+                {trips.length > 0 && trips[0]?.manifest ? (
+                  <div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+                      {trips[0].manifest.map((m: any) => {
+                        const isChecked = driverArrivedStudents.includes(m.studentId)
+                        return (
+                          <div
+                            key={m.id}
+                            onClick={() => {
+                              setDriverArrivedStudents((prev) =>
+                                prev.includes(m.studentId) ? prev.filter((id) => id !== m.studentId) : [...prev, m.studentId]
+                              )
+                            }}
+                            style={{
+                              padding: '12px 16px',
+                              borderRadius: 8,
+                              background: isChecked ? 'rgba(34, 197, 94, 0.08)' : 'var(--c-surface-hover)',
+                              border: isChecked ? '1px solid var(--success)' : '1px solid var(--border)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <input type="checkbox" checked={isChecked} onChange={() => {}} style={{ width: 18, height: 18 }} />
+                              <div>
+                                <div style={{ fontSize: 15, fontWeight: 700 }}>
+                                  {m.student?.firstName} {m.student?.lastName || ''}
+                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--muted)' }}>Stop: {m.stop?.name || 'Assigned Stop'}</div>
+                              </div>
+                            </div>
+                            <StatusBadge status={m.status} />
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <button
+                      className="btn btn-success"
+                      onClick={() => handleDriverSubmitArrival(trips[0].id, driverArrivedStudents)}
+                      disabled={busy || driverArrivedStudents.length === 0}
+                    >
+                      <CheckCircle2 size={15} /> Submit Bus Arrival ({driverArrivedStudents.length} Students)
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <EmptyState
+                      title="No active trip run in progress"
+                      message="You can review your full assigned passenger list in the 'Assigned Route Students' tab above. To begin today's route run, click below."
+                      icon={<Bus size={32} />}
+                    />
+                    {myDriverRoute && (
+                      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => {
+                            if (myDriverRoute?.id) {
+                              setStartTripRouteId(myDriverRoute.id)
+                            }
+                            setStartTripStep(1)
+                            setStartTripOpen(true)
+                          }}
+                        >
+                          <Bus size={15} /> Dispatch / Start Route Run ({myDriverRoute.name})
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ========================================================================= */}
       {/* TAB: TEACHER — CLASS ARRIVAL VERIFICATION */}

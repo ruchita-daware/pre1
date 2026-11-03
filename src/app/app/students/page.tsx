@@ -146,6 +146,11 @@ export default function StudentsPage() {
       .then((res) => {
         if (res.success && res.data) {
           const roles: string[] = res.data.roles && res.data.roles.length > 0 ? res.data.roles : [res.data.role]
+          const isDriver = roles.some((r) => ['DRIVER', 'ATTENDANT'].includes(r)) && !roles.some((r) => ['OWNER', 'PRINCIPAL', 'SUPER_ADMIN', 'PLATFORM_ADMIN', 'TEACHER', 'COORDINATOR'].includes(r))
+          if (isDriver) {
+            router.replace('/app/transport')
+            return
+          }
           const isFam = roles.some((r) => ['PARENT', 'GUARDIAN'].includes(r))
           setIsParent(isFam)
           const writeAllowed = roles.some((r) => ['OWNER', 'PRINCIPAL', 'SUPER_ADMIN', 'PLATFORM_ADMIN'].includes(r))

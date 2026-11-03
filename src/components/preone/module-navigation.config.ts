@@ -433,9 +433,10 @@ export function getTransportNavConfig(options: {
   if (isDriver) {
     items.push({
       id: 'DRIVER',
-      label: 'My Trip',
+      label: 'My Route & Students',
       icon: Bus,
-      tooltip: 'Active transit route, passenger manifest and stop check-ins',
+      badge: assignmentsCount,
+      tooltip: 'Assigned route, student passengers and trip check-in',
     })
     items.push({
       id: 'SCANNER',

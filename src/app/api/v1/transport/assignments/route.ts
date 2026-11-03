@@ -22,7 +22,7 @@ async function _GET(req: NextRequest) {
 
     const context = {
       tenantId: session.tenantId,
-      branchId: session.branchId || undefined,
+      branchId: (((session.roles && session.roles.length > 0 ? session.roles : [session.role]) || []).some((r) => ['DRIVER', 'ATTENDANT'].includes(r)) && !((session.roles && session.roles.length > 0 ? session.roles : [session.role]) || []).some((r) => ['OWNER', 'PRINCIPAL', 'SUPER_ADMIN', 'PLATFORM_ADMIN', 'TEACHER', 'COORDINATOR'].includes(r))) ? undefined : (session.branchId || undefined),
       actorId: session.uid,
       actorName: session.name,
       actorRole: session.role,

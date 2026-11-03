@@ -1069,6 +1069,7 @@ export class TransportService {
             id: true,
             firstName: true,
             lastName: true,
+            photoUrl: true,
             admissionNo: true,
             currentClassroom: { select: { id: true, name: true } },
             guardians: {

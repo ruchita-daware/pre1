@@ -30,7 +30,9 @@ async function _GET(req: NextRequest) {
       return ok([])
     }
 
-    const branchToUse = requestedBranchId || (isInstitutionWide ? undefined : session.branchId)
+const effectiveRoles = ((session.roles && session.roles.length > 0 ? session.roles : [session.role]) || []).filter(Boolean) as string[]
+    const isDriverOnly = effectiveRoles.some((r) => ['DRIVER', 'ATTENDANT'].includes(r)) && !effectiveRoles.some((r) => ['OWNER', 'PRINCIPAL', 'SUPER_ADMIN', 'PLATFORM_ADMIN', 'TEACHER', 'COORDINATOR'].includes(r))
+    const branchToUse = requestedBranchId || (isDriverOnly || isInstitutionWide ? undefined : session.branchId)
 
     const context = {
       tenantId: session.tenantId,

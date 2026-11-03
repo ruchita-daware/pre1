@@ -10,6 +10,7 @@ import {
   Sparkles,
   Briefcase,
   CalendarCheck,
+  Bus,
 } from 'lucide-react'
 import { PLogoMark } from '@/components/preone/PLogo'
 import { DockStarsAccent } from '@/components/preone/illustrations'
@@ -106,9 +107,28 @@ export function BottomNav({
       },
     ]
 
-    // Prepare right cluster (Students, Learning, Staff, Growth)
+    const userRoles = (((user as any).roles && (user as any).roles.length > 0 ? (user as any).roles : [user.role]) || []) as Role[]
+    const isDriverUser = userRoles.some((r) => ['DRIVER', 'ATTENDANT'].includes(r)) && !userRoles.some((r) => ['OWNER', 'PRINCIPAL', 'SUPER_ADMIN', 'PLATFORM_ADMIN', 'TEACHER', 'COORDINATOR'].includes(r))
+    const transportItem =
+      nav.find((n) => n.key === 'transport') || {
+        key: 'transport',
+        label: t('nav.transport') || 'Transport',
+        href: '/app/transport',
+        icon: Bus,
+        image: '/animations/home/transport.webp',
+      }
+
+    // Prepare right cluster (Transport for Drivers; Students, Learning, Staff, Growth for others)
     const right: ResolvedDockItem[] = []
-    if (user.role === 'TEACHER') {
+    if (isDriverUser) {
+      right.push({
+        key: transportItem.key,
+        label: t('nav.transport') || 'Transport',
+        href: transportItem.href,
+        icon: transportItem.icon || Bus,
+        image: '/animations/home/transport.webp',
+      })
+    } else if (user.role === 'TEACHER') {
       // For teachers, Daily Diary & Students are the critical primary tools
       if (growthItem) {
         right.push({

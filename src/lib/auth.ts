@@ -119,7 +119,6 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
   ],
   DRIVER: [
     'transport:read', 'transport:trip', 'transport:board', 'transport:drop', 'transport:incident',
-    'students:read',
     'hr:self',
   ],
   PARENT: [

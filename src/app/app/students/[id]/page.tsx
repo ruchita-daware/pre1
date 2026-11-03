@@ -14,6 +14,12 @@ export default async function StudentDetailPage({
   if (!session) redirect('/')
   if (!session.tenantId) notFound()
 
+  const effectiveRoles = session.roles && session.roles.length > 0 ? session.roles : [session.role]
+  const isDriverOnly = effectiveRoles.some((r) => ['DRIVER', 'ATTENDANT'].includes(r)) && !effectiveRoles.some((r) => ['OWNER', 'PRINCIPAL', 'SUPER_ADMIN', 'PLATFORM_ADMIN', 'TEACHER', 'COORDINATOR'].includes(r))
+  if (isDriverOnly) {
+    redirect('/app/transport')
+  }
+
   const { id } = await params
   const resolvedSearchParams = searchParams ? await searchParams : undefined
   const initialTab = typeof resolvedSearchParams?.tab === 'string' ? resolvedSearchParams.tab : undefined
@@ -31,7 +37,6 @@ export default async function StudentDetailPage({
       id
     )
 
-    const effectiveRoles = session.roles && session.roles.length > 0 ? session.roles : [session.role]
     return (
       <StudentDetailClient
         profile={profile}
@@ -44,4 +49,3 @@ export default async function StudentDetailPage({
     notFound()
   }
 }
-
