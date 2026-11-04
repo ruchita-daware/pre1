@@ -10,6 +10,11 @@ import {
   Sparkles,
   Briefcase,
   CalendarCheck,
+  Bus,
+  MapPin,
+  ArrowUpCircle,
+  ArrowDownCircle,
+  UserCheck,
 } from 'lucide-react'
 import { PLogoMark } from '@/components/preone/PLogo'
 import { DockStarsAccent } from '@/components/preone/illustrations'
@@ -19,7 +24,7 @@ import type { Role } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n/context'
 
 export interface BottomNavProps {
-  user: { role: Role; name?: string }
+  user: { role: Role; name?: string; roles?: Role[] }
   nav: NavItem[]
   pathname: string
   isOpen: boolean
@@ -88,6 +93,55 @@ export function BottomNav({
     const growthItem =
       nav.find((n) => n.key === 'daily-diary') ||
       nav.find((n) => n.key === 'reports')
+
+    const userRoles = (((user as any).roles && (user as any).roles.length > 0 ? (user as any).roles : [user.role]) || []) as Role[]
+    const isDriverUser = userRoles.some((r) => ['DRIVER', 'ATTENDANT'].includes(r)) && !userRoles.some((r) => ['OWNER', 'PRINCIPAL', 'SUPER_ADMIN', 'PLATFORM_ADMIN', 'TEACHER', 'COORDINATOR'].includes(r))
+
+    if (isDriverUser) {
+      const driverLeft: ResolvedDockItem[] = [
+        {
+          key: 'driver-home',
+          label: 'Home',
+          href: '/app/driver?tab=overview',
+          icon: Home,
+        },
+        {
+          key: 'driver-routes',
+          label: 'My Routes',
+          href: '/app/driver?tab=routes',
+          icon: Bus,
+          image: '/animations/home/transport.webp',
+        },
+      ]
+      const driverRight: ResolvedDockItem[] = [
+        {
+          key: 'driver-pickup',
+          label: 'Pickup',
+          href: '/app/driver?tab=pickup',
+          icon: ArrowUpCircle,
+        },
+        {
+          key: 'driver-drop',
+          label: 'Drop',
+          href: '/app/driver?tab=drop',
+          icon: ArrowDownCircle,
+        },
+        {
+          key: 'driver-students',
+          label: 'My Students',
+          href: '/app/driver?tab=students',
+          icon: Users,
+          image: '/animations/home/students.webp',
+        },
+        {
+          key: 'driver-profile',
+          label: 'Profile',
+          href: '/app/driver?tab=profile',
+          icon: UserCheck,
+        },
+      ]
+      return { leftItems: driverLeft, rightItems: driverRight }
+    }
 
     // Prepare left cluster (Home, Apps)
     const left: ResolvedDockItem[] = [

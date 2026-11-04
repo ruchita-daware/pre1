@@ -53,10 +53,13 @@ export default async function DashboardPage() {
 
   // 6. Operational Support & Restricted Staff Roles (STAFF, ATTENDANT, DRIVER, RECEPTIONIST)
   // Non-leadership, non-finance operational personnel get the safe restricted duty workspace
+  if (canonicalRole === 'DRIVER' || session.roles?.includes('DRIVER')) {
+    redirect('/app/driver')
+  }
+
   if (
     canonicalRole === 'STAFF' ||
     canonicalRole === 'ATTENDANT' ||
-    canonicalRole === 'DRIVER' ||
     canonicalRole === 'RECEPTIONIST'
   ) {
     return (

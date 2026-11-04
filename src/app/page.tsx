@@ -150,8 +150,12 @@ export default function LoginPage() {
       .then((j) => {
         if (j?.success) {
           const role = j.data?.role || j.data?.user?.role
+          const roles = j.data?.roles || j.data?.user?.roles || (role ? [role] : [])
+          const isDriver = roles.some((r: string) => ['DRIVER', 'ATTENDANT'].includes(r)) && !roles.some((r: string) => ['OWNER', 'PRINCIPAL', 'SUPER_ADMIN', 'PLATFORM_ADMIN', 'TEACHER', 'COORDINATOR'].includes(r))
           if (role === 'PLATFORM_ADMIN') {
             router.replace('/onboard')
+          } else if (isDriver) {
+            router.replace('/app/driver')
           } else {
             router.replace('/app/dashboard')
           }
@@ -274,8 +278,13 @@ export default function LoginPage() {
         syncThemeWithDatabase(json.data.user.preferences.theme)
       }
 
-      if (json.data?.user?.role === 'PLATFORM_ADMIN') {
+      const userRole = json.data?.user?.role
+      const userRoles = json.data?.user?.roles || (userRole ? [userRole] : [])
+      const isDriverUser = userRoles.some((r: string) => ['DRIVER', 'ATTENDANT'].includes(r)) && !userRoles.some((r: string) => ['OWNER', 'PRINCIPAL', 'SUPER_ADMIN', 'PLATFORM_ADMIN', 'TEACHER', 'COORDINATOR'].includes(r))
+      if (userRole === 'PLATFORM_ADMIN') {
         router.push('/onboard')
+      } else if (isDriverUser) {
+        router.push('/app/driver')
       } else {
         router.push('/app/dashboard')
       }
@@ -341,8 +350,13 @@ export default function LoginPage() {
         syncThemeWithDatabase(json.data.user.preferences.theme)
       }
 
-      if (json.data?.user?.role === 'PLATFORM_ADMIN') {
+      const userRole = json.data?.user?.role
+      const userRoles = json.data?.user?.roles || (userRole ? [userRole] : [])
+      const isDriverUser = userRoles.some((r: string) => ['DRIVER', 'ATTENDANT'].includes(r)) && !userRoles.some((r: string) => ['OWNER', 'PRINCIPAL', 'SUPER_ADMIN', 'PLATFORM_ADMIN', 'TEACHER', 'COORDINATOR'].includes(r))
+      if (userRole === 'PLATFORM_ADMIN') {
         router.push('/onboard')
+      } else if (isDriverUser) {
+        router.push('/app/driver')
       } else {
         router.push('/app/dashboard')
       }

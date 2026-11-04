@@ -37,7 +37,7 @@ async function _GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) 
  */
 async function _PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
-  const session = await requireApi(req, 'transport:write')
+  const session = await requireApi(req, ['transport:write', 'transport:trip'])
   if (isResponse(session)) return session
   if (!session.tenantId) return Errors.forbidden('No tenant context')
 

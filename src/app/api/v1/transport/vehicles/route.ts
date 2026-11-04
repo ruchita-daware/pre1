@@ -23,11 +23,11 @@ async function _GET(req: NextRequest) {
     }
 
     const authorizedBranches = await getAuthorizedBranchIds(session)
-    if (authorizedBranches !== 'ALL' && authorizedBranches.length === 0) {
+    if (authorizedBranches !== null && authorizedBranches.length === 0) {
       return ok([])
     }
 
-    const branchToUse = requestedBranchId || (authorizedBranches === 'ALL' ? undefined : session.branchId)
+    const branchToUse = requestedBranchId || (authorizedBranches === null ? undefined : session.branchId)
 
     const vehicles = await TransportService.getVehicles({
       tenantId: session.tenantId,

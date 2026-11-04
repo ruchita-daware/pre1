@@ -24,12 +24,13 @@ async function _GET(req: NextRequest) {
       if (branchCheck) return branchCheck
     }
 
+    const isDriverRole = ['DRIVER', 'TRANSPORT_DRIVER'].includes((session.role || '').toUpperCase())
     const authorizedBranches = await getAuthorizedBranchIds(session)
-    if (authorizedBranches !== 'ALL' && authorizedBranches.length === 0) {
+    if (!isDriverRole && authorizedBranches !== null && authorizedBranches.length === 0) {
       return ok([])
     }
 
-    const branchToUse = requestedBranchId || (authorizedBranches === 'ALL' ? undefined : session.branchId)
+    const branchToUse = requestedBranchId || (isDriverRole || authorizedBranches === null ? undefined : session.branchId || undefined)
 
     const context = {
       tenantId: session.tenantId,
@@ -49,8 +50,8 @@ async function _GET(req: NextRequest) {
     const filtered = scope.isDriver && scope.allowedRouteIds !== null
       ? routes.filter((r: any) => scope.allowedRouteIds?.includes(r.id))
       : scope.isParent && assignedOnly && scope.allowedStudentIds !== null
-      ? routes.filter((r: any) => r.assignments?.some((a: any) => scope.allowedStudentIds?.includes(a.studentId)))
-      : routes
+        ? routes.filter((r: any) => r.assignments?.some((a: any) => scope.allowedStudentIds?.includes(a.studentId)))
+        : routes
 
     // For parents selecting routes without explicit status filter, show active routes
     const finalRoutes = scope.isParent && !status
@@ -73,7 +74,23 @@ async function _POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}))
-    const { code, name, description, vehicleId, driverProfileId, attendantProfileId, stops, branchId } = body
+    const {
+      code,
+      name,
+      description,
+      vehicleId,
+      driverProfileId,
+      attendantProfileId,
+      stops,
+      branchId,
+      scheduleType,
+      scheduleStatus,
+      operatingDays,
+      startDate,
+      endDate,
+      morningPickupTime,
+      eveningDropTime,
+    } = body
 
     if (!code || typeof code !== 'string' || !code.trim()) {
       return Errors.validation('Route code is required')
@@ -106,6 +123,13 @@ async function _POST(req: NextRequest) {
         driverProfileId,
         attendantProfileId,
         stops,
+        scheduleType,
+        scheduleStatus,
+        operatingDays,
+        startDate,
+        endDate,
+        morningPickupTime,
+        eveningDropTime,
       }
     )
 
