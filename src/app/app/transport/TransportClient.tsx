@@ -37,6 +37,10 @@ import {
   Eye,
   Minus,
   Trash2,
+  Play,
+  Pause,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import { PageHead, StatusBadge, EmptyState, KpiTile, Segmented, Field, GlobalKpiCard, KpiGrid, GlobalModuleNavigation, getTransportNavConfig } from '@/components/preone'
 import { Modal } from '@/components/preone/Modal'
@@ -320,6 +324,41 @@ export function TransportClient({ session }: { session: SessionProps }) {
   // Drop Verification Form State
   const [selectedGuardianId, setSelectedGuardianId] = useState('')
   const [pickupPin, setPickupPin] = useState('')
+
+  // Recurring Route Scheduling States (TASK 2)
+  const [addRouteScheduleType, setAddRouteScheduleType] = useState<'DAILY' | 'WEEKDAYS' | 'CUSTOM' | 'ONE_TIME'>('DAILY')
+  const [addRouteOperatingDays, setAddRouteOperatingDays] = useState<string[]>(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'])
+  const [addRouteStartDate, setAddRouteStartDate] = useState<string>(new Date().toISOString().split('T')[0])
+  const [addRouteEndDate, setAddRouteEndDate] = useState<string>('')
+  const [addRouteMorningPickup, setAddRouteMorningPickup] = useState<string>('08:00')
+  const [addRouteEveningDrop, setAddRouteEveningDrop] = useState<string>('15:00')
+
+  // Edit Route Schedule States (TASK 2 & 4)
+  const [editRouteScheduleType, setEditRouteScheduleType] = useState<'DAILY' | 'WEEKDAYS' | 'CUSTOM' | 'ONE_TIME'>('DAILY')
+  const [editRouteOperatingDays, setEditRouteOperatingDays] = useState<string[]>(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'])
+  const [editRouteScheduleStatus, setEditRouteScheduleStatus] = useState<'ACTIVE' | 'PAUSED'>('ACTIVE')
+  const [editRouteStartDate, setEditRouteStartDate] = useState<string>('')
+  const [editRouteEndDate, setEditRouteEndDate] = useState<string>('')
+  const [editRouteMorningPickup, setEditRouteMorningPickup] = useState<string>('08:00')
+  const [editRouteEveningDrop, setEditRouteEveningDrop] = useState<string>('15:00')
+
+  // Route Schedule & Calendar Modal States (TASK 4 & 5)
+  const [scheduleModalRoute, setScheduleModalRoute] = useState<any>(null)
+  const [routeCalendarData, setRouteCalendarData] = useState<any>(null)
+  const [calendarMonth, setCalendarMonth] = useState<number>(new Date().getMonth() + 1)
+  const [calendarYear, setCalendarYear] = useState<number>(new Date().getFullYear())
+  const [loadingCalendar, setLoadingCalendar] = useState<boolean>(false)
+
+  // Route Exception Modal States (TASK 5)
+  const [exceptionModalOpen, setExceptionModalOpen] = useState<boolean>(false)
+  const [exceptionDate, setExceptionDate] = useState<string>('')
+  const [exceptionReason, setExceptionReason] = useState<string>('')
+  const [exceptionIsCancelled, setExceptionIsCancelled] = useState<boolean>(true)
+  const [exceptionSubBus, setExceptionSubBus] = useState<string>('')
+  const [exceptionSubDriver, setExceptionSubDriver] = useState<string>('')
+
+  // Search filter for Today's Routes
+  const [todayRouteSearch, setTodayRouteSearch] = useState<string>('')
 
   // 1. Data Fetching
   const loadDashboard = useCallback(async () => {
@@ -1113,6 +1152,13 @@ export function TransportClient({ session }: { session: SessionProps }) {
           vehicleId: fd.get('vehicleId') || undefined,
           driverProfileId: fd.get('driverProfileId') || undefined,
           attendantProfileId: fd.get('attendantProfileId') || undefined,
+          scheduleType: addRouteScheduleType,
+          scheduleStatus: 'ACTIVE',
+          operatingDays: addRouteScheduleType === 'CUSTOM' ? addRouteOperatingDays : undefined,
+          startDate: fd.get('startDate') || undefined,
+          endDate: fd.get('endDate') || undefined,
+          morningPickupTime: fd.get('morningPickupTime') || undefined,
+          eveningDropTime: fd.get('eveningDropTime') || undefined,
           stops: stopsPayload,
         }),
       })
@@ -1179,6 +1225,13 @@ export function TransportClient({ session }: { session: SessionProps }) {
           driverProfileId: fd.get('driverProfileId') || null,
           attendantProfileId: fd.get('attendantProfileId') || null,
           status: fd.get('status'),
+          scheduleType: editRouteScheduleType,
+          scheduleStatus: editRouteScheduleStatus,
+          operatingDays: editRouteScheduleType === 'CUSTOM' ? editRouteOperatingDays : undefined,
+          startDate: editRouteStartDate || null,
+          endDate: editRouteEndDate || null,
+          morningPickupTime: editRouteMorningPickup,
+          eveningDropTime: editRouteEveningDrop,
         }),
       })
       const json = await res.json()
@@ -1192,6 +1245,224 @@ export function TransportClient({ session }: { session: SessionProps }) {
       }
     } catch (err: any) {
       toast.error('Error updating route', err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Recurring Route Helpers & Handlers (TASK 2, 4, 5)
+  const resetAddRouteForm = () => {
+    setAddRouteScheduleType('DAILY')
+    setAddRouteOperatingDays(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'])
+    setAddRouteStartDate(new Date().toISOString().split('T')[0])
+    setAddRouteEndDate('')
+    setAddRouteMorningPickup('08:00')
+    setAddRouteEveningDrop('15:00')
+    setNewRouteStops([
+      { id: '1', name: '', pickupTime: '08:00', dropTime: '15:00' },
+      { id: '2', name: '', pickupTime: '08:15', dropTime: '15:15' },
+    ])
+  }
+
+  const openEditRoute = (r: any) => {
+    setEditRouteModal(r)
+    setEditRouteScheduleType(r.scheduleType || 'DAILY')
+    setEditRouteScheduleStatus(r.scheduleStatus || 'ACTIVE')
+    setEditRouteOperatingDays(
+      Array.isArray(r.operatingDays) && r.operatingDays.length > 0
+        ? r.operatingDays
+        : ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+    )
+    setEditRouteStartDate(r.startDate ? new Date(r.startDate).toISOString().split('T')[0] : '')
+    setEditRouteEndDate(r.endDate ? new Date(r.endDate).toISOString().split('T')[0] : '')
+    setEditRouteMorningPickup(r.morningPickupTime || r.stops?.[0]?.morningPickupTime || '08:00')
+    setEditRouteEveningDrop(r.eveningDropTime || r.stops?.[r.stops?.length - 1]?.eveningDropTime || '15:00')
+  }
+
+  const handleQuickDispatchTrip = async (routeId: string, tripType: 'MORNING' | 'EVENING') => {
+    setBusy(true)
+    try {
+      const res = await fetch('/api/v1/transport/trips', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ routeId, tripType }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        toast.success(`${tripType === 'MORNING' ? 'Morning Pickup' : 'Evening Drop'} run dispatched`)
+        loadDashboard()
+        loadTrips()
+      } else {
+        toast.error('Failed to dispatch run', json.error?.message || json.error)
+      }
+    } catch (err: any) {
+      toast.error('Error dispatching run', err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handlePauseRouteSchedule = async (routeId: string, routeName: string) => {
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/v1/transport/routes/${routeId}/schedule`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'pause' }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        toast.success(`Recurring schedule paused for "${routeName}"`)
+        loadDashboard()
+        loadRoutes()
+        if (scheduleModalRoute && (scheduleModalRoute.id === routeId || scheduleModalRoute.routeId === routeId)) {
+          loadRouteCalendar(routeId, calendarYear, calendarMonth)
+        }
+      } else {
+        toast.error('Failed to pause schedule', json.error?.message || json.error)
+      }
+    } catch (err: any) {
+      toast.error('Error pausing schedule', err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleResumeRouteSchedule = async (routeId: string, routeName: string) => {
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/v1/transport/routes/${routeId}/schedule`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'resume' }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        toast.success(`Recurring schedule resumed for "${routeName}"`)
+        loadDashboard()
+        loadRoutes()
+        if (scheduleModalRoute && (scheduleModalRoute.id === routeId || scheduleModalRoute.routeId === routeId)) {
+          loadRouteCalendar(routeId, calendarYear, calendarMonth)
+        }
+      } else {
+        toast.error('Failed to resume schedule', json.error?.message || json.error)
+      }
+    } catch (err: any) {
+      toast.error('Error resuming schedule', err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleCancelFutureTrips = async (routeId: string, routeName: string) => {
+    if (!confirm(`Cancel future scheduled trips for "${routeName}"? Completed and active trips will not be modified.`)) return
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/v1/transport/routes/${routeId}/schedule`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel_future' }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        toast.success(`Cancelled ${json.data.cancelledCount} future trips for "${routeName}"`)
+        loadDashboard()
+        loadTrips()
+        if (scheduleModalRoute && (scheduleModalRoute.id === routeId || scheduleModalRoute.routeId === routeId)) {
+          loadRouteCalendar(routeId, calendarYear, calendarMonth)
+        }
+      } else {
+        toast.error('Failed to cancel future trips', json.error?.message || json.error)
+      }
+    } catch (err: any) {
+      toast.error('Error cancelling future trips', err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const loadRouteCalendar = async (routeId: string, yr: number, mo: number) => {
+    setLoadingCalendar(true)
+    try {
+      const res = await fetch(`/api/v1/transport/routes/${routeId}/schedule?year=${yr}&month=${mo}`)
+      const json = await res.json()
+      if (json.success) {
+        setRouteCalendarData(json.data)
+      } else {
+        toast.error('Failed to load schedule calendar', json.error?.message || json.error)
+      }
+    } catch (err: any) {
+      toast.error('Error loading calendar', err.message)
+    } finally {
+      setLoadingCalendar(false)
+    }
+  }
+
+  const openScheduleCalendar = (route: any) => {
+    setScheduleModalRoute(route)
+    const now = new Date()
+    const yr = now.getFullYear()
+    const mo = now.getMonth() + 1
+    setCalendarYear(yr)
+    setCalendarMonth(mo)
+    const rid = route.id || route.routeId
+    loadRouteCalendar(rid, yr, mo)
+  }
+
+  const handleAddRouteException = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!scheduleModalRoute) return
+    const routeId = scheduleModalRoute.id || scheduleModalRoute.routeId
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/v1/transport/routes/${routeId}/schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          exceptionDate,
+          reason: exceptionReason,
+          isCancelled: exceptionIsCancelled,
+          substituteVehicleId: !exceptionIsCancelled ? exceptionSubBus || undefined : undefined,
+          substituteDriverProfileId: !exceptionIsCancelled ? exceptionSubDriver || undefined : undefined,
+        }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        toast.success('Route schedule exception saved')
+        setExceptionModalOpen(false)
+        setExceptionDate('')
+        setExceptionReason('')
+        setExceptionIsCancelled(true)
+        setExceptionSubBus('')
+        setExceptionSubDriver('')
+        loadRouteCalendar(routeId, calendarYear, calendarMonth)
+        loadDashboard()
+      } else {
+        toast.error('Failed to add exception', json.error?.message || json.error)
+      }
+    } catch (err: any) {
+      toast.error('Error adding exception', err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleRemoveRouteException = async (routeId: string, exceptionId: string) => {
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/v1/transport/routes/${routeId}/schedule?exceptionId=${exceptionId}`, {
+        method: 'DELETE',
+      })
+      const json = await res.json()
+      if (json.success) {
+        toast.success('Schedule exception removed')
+        loadRouteCalendar(routeId, calendarYear, calendarMonth)
+        loadDashboard()
+      } else {
+        toast.error('Failed to remove exception', json.error?.message || json.error)
+      }
+    } catch (err: any) {
+      toast.error('Error removing exception', err.message)
     } finally {
       setBusy(false)
     }
@@ -2322,571 +2593,498 @@ export function TransportClient({ session }: { session: SessionProps }) {
 
 
       {/* ========================================================================= */}
-      {/* DESTINATION 1: HOME / OVERVIEW — OPERATIONAL COMMAND CENTER */}
+      {/* DESTINATION 1: HOME / OVERVIEW — SIMPLIFIED ADMIN DASHBOARD (TASK 1) */}
       {/* ========================================================================= */}
       {(tab === 'HOME' || tab === 'OVERVIEW') && (
         <div style={{ marginTop: 16 }}>
-          {/* ACTION-ORIENTED OPERATIONS BANNER */}
-          <div
-            style={{
-              background: 'var(--surface-card)',
-              borderRadius: 16,
-              border: '1px solid var(--border-default)',
-              padding: '18px 22px',
-              marginBottom: 20,
-              boxShadow: 'var(--elevation-1)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 14,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div
-                  style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 10,
-                    background: 'var(--primary-light)',
-                    color: 'var(--primary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Clock size={20} />
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Today's Operational Command Center
-                  </div>
-                  <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--foreground)' }}>
-                    {trips.length > 0
-                      ? `${trips.filter((t) => t.status === 'IN_PROGRESS').length} Active Bus Run(s) • ${metrics?.childrenBoarded ?? 0} Children in Transit`
-                      : "No Morning or Evening Bus Runs Dispatched Yet"}
-                  </div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                {canOperate && (
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => {
-                      setStartTripStep(1)
-                      setStartTripOpen(true)
-                    }}
-                  >
-                    <Plus size={14} /> Dispatch Run
-                  </button>
-                )}
-                {canWrite && (
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => {
-                      setAssignStudentStep(1)
-                      setAssignStudentOpen(true)
-                    }}
-                  >
-                    <UserPlus size={14} /> Allocate Seat
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Priority Alert Strips inside Banner */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-              {/* 1. Urgent Gate Approvals */}
-              {authorizations.filter((a: any) => a.status === 'PENDING').length > 0 ? (
-                <div
-                  style={{
-                    padding: '12px 14px',
-                    borderRadius: 12,
-                    background: 'rgba(245, 158, 11, 0.08)',
-                    border: '1px solid rgba(245, 158, 11, 0.3)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <ShieldAlert size={18} style={{ color: 'var(--warning-dark, #b45309)' }} />
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)' }}>
-                        {authorizations.filter((a: any) => a.status === 'PENDING').length} Pending Pickup Approval(s)
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                        Non-parent pickup awaiting principal authorization
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    style={{ fontSize: 12, padding: '4px 10px' }}
-                    onClick={() => {
-                      handleSelectTab('SAFETY')
-                      setSafetySubTab('authorizations')
-                    }}
-                  >
-                    Review
-                  </button>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    padding: '12px 14px',
-                    borderRadius: 12,
-                    background: 'rgba(16, 185, 129, 0.06)',
-                    border: '1px solid rgba(16, 185, 129, 0.2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                  }}
-                >
-                  <CheckCircle2 size={18} style={{ color: 'var(--success)' }} />
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                    All gate pickup authorizations are verified and up-to-date
-                  </div>
-                </div>
-              )}
-
-              {/* 2. Fleet & Safety Status */}
-              {criticalIncidents.length > 0 ? (
-                <div
-                  style={{
-                    padding: '12px 14px',
-                    borderRadius: 12,
-                    background: 'rgba(239, 68, 68, 0.08)',
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <AlertOctagon size={18} style={{ color: 'var(--danger)' }} />
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--danger)' }}>
-                        {criticalIncidents.length} Critical Safety Incident(s)
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                        Requires immediate supervisor attention
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    className="btn btn-danger btn-sm"
-                    style={{ fontSize: 12, padding: '4px 10px' }}
-                    onClick={() => {
-                      handleSelectTab('SAFETY')
-                      setSafetySubTab('incidents')
-                    }}
-                  >
-                    Inspect
-                  </button>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    padding: '12px 14px',
-                    borderRadius: 12,
-                    background: 'var(--c-surface-hover, rgba(0,0,0,0.02))',
-                    border: '1px solid var(--border-default)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                  }}
-                >
-                  <ShieldCheck size={18} style={{ color: 'var(--primary)' }} />
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                    Fleet readiness: {vehicles.filter((v) => v.status === 'ACTIVE').length}/{vehicles.length} buses operational
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Fluent Metro KPI Tiles */}
+          {/* SUMMARY CARDS (TASK 1) */}
           <div className="mb-5">
-            <KpiGrid columns={6}>
+            <KpiGrid columns={3}>
               <GlobalKpiCard
                 label="Active Routes"
-                value={metrics?.activeRoutes ?? 0}
-                supportingText="Daily routes configured →"
-                icon={<Bus size={16} />}
-                onClick={() => setTab('ROUTES')}
-                tooltip="Click to view configured bus routes"
+                value={metrics?.summary?.activeRoutes ?? metrics?.activeRoutes ?? routes.filter((r: any) => r.status === 'ACTIVE').length}
+                supportingText="Recurring operating routes →"
+                icon={<Bus size={18} />}
+                iconClass="bg-blue-500/10 text-blue-500"
+                onClick={() => handleSelectTab('ROUTES')}
+                tooltip="Click to view and manage all routes"
               />
               <GlobalKpiCard
-                label="In-Service Fleet"
-                value={metrics?.activeVehicles ?? 0}
-                supportingText={metrics?.vehiclesInMaintenance ? `${metrics.vehiclesInMaintenance} in maintenance →` : '100% operational →'}
-                icon={<CheckCircle2 size={16} />}
-                iconClass="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                onClick={() => setTab('VEHICLES')}
+                label="Active Vehicles"
+                value={metrics?.summary?.activeVehicles ?? metrics?.activeVehicles ?? vehicles.filter((v: any) => v.status === 'ACTIVE').length}
+                supportingText="Preschool fleet operational →"
+                icon={<Truck size={18} />}
+                iconClass="bg-emerald-500/10 text-emerald-500"
+                onClick={() => handleSelectTab('VEHICLES')}
                 tooltip="Click to view fleet vehicles"
               />
               <GlobalKpiCard
-                label="Assigned Children"
-                value={metrics?.studentsUsingTransport ?? 0}
-                supportingText="Allocated seats →"
-                icon={<Users size={16} />}
-                iconClass="bg-sky-500/10 text-sky-600 dark:text-sky-400"
-                onClick={() => setTab('STUDENTS')}
-                tooltip="Click to view assigned students"
-              />
-              <GlobalKpiCard
-                label="Boarded Today"
-                value={metrics?.childrenBoarded ?? 0}
-                supportingText="Morning arrivals logged →"
-                icon={<UserCheck size={16} />}
-                iconClass="bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                onClick={() => setTab('TRIPS')}
-                tooltip="Click to view live trip boardings"
-              />
-              <GlobalKpiCard
-                label="Safely Dropped"
-                value={metrics?.childrenDropped ?? 0}
-                supportingText="Guardian PIN verified →"
-                icon={<ShieldCheck size={16} />}
-                iconClass="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                onClick={() => setTab('TRIPS')}
-                tooltip="Click to view safe drops"
-              />
-              <GlobalKpiCard
-                label="Delayed Trips"
-                value={metrics?.delayedTrips ?? 0}
-                supportingText={metrics?.delayedTrips > 0 ? 'Review & Alert →' : 'On schedule →'}
-                icon={<AlertTriangle size={16} />}
-                iconClass={metrics?.delayedTrips > 0 ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'}
-                onClick={() => { setTab('TRIPS'); setTripStatusFilter('DELAYED'); }}
-                tooltip="Click to filter delayed trips"
+                label="Assigned Students"
+                value={metrics?.summary?.assignedStudents ?? metrics?.studentsUsingTransport ?? assignments.filter((a: any) => a.status === 'ACTIVE').length}
+                supportingText="Enrolled child passengers →"
+                icon={<Users size={18} />}
+                iconClass="bg-purple-500/10 text-purple-500"
+                onClick={() => handleSelectTab('STUDENTS')}
+                tooltip="Click to manage student seat allocations"
               />
             </KpiGrid>
           </div>
 
-          {/* 2-Column Overview Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 20 }} className="dash-grid">
-            {/* Column 1: Active Trips + Routes */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div className="card">
-                <div className="card-head">
+          {/* QUICK ACTIONS ROW (TASK 1) */}
+          <div
+            style={{
+              background: 'var(--surface-card)',
+              borderRadius: 14,
+              border: '1px solid var(--border-default)',
+              padding: '12px 18px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 12,
+              marginBottom: 20,
+              boxShadow: 'var(--elevation-1)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Quick Actions
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              {canWrite && (
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => {
+                    resetAddRouteForm()
+                    setAddRouteOpen(true)
+                  }}
+                  style={{ gap: 6 }}
+                >
+                  <Plus size={14} /> Create Route
+                </button>
+              )}
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => handleSelectTab('ROUTES')}
+                style={{ gap: 6 }}
+              >
+                <MapPin size={14} /> Manage Routes
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => handleSelectTab('VEHICLES')}
+                style={{ gap: 6 }}
+              >
+                <Truck size={14} /> Manage Vehicles
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  setTab('FLEET_SETTINGS')
+                  setFleetSettingsSubTab('drivers')
+                }}
+                style={{ gap: 6 }}
+              >
+                <Users size={14} /> Manage Drivers
+              </button>
+            </div>
+          </div>
+
+          {/* SCHOOL HOLIDAY ALERT (TASK 5) */}
+          {metrics?.schoolHoliday && (
+            <div
+              style={{
+                padding: '12px 16px',
+                background: 'rgba(139, 92, 246, 0.1)',
+                border: '1px solid rgba(139, 92, 246, 0.3)',
+                borderRadius: 12,
+                marginBottom: 16,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <Calendar size={18} style={{ color: 'var(--purple-400, #a78bfa)' }} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--foreground)' }}>
+                School Holiday Today: <b>{metrics.schoolHoliday.title}</b>. Daily scheduled trips are suspended for the holiday.
+              </span>
+            </div>
+          )}
+
+          {/* TODAY'S ROUTES SECTION (TASK 1) */}
+          {(() => {
+            const todayRoutesList = Array.isArray(metrics?.todayRoutes) && metrics.todayRoutes.length > 0
+              ? metrics.todayRoutes
+              : routes.map((r: any) => ({
+                  routeId: r.id,
+                  routeName: r.name,
+                  routeNumber: r.code,
+                  assignedBus: r.vehicle?.registrationNumber || 'Not Assigned',
+                  assignedBusId: r.vehicleId,
+                  assignedDriver: r.driverProfile?.user?.fullName || 'Not Assigned',
+                  assignedDriverPhone: r.driverProfile?.user?.phone || null,
+                  assignedDriverId: r.driverProfileId,
+                  morningPickupTime: r.morningPickupTime || r.stops?.[0]?.morningPickupTime || '08:00',
+                  eveningDropTime: r.eveningDropTime || r.stops?.[r.stops?.length - 1]?.eveningDropTime || '15:00',
+                  assignedStudentsCount: r.assignments?.length || 0,
+                  scheduleType: r.scheduleType || 'DAILY',
+                  scheduleStatus: r.scheduleStatus || 'ACTIVE',
+                  operatingDays: r.operatingDays || null,
+                  isOperatingDay: true,
+                  overallStatus: r.status === 'INACTIVE' ? 'INACTIVE' : (r.scheduleStatus === 'PAUSED' ? 'PAUSED' : 'SCHEDULED'),
+                  morningTrip: null,
+                  eveningTrip: null,
+                }))
+
+            const filteredList = todayRouteSearch.trim()
+              ? todayRoutesList.filter((r: any) =>
+                  r.routeName?.toLowerCase().includes(todayRouteSearch.toLowerCase()) ||
+                  r.routeNumber?.toLowerCase().includes(todayRouteSearch.toLowerCase()) ||
+                  r.assignedBus?.toLowerCase().includes(todayRouteSearch.toLowerCase()) ||
+                  r.assignedDriver?.toLowerCase().includes(todayRouteSearch.toLowerCase())
+                )
+              : todayRoutesList
+
+            return (
+              <div className="card" style={{ padding: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
                   <div>
-                    <div className="card-title">Active Daily Trips Progress</div>
-                    <div className="card-sub">Morning pickup and evening handover runs</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: 'var(--foreground)' }}>
+                        Today's Routes
+                      </h2>
+                      <span className="badge b-primary" style={{ fontSize: 11, fontWeight: 700 }}>
+                        {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
+                      Daily scheduled school transport runs, vehicle & driver assignments, and live operational status
+                    </div>
                   </div>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setTab('TRIPS')}>
-                    Manage Runs <ArrowRight size={13} />
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface-ground)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '4px 10px' }}>
+                      <Search size={14} style={{ color: 'var(--text-secondary)' }} />
+                      <input
+                        type="text"
+                        placeholder="Filter route..."
+                        value={todayRouteSearch}
+                        onChange={(e) => setTodayRouteSearch(e.target.value)}
+                        style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--foreground)', fontSize: 13, width: 140 }}
+                      />
+                    </div>
+                    <button className="btn btn-secondary btn-sm" onClick={() => loadDashboard()} title="Refresh dashboard">
+                      <RefreshCw size={13} className={loading ? 'spin' : ''} /> Refresh
+                    </button>
+                  </div>
                 </div>
-                {trips.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {trips.map((t) => {
-                      const handledCount = t.manifest.filter((m: any) => m.status === 'BOARDED' || m.status === 'DROPPED').length
-                      const progressPct = t.manifest.length > 0 ? Math.round((handledCount / t.manifest.length) * 100) : 0
-                      return (
-                        <div
-                          key={t.id}
-                          style={{
-                            padding: '14px 16px',
-                            background: 'var(--c-surface-hover, rgba(0,0,0,0.02))',
-                            borderRadius: 10,
-                            border: '1px solid var(--border)',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div>
+
+                {filteredList.length > 0 ? (
+                  <>
+                    {/* Desktop / Tablet Table View */}
+                    <div className="hidden md:block" style={{ overflowX: 'auto' }}>
+                      <table className="table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 6px' }}>
+                        <thead>
+                          <tr>
+                            <th style={{ padding: '10px 14px' }}>Route Name</th>
+                            <th style={{ padding: '10px 14px' }}>Route #</th>
+                            <th style={{ padding: '10px 14px' }}>Assigned Bus</th>
+                            <th style={{ padding: '10px 14px' }}>Assigned Driver</th>
+                            <th style={{ padding: '10px 14px' }}>Morning Pickup</th>
+                            <th style={{ padding: '10px 14px' }}>Evening Drop</th>
+                            <th style={{ padding: '10px 14px' }}>Assigned Students</th>
+                            <th style={{ padding: '10px 14px' }}>Trip Status</th>
+                            <th style={{ padding: '10px 14px', textAlign: 'right' }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredList.map((r: any) => {
+                            const isPaused = r.scheduleStatus === 'PAUSED'
+                            const mStatus = r.morningTrip?.status || 'SCHEDULED'
+                            const eStatus = r.eveningTrip?.status || 'SCHEDULED'
+
+                            return (
+                              <tr
+                                key={r.routeId || r.id}
+                                style={{
+                                  background: 'var(--c-surface-hover, rgba(255, 255, 255, 0.02))',
+                                  borderRadius: 10,
+                                }}
+                              >
+                                <td style={{ padding: '12px 14px', fontWeight: 700, fontSize: 14, color: 'var(--foreground)' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <MapPin size={16} style={{ color: 'var(--primary)' }} />
+                                    <span>{r.routeName || r.name}</span>
+                                  </div>
+                                </td>
+                                <td style={{ padding: '12px 14px' }}>
+                                  <span className="badge b-neutral" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                                    {r.routeNumber || r.code}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '12px 14px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <Bus size={14} style={{ color: 'var(--text-secondary)' }} />
+                                    <span style={{ fontWeight: 600 }}>{r.assignedBus}</span>
+                                  </div>
+                                </td>
+                                <td style={{ padding: '12px 14px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <Users size={14} style={{ color: 'var(--text-secondary)' }} />
+                                    <div>
+                                      <span style={{ fontWeight: 600 }}>{r.assignedDriver}</span>
+                                      {r.assignedDriverPhone && (
+                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                                          {r.assignedDriverPhone}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}>
+                                    <Clock size={13} style={{ color: 'var(--warning, #f59e0b)' }} />
+                                    <span>{r.morningPickupTime || '08:00'}</span>
+                                  </div>
+                                </td>
+                                <td style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}>
+                                    <Clock size={13} style={{ color: 'var(--purple-400, #a78bfa)' }} />
+                                    <span>{r.eveningDropTime || '15:00'}</span>
+                                  </div>
+                                </td>
+                                <td style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>
+                                  <span className="badge b-purple" style={{ fontWeight: 700 }}>
+                                    {r.assignedStudentsCount} Student{r.assignedStudentsCount === 1 ? '' : 's'}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>
+                                  {r.overallStatus === 'HOLIDAY' ? (
+                                    <span className="badge b-purple">School Holiday</span>
+                                  ) : isPaused ? (
+                                    <span className="badge b-warning">Schedule Paused</span>
+                                  ) : r.overallStatus === 'CANCELLED' ? (
+                                    <span className="badge b-danger">Cancelled (Exception)</span>
+                                  ) : !r.isOperatingDay ? (
+                                    <span className="badge b-neutral">Non-Operating Day</span>
+                                  ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                                        <span style={{ color: 'var(--text-secondary)', width: 44 }}>Morning:</span>
+                                        <span className={`badge ${mStatus === 'IN_PROGRESS' ? 'b-warning' : mStatus === 'COMPLETED' ? 'b-success' : 'b-primary'}`} style={{ fontSize: 10, padding: '1px 6px' }}>
+                                          {mStatus === 'IN_PROGRESS' ? 'In Progress' : mStatus === 'COMPLETED' ? 'Completed' : 'Scheduled'}
+                                        </span>
+                                      </div>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                                        <span style={{ color: 'var(--text-secondary)', width: 44 }}>Evening:</span>
+                                        <span className={`badge ${eStatus === 'IN_PROGRESS' ? 'b-warning' : eStatus === 'COMPLETED' ? 'b-success' : 'b-neutral'}`} style={{ fontSize: 10, padding: '1px 6px' }}>
+                                          {eStatus === 'IN_PROGRESS' ? 'In Progress' : eStatus === 'COMPLETED' ? 'Completed' : 'Scheduled'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                                    {/* Quick Dispatch Run */}
+                                    {canOperate && r.isOperatingDay && !isPaused && r.overallStatus !== 'HOLIDAY' && r.overallStatus !== 'CANCELLED' && (
+                                      <>
+                                        {(!r.morningTrip || r.morningTrip.status === 'SCHEDULED') && (
+                                          <button
+                                            className="btn btn-primary btn-sm"
+                                            style={{ fontSize: 11, padding: '4px 8px', gap: 4 }}
+                                            onClick={() => handleQuickDispatchTrip(r.routeId || r.id, 'MORNING')}
+                                            title="Dispatch Morning Pickup Run"
+                                          >
+                                            <Play size={11} /> Morning Run
+                                          </button>
+                                        )}
+                                        {r.morningTrip && r.morningTrip.status !== 'SCHEDULED' && (!r.eveningTrip || r.eveningTrip.status === 'SCHEDULED') && (
+                                          <button
+                                            className="btn btn-secondary btn-sm"
+                                            style={{ fontSize: 11, padding: '4px 8px', gap: 4 }}
+                                            onClick={() => handleQuickDispatchTrip(r.routeId || r.id, 'EVENING')}
+                                            title="Dispatch Evening Drop Run"
+                                          >
+                                            <Play size={11} /> Evening Run
+                                          </button>
+                                        )}
+                                      </>
+                                    )}
+
+                                    {/* View Schedule Calendar */}
+                                    <button
+                                      className="btn btn-secondary btn-sm"
+                                      style={{ fontSize: 11, padding: '4px 8px', gap: 4 }}
+                                      onClick={() => openScheduleCalendar(r)}
+                                      title="Recurring Schedule & Calendar"
+                                    >
+                                      <Calendar size={13} /> Schedule
+                                    </button>
+
+                                    {/* Pause / Resume Schedule Toggle */}
+                                    {canWrite && (
+                                      <button
+                                        className="btn btn-ghost btn-sm"
+                                        style={{
+                                          padding: '4px 6px',
+                                          color: isPaused ? 'var(--success)' : 'var(--warning)',
+                                        }}
+                                        onClick={() =>
+                                          isPaused
+                                            ? handleResumeRouteSchedule(r.routeId || r.id, r.routeName || r.name)
+                                            : handlePauseRouteSchedule(r.routeId || r.id, r.routeName || r.name)
+                                        }
+                                        title={isPaused ? 'Resume Recurring Schedule' : 'Pause Recurring Schedule'}
+                                      >
+                                        {isPaused ? <Play size={13} /> : <Pause size={13} />}
+                                      </button>
+                                    )}
+
+                                    {/* Edit Route */}
+                                    {canWrite && (
+                                      <button
+                                        className="btn btn-ghost btn-sm"
+                                        style={{ padding: '4px 6px' }}
+                                        onClick={() => {
+                                          const full = routes.find((x: any) => x.id === (r.routeId || r.id)) || r
+                                          openEditRoute(full)
+                                        }}
+                                        title="Edit Route & Schedule"
+                                      >
+                                        <Edit3 size={13} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile Card View (TASK 1: Responsive Behavior) */}
+                    <div className="block md:hidden" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {filteredList.map((r: any) => {
+                        const isPaused = r.scheduleStatus === 'PAUSED'
+                        const mStatus = r.morningTrip?.status || 'SCHEDULED'
+                        const eStatus = r.eveningTrip?.status || 'SCHEDULED'
+
+                        return (
+                          <div
+                            key={r.routeId || r.id}
+                            style={{
+                              background: 'var(--c-surface-hover, rgba(255, 255, 255, 0.02))',
+                              borderRadius: 12,
+                              border: '1px solid var(--border-default)',
+                              padding: 14,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 10,
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span style={{ fontWeight: 700, fontSize: 14 }}>{t.route.name}</span>
-                                <span className="badge b-neutral" style={{ fontFamily: 'var(--font-mono)' }}>{t.route.code}</span>
-                                <span className={`badge ${t.tripType === 'MORNING' ? 'b-primary' : 'b-purple'}`}>{t.tripType}</span>
-                                <span className={`badge ${t.status === 'IN_PROGRESS' ? 'b-warning' : t.status === 'COMPLETED' ? 'b-success' : 'b-neutral'}`}>
-                                  {t.status}
+                                <MapPin size={16} style={{ color: 'var(--primary)' }} />
+                                <span style={{ fontWeight: 800, fontSize: 15 }}>{r.routeName || r.name}</span>
+                                <span className="badge b-neutral" style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                                  {r.routeNumber || r.code}
                                 </span>
                               </div>
-                              <div className="t-caption" style={{ marginTop: 4 }}>
-                                Bus: <b>{t.vehicle.registrationNumber}</b> · Driver: <b>{t.driverProfile.user.fullName}</b>
+                              <span className="badge b-purple" style={{ fontSize: 11 }}>
+                                {r.assignedStudentsCount} Student{r.assignedStudentsCount === 1 ? '' : 's'}
+                              </span>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12 }}>
+                              <div>
+                                <span style={{ color: 'var(--text-secondary)' }}>Bus: </span>
+                                <b>{r.assignedBus}</b>
+                              </div>
+                              <div>
+                                <span style={{ color: 'var(--text-secondary)' }}>Driver: </span>
+                                <b>{r.assignedDriver}</b>
+                              </div>
+                              <div>
+                                <span style={{ color: 'var(--text-secondary)' }}>Morning: </span>
+                                <b>{r.morningPickupTime || '08:00'}</b>
+                              </div>
+                              <div>
+                                <span style={{ color: 'var(--text-secondary)' }}>Evening: </span>
+                                <b>{r.eveningDropTime || '15:00'}</b>
                               </div>
                             </div>
-                            <div style={{ textAlign: 'right' }}>
-                              <div style={{ fontSize: 13, fontWeight: 700 }}>
-                                {handledCount} / {t.manifest.length} Handled ({progressPct}%)
-                              </div>
-                              {t.delayMinutes > 0 ? (
-                                <div style={{ fontSize: 11, color: 'var(--danger)', fontWeight: 700 }}>
-                                  Delayed +{t.delayMinutes}m ({t.delayReason})
-                                </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', paddingTop: 6, borderTop: '1px solid var(--border-default)' }}>
+                              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Status:</span>
+                              {isPaused ? (
+                                <span className="badge b-warning" style={{ fontSize: 11 }}>Schedule Paused</span>
+                              ) : r.overallStatus === 'HOLIDAY' ? (
+                                <span className="badge b-purple" style={{ fontSize: 11 }}>School Holiday</span>
                               ) : (
-                                <div style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>On time</div>
+                                <>
+                                  <span className={`badge ${mStatus === 'IN_PROGRESS' ? 'b-warning' : mStatus === 'COMPLETED' ? 'b-success' : 'b-primary'}`} style={{ fontSize: 10 }}>
+                                    AM: {mStatus}
+                                  </span>
+                                  <span className={`badge ${eStatus === 'IN_PROGRESS' ? 'b-warning' : eStatus === 'COMPLETED' ? 'b-success' : 'b-neutral'}`} style={{ fontSize: 10 }}>
+                                    PM: {eStatus}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+
+                            <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                              {canOperate && r.isOperatingDay && !isPaused && (!r.morningTrip || r.morningTrip.status === 'SCHEDULED') && (
+                                <button
+                                  className="btn btn-primary btn-sm"
+                                  style={{ flex: 1, fontSize: 11 }}
+                                  onClick={() => handleQuickDispatchTrip(r.routeId || r.id, 'MORNING')}
+                                >
+                                  <Play size={11} /> Morning Run
+                                </button>
+                              )}
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                style={{ flex: 1, fontSize: 11, gap: 4 }}
+                                onClick={() => openScheduleCalendar(r)}
+                              >
+                                <Calendar size={13} /> Schedule
+                              </button>
+                              {canWrite && (
+                                <button
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ padding: '6px 10px', color: isPaused ? 'var(--success)' : 'var(--warning)' }}
+                                  onClick={() =>
+                                    isPaused
+                                      ? handleResumeRouteSchedule(r.routeId || r.id, r.routeName || r.name)
+                                      : handlePauseRouteSchedule(r.routeId || r.id, r.routeName || r.name)
+                                  }
+                                >
+                                  {isPaused ? <Play size={13} /> : <Pause size={13} />}
+                                </button>
                               )}
                             </div>
                           </div>
-
-                          {/* Progress Bar */}
-                          <div style={{ width: '100%', height: 6, background: 'rgba(0,0,0,0.06)', borderRadius: 3, marginTop: 10, overflow: 'hidden' }}>
-                            <div
-                              style={{
-                                width: `${progressPct}%`,
-                                height: '100%',
-                                background: t.status === 'COMPLETED' ? 'var(--success)' : 'var(--primary)',
-                                transition: 'width 0.3s ease',
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                        )
+                      })}
+                    </div>
+                  </>
                 ) : (
                   <EmptyState
-                    icon={<Bus size={36} />}
-                    title="No Runs Active Today"
-                    message="Click 'Dispatch Trip' to initiate a morning pickup or evening drop manifest."
-                    action={canOperate && <button className="btn btn-primary btn-sm" onClick={() => setStartTripOpen(true)}>Dispatch Trip</button>}
-                  />
-                )}
-              </div>
-
-              {/* Route Transit Status & Network Coverage */}
-              <div className="card">
-                <div className="card-head">
-                  <div>
-                    <div className="card-title">Route Transit Status & Network Coverage</div>
-                    <div className="card-sub">Configured stops, allocated buses, and active student distribution</div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {canWrite && (
-                      <button
-                        className="btn btn-primary btn-sm"
-                        onClick={() => setAddRouteOpen(true)}
-                        title="Add Route (+)"
-                        aria-label="Add Route"
-                      >
-                        <Plus size={13} /> Add Route
+                    icon={<Bus size={32} />}
+                    title="No Routes Found"
+                    message={todayRouteSearch ? "No routes match your search." : "No transport routes scheduled for today."}
+                    action={canWrite && !todayRouteSearch && (
+                      <button className="btn btn-primary btn-sm" onClick={() => { resetAddRouteForm(); setAddRouteOpen(true); }}>
+                        <Plus size={13} /> Create Route
                       </button>
                     )}
-                    <button className="btn btn-ghost btn-sm" onClick={() => setTab('ROUTES')}>
-                      View All Routes <ArrowRight size={13} />
-                    </button>
-                  </div>
-                </div>
-                {routes.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {routes.slice(0, 5).map((r) => {
-                      const studentCount = assignments.filter((a) => a.routeId === r.id && a.status === 'ACTIVE').length
-                      const vehicleReg = r.vehicle?.registrationNumber || r.defaultVehicle?.registrationNumber || 'Unassigned'
-                      const driverName = r.driverProfile?.user?.fullName || r.defaultDriver?.user?.fullName || 'Unassigned'
-                      return (
-                        <div
-                          key={r.id}
-                          style={{
-                            padding: '12px 14px',
-                            background: 'var(--c-surface-hover, rgba(0,0,0,0.02))',
-                            borderRadius: 10,
-                            border: '1px solid var(--border)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                          }}
-                        >
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ fontWeight: 700, fontSize: 14 }}>{r.name}</span>
-                              <span className="badge b-neutral" style={{ fontFamily: 'var(--font-mono)' }}>{r.code}</span>
-                              <span className={`badge ${r.status === 'ACTIVE' || r.isActive ? 'b-success' : 'b-neutral'}`}>
-                                {r.status === 'ACTIVE' || r.isActive ? 'Active' : 'Inactive'}
-                              </span>
-                            </div>
-                            <div className="t-caption" style={{ marginTop: 3 }}>
-                              Stops: <b>{r.stops?.length || 0}</b> · Bus: <b>{vehicleReg}</b> · Driver: <b>{driverName}</b>
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <div style={{ textAlign: 'right' }}>
-                              <div style={{ fontSize: 13, fontWeight: 700 }}>
-                                {studentCount} Students
-                              </div>
-                              <div className="t-caption">{r.stops?.[0]?.morningPickupTime ? `Starts ${r.stops[0].morningPickupTime}` : 'Configured'}</div>
-                            </div>
-                            {canWrite && (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <button
-                                  className="btn btn-ghost btn-sm"
-                                  onClick={() => setEditRouteModal(r)}
-                                  title="Edit Route"
-                                  style={{ padding: '4px 6px' }}
-                                >
-                                  <Edit3 size={13} />
-                                </button>
-                                <button
-                                  className="btn btn-ghost btn-sm"
-                                  style={{ color: 'var(--c-danger, #ef4444)', padding: '4px 6px' }}
-                                  onClick={() => handleDeleteRoute(r.id, r.name)}
-                                  title="Remove Route (-)"
-                                  aria-label={`Remove Route ${r.name}`}
-                                >
-                                  <Minus size={14} />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <EmptyState
-                    icon={<MapPin size={32} />}
-                    title="No Routes Configured"
-                    message="Set up transport routes and pickup stops for enrolled children."
-                    action={canWrite && <button className="btn btn-primary btn-sm" onClick={() => setAddRouteOpen(true)}><Plus size={13} /> Add Route</button>}
                   />
                 )}
               </div>
-            </div>
-
-            {/* Column 2: Fleet Readiness + Safety Assurance */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div className="card">
-                <div className="card-head">
-                  <div>
-                    <div className="card-title">Fleet Readiness</div>
-                    <div className="card-sub">Active buses, vans, and maintenance guards</div>
-                  </div>
-                  {canWrite && (
-                    <button className="btn btn-ghost btn-sm" onClick={() => setAddVehicleOpen(true)}>
-                      <Plus size={13} /> Add Bus
-                    </button>
-                  )}
-                </div>
-                {vehicles.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {vehicles.slice(0, 6).map((v) => (
-                      <div
-                        key={v.id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '10px 12px',
-                          borderRadius: 8,
-                          border: '1px solid var(--border)',
-                          fontSize: 13,
-                        }}
-                      >
-                        <div>
-                          <div style={{ fontWeight: 700 }}>{v.registrationNumber}</div>
-                          <div className="t-caption">
-                            {v.makeModel || 'Standard Bus'} · Cap: <b>{v.capacity}</b> seats
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span className={`badge ${v.status === 'ACTIVE' ? 'b-success' : v.status === 'MAINTENANCE' ? 'b-warning' : 'b-neutral'}`}>
-                            {v.status}
-                          </span>
-                          {canWrite && (
-                            <button
-                              className="btn btn-ghost btn-sm"
-                              style={{ fontSize: 11, padding: '2px 6px' }}
-                              onClick={() => handleToggleVehicleStatus(v.id, v.status)}
-                              title="Toggle Maintenance Mode"
-                            >
-                              <Wrench size={12} />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyState icon={<Bus size={32} />} title="No Vehicles Registered" message="Register preschool buses or vans to assign to routes." />
-                )}
-              </div>
-
-              {/* Child Safety & Handover Assurance */}
-              <div className="card">
-                <div className="card-head">
-                  <div>
-                    <div className="card-title">Child Safety & Handover Assurance</div>
-                    <div className="card-sub">Zero unverified handovers invariant & real-time guardian verification</div>
-                  </div>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setTab('SECURITY')}>
-                    Audit Trail <ArrowRight size={13} />
-                  </button>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div
-                    style={{
-                      padding: '12px 14px',
-                      borderRadius: 10,
-                      background: 'rgba(16, 185, 129, 0.08)',
-                      border: '1px solid rgba(16, 185, 129, 0.2)',
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: 12,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 8,
-                        background: 'var(--success)',
-                        color: '#ffffff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                        marginTop: 2,
-                      }}
-                    >
-                      <ShieldCheck size={18} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)' }}>
-                        Strict Multi-Guardian Policy Active
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.4 }}>
-                        Every child release requires registered guardian OTP/PIN or biometric match. Non-authorized individuals trigger instant principal safety escalation.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 1fr',
-                      gap: 10,
-                      fontSize: 12,
-                    }}
-                  >
-                    <div style={{ padding: '10px 12px', background: 'var(--c-surface-hover, rgba(0,0,0,0.02))', borderRadius: 8, border: '1px solid var(--border)' }}>
-                      <div className="t-caption">Active Temp Pickups</div>
-                      <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2 }}>
-                        {authorizations.filter((a: any) => a.status === 'PENDING' || a.status === 'APPROVED').length}
-                      </div>
-                    </div>
-                    <div style={{ padding: '10px 12px', background: 'var(--c-surface-hover, rgba(0,0,0,0.02))', borderRadius: 8, border: '1px solid var(--border)' }}>
-                      <div className="t-caption">Security Audit Logs</div>
-                      <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2 }}>
-                        {securityLogs.length}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                    <button className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setTab('AUTHORIZATIONS')}>
-                      <ShieldCheck size={13} /> Temp Pickups
-                    </button>
-                    <button className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setTab('SECURITY')}>
-                      <ShieldAlert size={13} /> Security Logs
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+            )
+          })()}
         </div>
       )}
       {/* ========================================================================= */}
@@ -5796,6 +5994,124 @@ export function TransportClient({ session }: { session: SessionProps }) {
                 <input type="text" name="name" className="input" placeholder="Kothrud - Campus Express" required />
               </Field>
             </div>
+
+            {/* RECURRING SCHEDULE CONFIGURATION (TASK 2) */}
+            <div style={{ padding: 14, background: 'var(--c-surface-hover, rgba(255,255,255,0.03))', borderRadius: 12, border: '1px solid var(--border-default)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Calendar size={14} /> Recurring Route Schedule
+                </div>
+                <span className="badge b-primary" style={{ fontSize: 11 }}>Automated Daily Trips</span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <Field label="Schedule Type" required>
+                  <select
+                    className="input"
+                    value={addRouteScheduleType}
+                    onChange={(e) => setAddRouteScheduleType(e.target.value as any)}
+                  >
+                    <option value="DAILY">Every Day (Recurring)</option>
+                    <option value="WEEKDAYS">Monday to Friday (Weekdays)</option>
+                    <option value="CUSTOM">Custom Days of the Week</option>
+                    <option value="ONE_TIME">One-time Route</option>
+                  </select>
+                </Field>
+
+                <Field label="Schedule Start Date" required>
+                  <input
+                    type="date"
+                    name="startDate"
+                    className="input"
+                    value={addRouteStartDate}
+                    onChange={(e) => setAddRouteStartDate(e.target.value)}
+                    required
+                  />
+                </Field>
+              </div>
+
+              {addRouteScheduleType === 'CUSTOM' && (
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, display: 'block' }}>
+                    Operating Days of the Week
+                  </label>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {[
+                      { code: 'MON', label: 'Mon' },
+                      { code: 'TUE', label: 'Tue' },
+                      { code: 'WED', label: 'Wed' },
+                      { code: 'THU', label: 'Thu' },
+                      { code: 'FRI', label: 'Fri' },
+                      { code: 'SAT', label: 'Sat' },
+                      { code: 'SUN', label: 'Sun' },
+                    ].map((d) => {
+                      const selected = addRouteOperatingDays.includes(d.code)
+                      return (
+                        <button
+                          key={d.code}
+                          type="button"
+                          onClick={() => {
+                            setAddRouteOperatingDays((prev) =>
+                              selected ? prev.filter((x) => x !== d.code) : [...prev, d.code]
+                            )
+                          }}
+                          style={{
+                            padding: '5px 12px',
+                            borderRadius: 8,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            border: selected ? '1px solid var(--primary)' : '1px solid var(--border-default)',
+                            background: selected ? 'var(--primary)' : 'transparent',
+                            color: selected ? '#ffffff' : 'var(--foreground)',
+                          }}
+                        >
+                          {d.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                <Field label="Schedule End Date (Optional)">
+                  <input
+                    type="date"
+                    name="endDate"
+                    className="input"
+                    value={addRouteEndDate}
+                    onChange={(e) => setAddRouteEndDate(e.target.value)}
+                  />
+                </Field>
+
+                <Field label="Morning Pickup Time" required>
+                  <input
+                    type="time"
+                    name="morningPickupTime"
+                    className="input"
+                    value={addRouteMorningPickup}
+                    onChange={(e) => setAddRouteMorningPickup(e.target.value)}
+                    required
+                  />
+                </Field>
+
+                <Field label="Evening Drop Time" required>
+                  <input
+                    type="time"
+                    name="eveningDropTime"
+                    className="input"
+                    value={addRouteEveningDrop}
+                    onChange={(e) => setAddRouteEveningDrop(e.target.value)}
+                    required
+                  />
+                </Field>
+              </div>
+
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                💡 <b>Template vs Daily Trips:</b> The route, driver, vehicle, stops, and student seats are permanently configured once. Daily trip manifests are automatically scheduled on operating days without duplicating routes.
+              </div>
+            </div>
             <Field label="Assign Vehicle">
               <select name="vehicleId" className="input">
                 <option value="">-- Select Available Vehicle --</option>
@@ -5976,6 +6292,132 @@ export function TransportClient({ session }: { session: SessionProps }) {
                   <option value="INACTIVE">INACTIVE</option>
                 </select>
               </Field>
+
+              {/* RECURRING SCHEDULE EDITING (TASK 4) */}
+              <div style={{ padding: 14, background: 'var(--c-surface-hover, rgba(255,255,255,0.03))', borderRadius: 12, border: '1px solid var(--border-default)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Calendar size={14} /> Recurring Schedule & Timings
+                  </div>
+                  <span className={`badge ${editRouteScheduleStatus === 'ACTIVE' ? 'b-success' : 'b-warning'}`}>
+                    {editRouteScheduleStatus}
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <Field label="Schedule Type">
+                    <select
+                      className="input"
+                      value={editRouteScheduleType}
+                      onChange={(e) => setEditRouteScheduleType(e.target.value as any)}
+                    >
+                      <option value="DAILY">Every Day (Recurring)</option>
+                      <option value="WEEKDAYS">Monday to Friday (Weekdays)</option>
+                      <option value="CUSTOM">Custom Days of Week</option>
+                      <option value="ONE_TIME">One-time Route</option>
+                    </select>
+                  </Field>
+
+                  <Field label="Schedule Operational Status">
+                    <select
+                      className="input"
+                      value={editRouteScheduleStatus}
+                      onChange={(e) => setEditRouteScheduleStatus(e.target.value as any)}
+                    >
+                      <option value="ACTIVE">ACTIVE (Generating Daily Trips)</option>
+                      <option value="PAUSED">PAUSED (Suspended)</option>
+                    </select>
+                  </Field>
+                </div>
+
+                {editRouteScheduleType === 'CUSTOM' && (
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, display: 'block' }}>
+                      Operating Days
+                    </label>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {[
+                        { code: 'MON', label: 'Mon' },
+                        { code: 'TUE', label: 'Tue' },
+                        { code: 'WED', label: 'Wed' },
+                        { code: 'THU', label: 'Thu' },
+                        { code: 'FRI', label: 'Fri' },
+                        { code: 'SAT', label: 'Sat' },
+                        { code: 'SUN', label: 'Sun' },
+                      ].map((d) => {
+                        const selected = editRouteOperatingDays.includes(d.code)
+                        return (
+                          <button
+                            key={d.code}
+                            type="button"
+                            onClick={() => {
+                              setEditRouteOperatingDays((prev) =>
+                                selected ? prev.filter((x) => x !== d.code) : [...prev, d.code]
+                              )
+                            }}
+                            style={{
+                              padding: '5px 12px',
+                              borderRadius: 8,
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              border: selected ? '1px solid var(--primary)' : '1px solid var(--border-default)',
+                              background: selected ? 'var(--primary)' : 'transparent',
+                              color: selected ? '#ffffff' : 'var(--foreground)',
+                            }}
+                          >
+                            {d.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <Field label="Morning Pickup Time">
+                    <input
+                      type="time"
+                      className="input"
+                      value={editRouteMorningPickup}
+                      onChange={(e) => setEditRouteMorningPickup(e.target.value)}
+                    />
+                  </Field>
+
+                  <Field label="Evening Drop Time">
+                    <input
+                      type="time"
+                      className="input"
+                      value={editRouteEveningDrop}
+                      onChange={(e) => setEditRouteEveningDrop(e.target.value)}
+                    />
+                  </Field>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <Field label="Start Date">
+                    <input
+                      type="date"
+                      className="input"
+                      value={editRouteStartDate}
+                      onChange={(e) => setEditRouteStartDate(e.target.value)}
+                    />
+                  </Field>
+
+                  <Field label="End Date (Optional)">
+                    <input
+                      type="date"
+                      className="input"
+                      value={editRouteEndDate}
+                      onChange={(e) => setEditRouteEndDate(e.target.value)}
+                    />
+                  </Field>
+                </div>
+
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                  * Modifying future recurring schedules leaves historical and completed trips intact.
+                </div>
+              </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
               <button type="button" className="btn btn-ghost" onClick={() => setEditRouteModal(null)}>Cancel</button>
@@ -5983,6 +6425,307 @@ export function TransportClient({ session }: { session: SessionProps }) {
             </div>
           </form>
         )}
+      </Modal>
+
+      {/* ========================================================================= */}
+      {/* MODAL: ROUTE SCHEDULE & CALENDAR (TASK 4 & 5) */}
+      {/* ========================================================================= */}
+      <Modal
+        open={!!scheduleModalRoute}
+        onClose={() => { setScheduleModalRoute(null); setRouteCalendarData(null); }}
+        title={scheduleModalRoute ? `Route Schedule: ${scheduleModalRoute.routeName || scheduleModalRoute.name}` : 'Route Schedule'}
+        subtitle={scheduleModalRoute ? `Code: ${scheduleModalRoute.routeNumber || scheduleModalRoute.code} • ${scheduleModalRoute.scheduleType || 'DAILY'} Recurring Schedule` : ''}
+        icon={<Calendar size={20} />}
+      >
+        {scheduleModalRoute && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Route Schedule Summary Card */}
+            <div
+              style={{
+                padding: '12px 16px',
+                borderRadius: 12,
+                background: 'var(--c-surface-hover, rgba(255,255,255,0.03))',
+                border: '1px solid var(--border-default)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 12,
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 800, fontSize: 15 }}>{scheduleModalRoute.routeName || scheduleModalRoute.name}</span>
+                  <span className="badge b-neutral" style={{ fontFamily: 'var(--font-mono)' }}>
+                    {scheduleModalRoute.routeNumber || scheduleModalRoute.code}
+                  </span>
+                  <span className={`badge ${scheduleModalRoute.scheduleStatus === 'ACTIVE' ? 'b-success' : 'b-warning'}`}>
+                    {scheduleModalRoute.scheduleStatus || 'ACTIVE'}
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                  Bus: <b>{scheduleModalRoute.assignedBus || 'MH-12'}</b> · Driver: <b>{scheduleModalRoute.assignedDriver || 'Alex'}</b> · Students: <b>{scheduleModalRoute.assignedStudentsCount || 0}</b>
+                </div>
+              </div>
+
+              {/* Schedule Controls (TASK 4) */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                {canWrite && (
+                  <>
+                    <button
+                      className={`btn ${scheduleModalRoute.scheduleStatus === 'PAUSED' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+                      style={{ fontSize: 11, gap: 4 }}
+                      onClick={() =>
+                        scheduleModalRoute.scheduleStatus === 'PAUSED'
+                          ? handleResumeRouteSchedule(scheduleModalRoute.routeId || scheduleModalRoute.id, scheduleModalRoute.routeName || scheduleModalRoute.name)
+                          : handlePauseRouteSchedule(scheduleModalRoute.routeId || scheduleModalRoute.id, scheduleModalRoute.routeName || scheduleModalRoute.name)
+                      }
+                    >
+                      {scheduleModalRoute.scheduleStatus === 'PAUSED' ? <Play size={12} /> : <Pause size={12} />}
+                      {scheduleModalRoute.scheduleStatus === 'PAUSED' ? 'Resume Schedule' : 'Pause Schedule'}
+                    </button>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      style={{ fontSize: 11, gap: 4 }}
+                      onClick={() => setExceptionModalOpen(true)}
+                    >
+                      <Plus size={12} /> Add Exception
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ fontSize: 11, color: 'var(--danger)', gap: 4 }}
+                      onClick={() => handleCancelFutureTrips(scheduleModalRoute.routeId || scheduleModalRoute.id, scheduleModalRoute.routeName || scheduleModalRoute.name)}
+                    >
+                      Cancel Future Trips
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Month Navigation */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0' }}>
+              <div style={{ fontWeight: 800, fontSize: 16 }}>
+                {new Date(calendarYear, calendarMonth - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ padding: '4px 8px' }}
+                  onClick={() => {
+                    let nextM = calendarMonth - 1
+                    let nextY = calendarYear
+                    if (nextM < 1) { nextM = 12; nextY -= 1; }
+                    setCalendarMonth(nextM)
+                    setCalendarYear(nextY)
+                    loadRouteCalendar(scheduleModalRoute.routeId || scheduleModalRoute.id, nextY, nextM)
+                  }}
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ padding: '4px 8px' }}
+                  onClick={() => {
+                    let nextM = calendarMonth + 1
+                    let nextY = calendarYear
+                    if (nextM > 12) { nextM = 1; nextY += 1; }
+                    setCalendarMonth(nextM)
+                    setCalendarYear(nextY)
+                    loadRouteCalendar(scheduleModalRoute.routeId || scheduleModalRoute.id, nextY, nextM)
+                  }}
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+
+            {/* Calendar Grid View */}
+            {loadingCalendar ? (
+              <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-secondary)' }}>
+                Loading schedule calendar...
+              </div>
+            ) : routeCalendarData ? (
+              <div>
+                {/* Weekday headers */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, marginBottom: 6, textAlign: 'center' }}>
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+                    <div key={d} style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                      {d}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Day cells */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+                  {/* Leading empty cells */}
+                  {Array.from({ length: routeCalendarData.days[0]?.dayOfWeek || 0 }).map((_, idx) => (
+                    <div key={`empty-${idx}`} style={{ minHeight: 64, borderRadius: 8, background: 'transparent' }} />
+                  ))}
+
+                  {/* Day cards */}
+                  {routeCalendarData.days.map((day: any) => {
+                    const dayNum = parseInt(day.date.split('-')[2], 10)
+                    const isToday = new Date().toISOString().split('T')[0] === day.date
+
+                    let bg = 'var(--surface-ground)'
+                    let borderColor = 'var(--border-default)'
+                    if (day.isHoliday) {
+                      bg = 'rgba(139, 92, 246, 0.08)'
+                      borderColor = 'rgba(139, 92, 246, 0.3)'
+                    } else if (day.exception) {
+                      bg = day.exception.isCancelled ? 'rgba(239, 68, 68, 0.08)' : 'rgba(245, 158, 11, 0.08)'
+                      borderColor = day.exception.isCancelled ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)'
+                    } else if (day.isOperating) {
+                      bg = 'rgba(16, 185, 129, 0.04)'
+                      borderColor = 'rgba(16, 185, 129, 0.2)'
+                    }
+
+                    return (
+                      <div
+                        key={day.date}
+                        style={{
+                          minHeight: 64,
+                          borderRadius: 8,
+                          background: bg,
+                          border: isToday ? '2px solid var(--primary)' : `1px solid ${borderColor}`,
+                          padding: '6px 8px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          fontSize: 11,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontWeight: isToday ? 800 : 600, color: isToday ? 'var(--primary)' : 'var(--foreground)' }}>
+                            {dayNum}
+                          </span>
+                          {day.isHoliday && (
+                            <span style={{ fontSize: 9, color: 'var(--purple-400, #a78bfa)', fontWeight: 700 }}>
+                              Holiday
+                            </span>
+                          )}
+                          {day.exception && (
+                            <span style={{ fontSize: 9, color: day.exception.isCancelled ? 'var(--danger)' : 'var(--warning)', fontWeight: 700 }}>
+                              {day.exception.isCancelled ? 'Skip' : 'Sub'}
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          {day.trips && day.trips.length > 0 ? (
+                            <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginTop: 4 }}>
+                              {day.trips.map((t: any) => (
+                                <span
+                                  key={t.id}
+                                  className={`badge ${t.status === 'COMPLETED' ? 'b-success' : t.status === 'IN_PROGRESS' ? 'b-warning' : 'b-primary'}`}
+                                  style={{ fontSize: 9, padding: '0 4px' }}
+                                  title={`${t.type}: ${t.status}`}
+                                >
+                                  {t.type === 'MORNING' ? 'AM' : 'PM'}
+                                </span>
+                              ))}
+                            </div>
+                          ) : day.isOperating && !day.isHoliday && !day.exception?.isCancelled ? (
+                            <span style={{ fontSize: 9, color: 'var(--text-secondary)' }}>Operating</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
+      </Modal>
+
+      {/* ========================================================================= */}
+      {/* MODAL: ADD ROUTE SCHEDULE EXCEPTION (TASK 5) */}
+      {/* ========================================================================= */}
+      <Modal
+        open={exceptionModalOpen}
+        onClose={() => setExceptionModalOpen(false)}
+        title="Add Route Schedule Exception"
+        subtitle="Temporary cancellation or substitute vehicle / driver assignment"
+        icon={<AlertTriangle size={20} />}
+      >
+        <form onSubmit={handleAddRouteException}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <Field label="Exception Date" required>
+              <input
+                type="date"
+                className="input"
+                value={exceptionDate}
+                onChange={(e) => setExceptionDate(e.target.value)}
+                required
+              />
+            </Field>
+
+            <Field label="Exception Type" required>
+              <select
+                className="input"
+                value={exceptionIsCancelled ? 'CANCEL' : 'SUBSTITUTE'}
+                onChange={(e) => setExceptionIsCancelled(e.target.value === 'CANCEL')}
+              >
+                <option value="CANCEL">Temporary Route Cancellation (Skip Operations)</option>
+                <option value="SUBSTITUTE">Temporary Bus / Driver Replacement</option>
+              </select>
+            </Field>
+
+            {!exceptionIsCancelled && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <Field label="Substitute Vehicle">
+                  <select
+                    className="input"
+                    value={exceptionSubBus}
+                    onChange={(e) => setExceptionSubBus(e.target.value)}
+                  >
+                    <option value="">-- Select Substitute Vehicle --</option>
+                    {vehicles.filter((v) => v.status === 'ACTIVE').map((v) => (
+                      <option key={v.id} value={v.id}>{v.registrationNumber} (Cap: {v.capacity})</option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Substitute Driver">
+                  <select
+                    className="input"
+                    value={exceptionSubDriver}
+                    onChange={(e) => setExceptionSubDriver(e.target.value)}
+                  >
+                    <option value="">-- Select Substitute Driver --</option>
+                    {eligibleStaff.map((s) => (
+                      <option key={s.id} value={s.id}>{s.fullName} ({s.designation})</option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            )}
+
+            <Field label="Reason / Notes" required>
+              <input
+                type="text"
+                className="input"
+                placeholder="e.g. Annual Preschool Picnic, Driver medical leave, Road work"
+                value={exceptionReason}
+                onChange={(e) => setExceptionReason(e.target.value)}
+                required
+              />
+            </Field>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+              <button type="button" className="btn btn-ghost" onClick={() => setExceptionModalOpen(false)}>
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary" disabled={busy}>
+                Save Exception
+              </button>
+            </div>
+          </div>
+        </form>
       </Modal>
 
       {/* ========================================================================= */}

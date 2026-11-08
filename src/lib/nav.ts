@@ -41,10 +41,17 @@ export const NAV_ITEMS: NavItem[] = [
 /** Role-filtered navigation (menuBuilder per Frontend Architecture — RBAC). */
 export function navForRole(roleOrRoles: Role | Role[]): NavItem[] {
   const roles = Array.isArray(roleOrRoles) ? roleOrRoles : [roleOrRoles]
+  const isDriverOnly = roles.some((r) => ['DRIVER', 'ATTENDANT'].includes(r)) && !roles.some((r) => ['OWNER', 'PRINCIPAL', 'SUPER_ADMIN', 'PLATFORM_ADMIN', 'TEACHER', 'COORDINATOR'].includes(r))
+
   return NAV_ITEMS.filter((n) => {
     if (n.roles && !n.roles.some((r) => roles.includes(r))) return false
     if (n.perms && !n.perms.some((p) => can(roles, p))) return false
     if (n.perm && !can(roles, n.perm)) return false
     return true
+  }).map((n) => {
+    if (isDriverOnly && (n.key === 'home' || n.key === 'dashboard' || n.key === 'transport')) {
+      return { ...n, href: '/app/driver' }
+    }
+    return n
   })
 }

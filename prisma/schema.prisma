@@ -126,6 +126,7 @@ model Tenant {
   transportIncidents          TransportIncident[]
   pickupAuthorizations        TransportPickupAuthorization[]
   transportSecurityEvents     TransportSecurityEvent[]
+  routeScheduleExceptions     RouteScheduleException[]
 
   // Reports & Analytics Relations
   savedReports                SavedReport[]
@@ -3728,9 +3729,40 @@ model TransportRoute {
   assignments        StudentTransportAssignment[]
   trips              TransportTrip[]
 
+  // Recurring Schedule Configuration
+  scheduleType       String          @default("DAILY")
+  scheduleStatus     String          @default("ACTIVE")
+  operatingDays      Json?
+  startDate          DateTime?       @db.Date
+  endDate            DateTime?       @db.Date
+  morningPickupTime  String?         @default("08:00")
+  eveningDropTime    String?         @default("15:00")
+  exceptions         RouteScheduleException[]
+
   @@unique([tenantId, code])
   @@index([tenantId, branchId])
   @@map("transport_routes")
+}
+
+/// Individual exception or temporary override for a recurring route schedule
+model RouteScheduleException {
+  id                         String          @id @default(uuid())
+  tenantId                   String
+  routeId                    String
+  exceptionDate              DateTime        @db.Date
+  reason                     String?
+  isCancelled                Boolean         @default(true)
+  substituteVehicleId        String?
+  substituteDriverProfileId  String?
+  createdAt                  DateTime        @default(now())
+  updatedAt                  DateTime        @updatedAt
+
+  tenant                     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  route                      TransportRoute  @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@unique([routeId, exceptionDate])
+  @@index([tenantId, exceptionDate])
+  @@map("transport_route_schedule_exceptions")
 }
 
 /// Ordered stop along a transport route

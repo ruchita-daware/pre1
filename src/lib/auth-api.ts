@@ -14,7 +14,7 @@ import { RbacEngine } from './auth/rbac-engine'
  */
 export async function requireApi(
   req: NextRequest,
-  permission?: string
+  permission?: string | string[]
 ): Promise<SessionPayload | Response> {
   const session = await getSession(req)
   if (!session) return Errors.unauthorized()
@@ -46,16 +46,19 @@ export async function requireApi(
   }
 
   const effectiveRoles = session.roles && session.roles.length > 0 ? session.roles : [session.role]
-  let hasPermission = !permission || can(effectiveRoles, permission) || Boolean(session.permissions?.includes(permission as any))
-  if (!hasPermission && permission && session.tenantId) {
+  const perms = permission ? (Array.isArray(permission) ? permission : [permission]) : []
+  let hasPermission =
+    perms.length === 0 ||
+    perms.some((p) => can(effectiveRoles, p) || Boolean(session.permissions?.includes(p as any)))
+  if (!hasPermission && perms.length > 0 && session.tenantId) {
     const dynamicPerms = await RbacEngine.resolveEffectivePermissions({
       userId: session.uid,
       tenantId: session.tenantId,
       roles: effectiveRoles,
     })
-    hasPermission =
-      dynamicPerms.includes(permission) ||
-      (dynamicPerms.includes('*') && !permission.startsWith('platform:'))
+    hasPermission = perms.some((p) =>
+      dynamicPerms.includes(p) || (dynamicPerms.includes('*') && !p.startsWith('platform:'))
+    )
   }
 
   if (!hasPermission) {

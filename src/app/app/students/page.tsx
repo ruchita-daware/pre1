@@ -138,6 +138,7 @@ export default function StudentsPage() {
   const [classrooms, setClassrooms] = useState<Classroom[]>([])
   const [canWriteStudents, setCanWriteStudents] = useState(false)
   const [isParent, setIsParent] = useState(false)
+  const [isDriver, setIsDriver] = useState(false)
 
   // Load current user permissions
   useEffect(() => {
@@ -146,6 +147,12 @@ export default function StudentsPage() {
       .then((res) => {
         if (res.success && res.data) {
           const roles: string[] = res.data.roles && res.data.roles.length > 0 ? res.data.roles : [res.data.role]
+          const isDriverUser = roles.some((r) => ['DRIVER', 'ATTENDANT'].includes(r)) && !roles.some((r) => ['OWNER', 'PRINCIPAL', 'SUPER_ADMIN', 'PLATFORM_ADMIN', 'TEACHER', 'COORDINATOR'].includes(r))
+          if (isDriverUser) {
+            setIsDriver(true)
+            router.replace('/app/driver')
+            return
+          }
           const isFam = roles.some((r) => ['PARENT', 'GUARDIAN'].includes(r))
           setIsParent(isFam)
           const writeAllowed = roles.some((r) => ['OWNER', 'PRINCIPAL', 'SUPER_ADMIN', 'PLATFORM_ADMIN'].includes(r))
@@ -656,6 +663,18 @@ export default function StudentsPage() {
       ),
     },
   ]
+
+  if (isDriver) {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 mb-4 animate-pulse">
+          <School className="w-6 h-6" />
+        </div>
+        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Redirecting to Driver Dashboard...</h2>
+        <p className="text-sm text-slate-500 mt-1">Drivers do not have access to general student administration.</p>
+      </div>
+    )
+  }
 
   if (isParent) {
     return <ParentStudentsView />

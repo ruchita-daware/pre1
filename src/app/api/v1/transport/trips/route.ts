@@ -61,13 +61,15 @@ async function _GET(req: NextRequest) {
  * POST /api/v1/transport/trips — Start/Create a trip (Pickup or Drop)
  */
 async function _POST(req: NextRequest) {
-  const session = await requireApi(req, 'transport:write')
+  const session = await requireApi(req, ['transport:write', 'transport:trip'])
   if (isResponse(session)) return session
   if (!session.tenantId) return Errors.forbidden('No tenant context')
 
   try {
     const body = await req.json().catch(() => ({}))
-    const { routeId, vehicleId, driverId, tripType, date } = body
+    const { routeId, vehicleId, driverId, date } = body
+    const rawTripType = body.tripType
+    const tripType = rawTripType === 'PICKUP' ? 'MORNING' : rawTripType === 'DROP' ? 'EVENING' : rawTripType
 
     if (!routeId || !tripType) {
       return Errors.validation('routeId and tripType (PICKUP/DROP) are required')

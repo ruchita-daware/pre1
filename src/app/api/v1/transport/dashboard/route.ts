@@ -15,25 +15,39 @@ async function _GET(req: NextRequest) {
   try {
     const sp = req.nextUrl.searchParams
     const requestedBranchId = sp.get('branchId') || undefined
+    const dateParam = sp.get('date') || undefined
+    const queryDate = dateParam ? new Date(dateParam) : undefined
+
     if (requestedBranchId) {
       const branchCheck = await requireBranchAccess(session, requestedBranchId)
       if (branchCheck) return branchCheck
     }
 
     const authorizedBranches = await getAuthorizedBranchIds(session)
-    if (authorizedBranches !== 'ALL' && authorizedBranches.length === 0) {
-      return ok({ activeTrips: 0, pendingAlerts: 0, totalVehicles: 0, totalRoutes: 0, activeAssignments: 0 })
+    if (authorizedBranches !== null && authorizedBranches.length === 0) {
+      return ok({
+        summary: { activeRoutes: 0, activeVehicles: 0, assignedStudents: 0 },
+        todayRoutes: [],
+        activeTrips: 0,
+        pendingAlerts: 0,
+        totalVehicles: 0,
+        totalRoutes: 0,
+        activeAssignments: 0,
+      })
     }
 
-    const branchToUse = requestedBranchId || (authorizedBranches === 'ALL' ? undefined : session.branchId)
+    const branchToUse = requestedBranchId || (authorizedBranches === null ? undefined : session.branchId || undefined)
 
-    const data = await TransportService.getDashboardMetrics({
-      tenantId: session.tenantId,
-      branchId: branchToUse,
-      actorId: session.uid,
-      actorName: session.name,
-      actorRole: session.role,
-    })
+    const data = await TransportService.getDashboardMetrics(
+      {
+        tenantId: session.tenantId,
+        branchId: branchToUse,
+        actorId: session.uid,
+        actorName: session.name,
+        actorRole: session.role,
+      },
+      queryDate
+    )
     return ok(data)
   } catch (e: any) {
     return Errors.system(e)

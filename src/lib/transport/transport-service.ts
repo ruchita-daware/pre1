@@ -257,6 +257,13 @@ export interface CreateRouteInput {
   driverProfileId?: string | null
   attendantProfileId?: string | null
   stops?: CreateStopInput[]
+  scheduleType?: 'ONE_TIME' | 'DAILY' | 'WEEKDAYS' | 'CUSTOM'
+  scheduleStatus?: 'ACTIVE' | 'PAUSED'
+  operatingDays?: string[] | number[]
+  startDate?: Date | string | null
+  endDate?: Date | string | null
+  morningPickupTime?: string
+  eveningDropTime?: string
 }
 
 export interface AssignStudentInput {
@@ -313,21 +320,28 @@ export class TransportService {
    * 1. DASHBOARD & OPERATIONAL METRICS
    * Real database aggregates — zero dummy data.
    */
-  static async getDashboardMetrics(ctx: ScopeContext) {
-    const today = new Date()
+  static async getDashboardMetrics(ctx: ScopeContext, targetDate?: Date | string) {
+    const today = targetDate ? new Date(targetDate) : new Date()
     today.setHours(0, 0, 0, 0)
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
 
     const branchFilter = ctx.branchId ? { branchId: ctx.branchId } : {}
 
+    // 1. Ensure idempotent automatic generation of daily trips for scheduled operating routes
+    await this.ensureDailyTripsForDate(ctx, today).catch((err) => {
+      console.warn('[TransportService] ensureDailyTripsForDate warning:', err?.message || err)
+    })
+
     const [
       activeRoutesCount,
       activeVehiclesCount,
       vehiclesInMaintenanceCount,
       activeAssignmentsCount,
+      allRoutes,
       todayTrips,
       openIncidentsCount,
+      schoolHoliday,
     ] = await Promise.all([
       db.transportRoute.count({
         where: { tenantId: ctx.tenantId, status: 'ACTIVE', deletedAt: null, ...branchFilter },
@@ -341,6 +355,17 @@ export class TransportService {
       db.studentTransportAssignment.count({
         where: { tenantId: ctx.tenantId, status: 'ACTIVE', deletedAt: null, ...branchFilter },
       }),
+      db.transportRoute.findMany({
+        where: { tenantId: ctx.tenantId, deletedAt: null, ...branchFilter },
+        include: {
+          vehicle: true,
+          driverProfile: { include: { user: { select: { id: true, fullName: true, phone: true } } } },
+          stops: { orderBy: { sequence: 'asc' } },
+          assignments: { where: { status: 'ACTIVE', deletedAt: null }, select: { id: true, studentId: true } },
+          exceptions: { where: { exceptionDate: { gte: today, lt: tomorrow } } },
+        },
+        orderBy: { code: 'asc' },
+      }),
       db.transportTrip.findMany({
         where: {
           tenantId: ctx.tenantId,
@@ -349,9 +374,9 @@ export class TransportService {
         },
         include: {
           manifest: true,
-          route: { select: { name: true, code: true } },
-          vehicle: { select: { registrationNumber: true } },
-          driverProfile: { include: { user: { select: { fullName: true } } } },
+          route: { select: { id: true, name: true, code: true } },
+          vehicle: { select: { id: true, registrationNumber: true } },
+          driverProfile: { include: { user: { select: { id: true, fullName: true, phone: true } } } },
         },
       }),
       db.transportIncident.count({
@@ -359,6 +384,14 @@ export class TransportService {
           tenantId: ctx.tenantId,
           status: { in: ['REPORTED', 'INVESTIGATING'] },
           ...branchFilter,
+        },
+      }),
+      db.calendarEvent.findFirst({
+        where: {
+          tenantId: ctx.tenantId,
+          date: { gte: today, lt: tomorrow },
+          type: { in: ['HOLIDAY', 'VACATION'] },
+          ...(ctx.branchId ? { OR: [{ branchId: ctx.branchId }, { branchId: null }] } : {}),
         },
       }),
     ])
@@ -378,7 +411,88 @@ export class TransportService {
       }
     }
 
+    // Build concise, rich "Today's Routes" records (TASK 1 & TASK 3)
+    const todayRoutes = allRoutes.map((route) => {
+      const morningTrip = todayTrips.find((t) => t.routeId === route.id && t.tripType === 'MORNING')
+      const eveningTrip = todayTrips.find((t) => t.routeId === route.id && t.tripType === 'EVENING')
+
+      const isOperatingDay = this.isRouteOperatingOnDate(route, today)
+      const exception = route.exceptions?.[0]
+      const isCancelledByException = Boolean(exception?.isCancelled)
+
+      let overallStatus = 'SCHEDULED'
+      if (route.status === 'INACTIVE') {
+        overallStatus = 'INACTIVE'
+      } else if (route.scheduleStatus === 'PAUSED') {
+        overallStatus = 'PAUSED'
+      } else if (schoolHoliday) {
+        overallStatus = 'HOLIDAY'
+      } else if (isCancelledByException) {
+        overallStatus = 'CANCELLED'
+      } else if (!isOperatingDay) {
+        overallStatus = 'NOT_OPERATING_TODAY'
+      } else if (!route.vehicleId || !route.driverProfileId) {
+        overallStatus = 'NEEDS_ASSIGNMENT'
+      } else if (morningTrip?.status === 'IN_PROGRESS' || eveningTrip?.status === 'IN_PROGRESS') {
+        overallStatus = 'IN_PROGRESS'
+      } else if (morningTrip?.status === 'COMPLETED' && eveningTrip?.status === 'COMPLETED') {
+        overallStatus = 'COMPLETED'
+      } else if (morningTrip?.status === 'COMPLETED' || eveningTrip?.status === 'COMPLETED') {
+        overallStatus = 'PARTIAL_COMPLETED'
+      } else {
+        overallStatus = 'SCHEDULED'
+      }
+
+      return {
+        routeId: route.id,
+        routeName: route.name,
+        routeNumber: route.code,
+        assignedBus: route.vehicle?.registrationNumber || 'Not Assigned',
+        assignedBusId: route.vehicleId,
+        assignedDriver: route.driverProfile?.user?.fullName || 'Not Assigned',
+        assignedDriverPhone: route.driverProfile?.user?.phone || null,
+        assignedDriverId: route.driverProfileId,
+        morningPickupTime: route.morningPickupTime || route.stops[0]?.morningPickupTime || '08:00',
+        eveningDropTime: route.eveningDropTime || route.stops[route.stops.length - 1]?.eveningDropTime || '15:00',
+        assignedStudentsCount: route.assignments.length,
+        scheduleType: route.scheduleType || 'DAILY',
+        scheduleStatus: route.scheduleStatus || 'ACTIVE',
+        operatingDays: route.operatingDays || null,
+        startDate: route.startDate,
+        endDate: route.endDate,
+        isOperatingDay,
+        overallStatus,
+        exception: exception || null,
+        morningTrip: morningTrip
+          ? {
+              id: morningTrip.id,
+              status: morningTrip.status,
+              delayMinutes: morningTrip.delayMinutes,
+              totalManifest: morningTrip.manifest.length,
+              boarded: morningTrip.manifest.filter((m) => m.status === 'BOARDED').length,
+            }
+          : null,
+        eveningTrip: eveningTrip
+          ? {
+              id: eveningTrip.id,
+              status: eveningTrip.status,
+              delayMinutes: eveningTrip.delayMinutes,
+              totalManifest: eveningTrip.manifest.length,
+              dropped: eveningTrip.manifest.filter((m) => m.status === 'DROPPED').length,
+            }
+          : null,
+        stopsCount: route.stops.length,
+      }
+    })
+
     return {
+      summary: {
+        activeRoutes: activeRoutesCount,
+        activeVehicles: activeVehiclesCount,
+        assignedStudents: activeAssignmentsCount,
+      },
+      todayRoutes,
+      schoolHoliday: schoolHoliday ? { title: schoolHoliday.title, date: schoolHoliday.date } : null,
       activeRoutes: activeRoutesCount,
       activeVehicles: activeVehiclesCount,
       vehiclesInMaintenance: vehiclesInMaintenanceCount,
@@ -391,6 +505,7 @@ export class TransportService {
       openIncidents: openIncidentsCount,
       todayTrips: todayTrips.map((t) => ({
         id: t.id,
+        routeId: t.route.id,
         routeName: t.route.name,
         routeCode: t.route.code,
         vehicleReg: t.vehicle.registrationNumber,
@@ -655,6 +770,13 @@ export class TransportService {
         driverProfileId: input.driverProfileId || null,
         attendantProfileId: input.attendantProfileId || null,
         status: 'ACTIVE',
+        scheduleType: input.scheduleType || 'DAILY',
+        scheduleStatus: input.scheduleStatus || 'ACTIVE',
+        operatingDays: input.operatingDays !== undefined ? (input.operatingDays as any) : (input.scheduleType === 'WEEKDAYS' ? ['MON', 'TUE', 'WED', 'THU', 'FRI'] : ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']),
+        startDate: input.startDate ? new Date(input.startDate) : null,
+        endDate: input.endDate ? new Date(input.endDate) : null,
+        morningPickupTime: input.morningPickupTime?.trim() || (input.stops?.[0]?.morningPickupTime?.trim() || '08:00'),
+        eveningDropTime: input.eveningDropTime?.trim() || (input.stops?.[input.stops.length - 1]?.eveningDropTime?.trim() || '15:00'),
         stops: input.stops && input.stops.length > 0
           ? {
               create: input.stops.map((s) => ({
@@ -704,6 +826,13 @@ export class TransportService {
       attendantProfileId?: string | null
       branchId?: string | null
       stops?: CreateStopInput[]
+      scheduleType?: 'ONE_TIME' | 'DAILY' | 'WEEKDAYS' | 'CUSTOM'
+      scheduleStatus?: 'ACTIVE' | 'PAUSED'
+      operatingDays?: string[] | number[]
+      startDate?: Date | string | null
+      endDate?: Date | string | null
+      morningPickupTime?: string
+      eveningDropTime?: string
     }
   ) {
     const existing = await db.transportRoute.findFirst({
@@ -798,6 +927,13 @@ export class TransportService {
           ...(data.driverProfileId !== undefined ? { driverProfileId: data.driverProfileId || null } : {}),
           ...(data.attendantProfileId !== undefined ? { attendantProfileId: data.attendantProfileId || null } : {}),
           ...(data.branchId !== undefined ? { branchId: data.branchId || null } : {}),
+          ...(data.scheduleType !== undefined ? { scheduleType: data.scheduleType } : {}),
+          ...(data.scheduleStatus !== undefined ? { scheduleStatus: data.scheduleStatus } : {}),
+          ...(data.operatingDays !== undefined ? { operatingDays: data.operatingDays as any } : {}),
+          ...(data.startDate !== undefined ? { startDate: data.startDate ? new Date(data.startDate) : null } : {}),
+          ...(data.endDate !== undefined ? { endDate: data.endDate ? new Date(data.endDate) : null } : {}),
+          ...(data.morningPickupTime !== undefined ? { morningPickupTime: data.morningPickupTime } : {}),
+          ...(data.eveningDropTime !== undefined ? { eveningDropTime: data.eveningDropTime } : {}),
         },
         include: { stops: { orderBy: { sequence: 'asc' } }, vehicle: true, driverProfile: { include: { user: true } } },
       })
@@ -1222,6 +1358,39 @@ export class TransportService {
     if (existingTrip) {
       if (existingTrip.status === 'COMPLETED') {
         throw new Error(`Trip for ${tripType} on this date is already COMPLETED`)
+      }
+      if (existingTrip.status === 'SCHEDULED') {
+        const dispatched = await db.transportTrip.update({
+          where: { id: existingTrip.id },
+          data: {
+            status: 'IN_PROGRESS',
+            actualStartTime: new Date(),
+            vehicleId,
+            driverProfileId: driverId,
+            attendantProfileId: attendantId || null,
+          },
+          include: {
+            manifest: { include: { student: true, stop: true } },
+            vehicle: true,
+            route: true,
+            driverProfile: { include: { user: true } },
+          },
+        })
+
+        await recordAudit({
+          tenantId: ctx.tenantId,
+          branchId: route.branchId || undefined,
+          actorId: ctx.actorId,
+          actorName: ctx.actorName,
+          actorRole: ctx.actorRole,
+          action: 'DISPATCH_SCHEDULED_TRIP',
+          entity: 'TransportTrip',
+          entityId: dispatched.id,
+          module: 'TRANSPORT',
+          summary: `Dispatched ${tripType} trip on route ${route.name} (Vehicle: ${vehicle.registrationNumber})`,
+        })
+
+        return dispatched
       }
       return existingTrip
     }
@@ -2367,9 +2536,9 @@ export class TransportService {
       ...(filter?.status ? { status: filter.status } : {}),
       ...(filter?.date
         ? {
-            scheduledDate: {
-              gte: new Date(filter.date.setHours(0, 0, 0, 0)),
-              lte: new Date(filter.date.setHours(23, 59, 59, 999)),
+            tripDate: {
+              gte: new Date(new Date(filter.date).setHours(0, 0, 0, 0)),
+              lte: new Date(new Date(filter.date).setHours(23, 59, 59, 999)),
             },
           }
         : {}),
@@ -2836,5 +3005,448 @@ export class TransportService {
       timestamp: Date.now(),
     }
   }
+  /**
+   * RECURRING SCHEDULE & IDEMPOTENT TRIP GENERATION ENGINE
+   */
+  static isRouteOperatingOnDate(route: any, targetDate: Date = new Date()): boolean {
+    const d = new Date(targetDate)
+    d.setHours(0, 0, 0, 0)
+
+    if (route.status === 'INACTIVE' || route.scheduleStatus === 'PAUSED') {
+      return false
+    }
+
+    if (route.startDate) {
+      const s = new Date(route.startDate)
+      s.setHours(0, 0, 0, 0)
+      if (d < s) return false
+    }
+    if (route.endDate) {
+      const e = new Date(route.endDate)
+      e.setHours(23, 59, 59, 999)
+      if (d > e) return false
+    }
+
+    const dayOfWeek = d.getDay() // 0 = Sun, 1 = Mon ... 6 = Sat
+    const dayCodes = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+    const dayCode = dayCodes[dayOfWeek]
+
+    const schedType = route.scheduleType || 'DAILY'
+    if (schedType === 'ONE_TIME') {
+      if (!route.startDate) return false
+      const s = new Date(route.startDate)
+      s.setHours(0, 0, 0, 0)
+      return s.getTime() === d.getTime()
+    }
+
+    if (schedType === 'WEEKDAYS') {
+      return dayOfWeek >= 1 && dayOfWeek <= 5
+    }
+
+    if (schedType === 'CUSTOM') {
+      if (Array.isArray(route.operatingDays)) {
+        return route.operatingDays.includes(dayCode) || route.operatingDays.includes(dayOfWeek)
+      }
+      return false
+    }
+
+    // DAILY
+    if (Array.isArray(route.operatingDays) && route.operatingDays.length > 0) {
+      return route.operatingDays.includes(dayCode) || route.operatingDays.includes(dayOfWeek)
+    }
+    return true
+  }
+
+  static async ensureDailyTripsForDate(ctx: ScopeContext, targetDate: Date = new Date()) {
+    const dateObj = new Date(targetDate)
+    dateObj.setHours(0, 0, 0, 0)
+    const nextDay = new Date(dateObj)
+    nextDay.setDate(nextDay.getDate() + 1)
+
+    // Check School Holiday
+    const holiday = await db.calendarEvent.findFirst({
+      where: {
+        tenantId: ctx.tenantId,
+        date: { gte: dateObj, lt: nextDay },
+        type: { in: ['HOLIDAY', 'VACATION'] },
+        ...(ctx.branchId ? { OR: [{ branchId: ctx.branchId }, { branchId: null }] } : {}),
+      },
+    })
+    if (holiday) {
+      return { holiday: true, title: holiday.title, generatedTrips: [] }
+    }
+
+    const branchFilter = ctx.branchId ? { branchId: ctx.branchId } : {}
+    const routes = await db.transportRoute.findMany({
+      where: {
+        tenantId: ctx.tenantId,
+        status: 'ACTIVE',
+        deletedAt: null,
+        ...branchFilter,
+      },
+      include: {
+        stops: { orderBy: { sequence: 'asc' } },
+        assignments: { where: { status: 'ACTIVE', deletedAt: null } },
+        exceptions: { where: { exceptionDate: { gte: dateObj, lt: nextDay } } },
+      },
+    })
+
+    const generatedTrips: any[] = []
+
+    for (const route of routes) {
+      if (!this.isRouteOperatingOnDate(route, dateObj)) continue
+
+      const exception = route.exceptions?.[0]
+      if (exception?.isCancelled) continue
+
+      const vehicleId = exception?.substituteVehicleId || route.vehicleId
+      const driverProfileId = exception?.substituteDriverProfileId || route.driverProfileId
+      if (!vehicleId || !driverProfileId) continue
+
+      const tripTypes: TripOperationalType[] = ['MORNING', 'EVENING']
+
+      for (const tripType of tripTypes) {
+        // Idempotent check
+        const existing = await db.transportTrip.findUnique({
+          where: {
+            tenantId_routeId_tripDate_tripType: {
+              tenantId: ctx.tenantId,
+              routeId: route.id,
+              tripDate: dateObj,
+              tripType,
+            },
+          },
+        })
+
+        if (!existing) {
+          const scheduledStartTime =
+            tripType === 'MORNING'
+              ? (route.morningPickupTime || route.stops[0]?.morningPickupTime || '08:00')
+              : (route.eveningDropTime || route.stops[route.stops.length - 1]?.eveningDropTime || '15:00')
+
+          const relevantAssignments = route.assignments.filter((a) =>
+            tripType === 'MORNING'
+              ? ['TWO_WAY', 'MORNING_ONLY'].includes(a.tripType)
+              : ['TWO_WAY', 'EVENING_ONLY'].includes(a.tripType)
+          )
+
+          const created = await db.$transaction(async (tx) => {
+            const trip = await tx.transportTrip.create({
+              data: {
+                tenantId: ctx.tenantId,
+                branchId: route.branchId,
+                routeId: route.id,
+                vehicleId,
+                driverProfileId,
+                attendantProfileId: route.attendantProfileId || null,
+                tripDate: dateObj,
+                tripType,
+                status: 'SCHEDULED',
+                scheduledStartTime,
+              },
+            })
+
+            if (relevantAssignments.length > 0) {
+              await tx.tripManifestItem.createMany({
+                data: relevantAssignments.map((a) => ({
+                  tripId: trip.id,
+                  studentId: a.studentId,
+                  stopId: tripType === 'MORNING' ? a.pickupStopId : a.dropStopId,
+                  status: 'EXPECTED',
+                })),
+              })
+            }
+
+            return trip
+          })
+          generatedTrips.push(created)
+        }
+      }
+    }
+
+    return { holiday: false, generatedTrips }
+  }
+
+  static async pauseSchedule(ctx: ScopeContext, routeId: string) {
+    const route = await db.transportRoute.findFirst({
+      where: { id: routeId, tenantId: ctx.tenantId, deletedAt: null },
+    })
+    if (!route) throw new Error('Route not found')
+
+    const updated = await db.transportRoute.update({
+      where: { id: routeId },
+      data: { scheduleStatus: 'PAUSED' },
+    })
+
+    await recordAudit({
+      tenantId: ctx.tenantId,
+      branchId: route.branchId || undefined,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: 'PAUSE_ROUTE_SCHEDULE',
+      entity: 'TransportRoute',
+      entityId: routeId,
+      module: 'TRANSPORT',
+      summary: `Recurring schedule for route ${route.name} PAUSED`,
+    })
+
+    return updated
+  }
+
+  static async resumeSchedule(ctx: ScopeContext, routeId: string) {
+    const route = await db.transportRoute.findFirst({
+      where: { id: routeId, tenantId: ctx.tenantId, deletedAt: null },
+    })
+    if (!route) throw new Error('Route not found')
+
+    const updated = await db.transportRoute.update({
+      where: { id: routeId },
+      data: { scheduleStatus: 'ACTIVE' },
+    })
+
+    // Immediately ensure today's trip is generated if operating today
+    await this.ensureDailyTripsForDate(ctx, new Date()).catch(() => {})
+
+    await recordAudit({
+      tenantId: ctx.tenantId,
+      branchId: route.branchId || undefined,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: 'RESUME_ROUTE_SCHEDULE',
+      entity: 'TransportRoute',
+      entityId: routeId,
+      module: 'TRANSPORT',
+      summary: `Recurring schedule for route ${route.name} RESUMED`,
+    })
+
+    return updated
+  }
+
+  static async cancelFutureTrips(ctx: ScopeContext, routeId: string, fromDate: Date = new Date()) {
+    const route = await db.transportRoute.findFirst({
+      where: { id: routeId, tenantId: ctx.tenantId, deletedAt: null },
+    })
+    if (!route) throw new Error('Route not found')
+
+    const dateNorm = new Date(fromDate)
+    dateNorm.setHours(0, 0, 0, 0)
+
+    const result = await db.transportTrip.updateMany({
+      where: {
+        tenantId: ctx.tenantId,
+        routeId,
+        tripDate: { gte: dateNorm },
+        status: 'SCHEDULED',
+      },
+      data: {
+        status: 'CANCELLED',
+        delayReason: 'Admin cancelled future schedule',
+      },
+    })
+
+    await recordAudit({
+      tenantId: ctx.tenantId,
+      branchId: route.branchId || undefined,
+      actorId: ctx.actorId,
+      actorName: ctx.actorName,
+      actorRole: ctx.actorRole,
+      action: 'CANCEL_FUTURE_TRIPS',
+      entity: 'TransportRoute',
+      entityId: routeId,
+      module: 'TRANSPORT',
+      summary: `Cancelled ${result.count} future scheduled trip(s) for route ${route.name}`,
+    })
+
+    return result
+  }
+
+  static async addRouteException(
+    ctx: ScopeContext,
+    routeId: string,
+    input: {
+      exceptionDate: string | Date
+      reason?: string
+      isCancelled?: boolean
+      substituteVehicleId?: string | null
+      substituteDriverProfileId?: string | null
+    }
+  ) {
+    const route = await db.transportRoute.findFirst({
+      where: { id: routeId, tenantId: ctx.tenantId, deletedAt: null },
+    })
+    if (!route) throw new Error('Route not found')
+
+    const dateObj = new Date(input.exceptionDate)
+    dateObj.setHours(0, 0, 0, 0)
+
+    if (input.substituteVehicleId) {
+      const v = await db.vehicle.findFirst({
+        where: { id: input.substituteVehicleId, tenantId: ctx.tenantId, deletedAt: null },
+      })
+      if (!v) throw new Error('Substitute vehicle not found')
+    }
+
+    if (input.substituteDriverProfileId) {
+      await this.validateStaffEligibility(ctx.tenantId, input.substituteDriverProfileId, 'driver')
+    }
+
+    const exception = await db.routeScheduleException.upsert({
+      where: {
+        routeId_exceptionDate: {
+          routeId,
+          exceptionDate: dateObj,
+        },
+      },
+      create: {
+        tenantId: ctx.tenantId,
+        routeId,
+        exceptionDate: dateObj,
+        reason: input.reason?.trim() || null,
+        isCancelled: input.isCancelled ?? true,
+        substituteVehicleId: input.substituteVehicleId || null,
+        substituteDriverProfileId: input.substituteDriverProfileId || null,
+      },
+      update: {
+        reason: input.reason?.trim() || null,
+        isCancelled: input.isCancelled ?? true,
+        substituteVehicleId: input.substituteVehicleId || null,
+        substituteDriverProfileId: input.substituteDriverProfileId || null,
+      },
+    })
+
+    // If cancelled, update any scheduled trip on that date to CANCELLED
+    if (input.isCancelled) {
+      await db.transportTrip.updateMany({
+        where: {
+          tenantId: ctx.tenantId,
+          routeId,
+          tripDate: dateObj,
+          status: 'SCHEDULED',
+        },
+        data: {
+          status: 'CANCELLED',
+          delayReason: input.reason || 'Route exception: Cancelled',
+        },
+      })
+    } else if (input.substituteVehicleId || input.substituteDriverProfileId) {
+      await db.transportTrip.updateMany({
+        where: {
+          tenantId: ctx.tenantId,
+          routeId,
+          tripDate: dateObj,
+          status: 'SCHEDULED',
+        },
+        data: {
+          ...(input.substituteVehicleId ? { vehicleId: input.substituteVehicleId } : {}),
+          ...(input.substituteDriverProfileId ? { driverProfileId: input.substituteDriverProfileId } : {}),
+        },
+      })
+    }
+
+    return exception
+  }
+
+  static async removeRouteException(ctx: ScopeContext, routeId: string, exceptionId: string) {
+    return db.routeScheduleException.deleteMany({
+      where: { id: exceptionId, routeId, tenantId: ctx.tenantId },
+    })
+  }
+
+  static async getRouteScheduleCalendar(
+    ctx: ScopeContext,
+    routeId: string,
+    year: number,
+    month: number
+  ) {
+    const route = await db.transportRoute.findFirst({
+      where: { id: routeId, tenantId: ctx.tenantId, deletedAt: null },
+      include: {
+        vehicle: true,
+        driverProfile: { include: { user: true } },
+        stops: { orderBy: { sequence: 'asc' } },
+        assignments: { where: { status: 'ACTIVE', deletedAt: null } },
+      },
+    })
+    if (!route) throw new Error('Route not found')
+
+    const startDate = new Date(year, month - 1, 1)
+    const endDate = new Date(year, month, 0)
+
+    const [trips, exceptions, holidays] = await Promise.all([
+      db.transportTrip.findMany({
+        where: {
+          tenantId: ctx.tenantId,
+          routeId,
+          tripDate: { gte: startDate, lte: endDate },
+        },
+        include: { manifest: true, vehicle: true, driverProfile: { include: { user: true } } },
+      }),
+      db.routeScheduleException.findMany({
+        where: {
+          tenantId: ctx.tenantId,
+          routeId,
+          exceptionDate: { gte: startDate, lte: endDate },
+        },
+      }),
+      db.calendarEvent.findMany({
+        where: {
+          tenantId: ctx.tenantId,
+          date: { gte: startDate, lte: endDate },
+          type: { in: ['HOLIDAY', 'VACATION'] },
+        },
+      }),
+    ])
+
+    const daysInMonth = endDate.getDate()
+    const days: any[] = []
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const d = new Date(year, month - 1, day)
+      d.setHours(0, 0, 0, 0)
+      const isOperating = this.isRouteOperatingOnDate(route, d)
+      const dayHolidays = holidays.filter((h) => new Date(h.date).setHours(0, 0, 0, 0) === d.getTime())
+      const dayException = exceptions.find((e) => new Date(e.exceptionDate).setHours(0, 0, 0, 0) === d.getTime())
+      const dayTrips = trips.filter((t) => new Date(t.tripDate).setHours(0, 0, 0, 0) === d.getTime())
+
+      days.push({
+        date: d.toISOString().split('T')[0],
+        dayOfWeek: d.getDay(),
+        isOperating,
+        isHoliday: dayHolidays.length > 0,
+        holidayTitle: dayHolidays[0]?.title || null,
+        exception: dayException || null,
+        trips: dayTrips.map((t) => ({
+          id: t.id,
+          type: t.tripType,
+          status: t.status,
+          delayMinutes: t.delayMinutes,
+          vehicleReg: t.vehicle?.registrationNumber,
+          driverName: t.driverProfile?.user?.fullName,
+        })),
+      })
+    }
+
+    return {
+      route: {
+        id: route.id,
+        name: route.name,
+        code: route.code,
+        scheduleType: route.scheduleType,
+        scheduleStatus: route.scheduleStatus,
+        operatingDays: route.operatingDays,
+        startDate: route.startDate,
+        endDate: route.endDate,
+        morningPickupTime: route.morningPickupTime,
+        eveningDropTime: route.eveningDropTime,
+        assignedStudentsCount: route.assignments.length,
+      },
+      year,
+      month,
+      days,
+    }
+  }
+
 }
 

@@ -9,6 +9,12 @@ export default async function HomePage() {
   const session = await getSession()
   if (!session?.tenantId) redirect('/')
 
+  const effectiveRoles = (session.roles && session.roles.length > 0 ? session.roles : [session.role]).filter(Boolean) as string[]
+  const isDriverOnly = effectiveRoles.some((r) => ['DRIVER', 'ATTENDANT'].includes(r)) && !effectiveRoles.some((r) => ['OWNER', 'PRINCIPAL', 'SUPER_ADMIN', 'PLATFORM_ADMIN', 'TEACHER', 'COORDINATOR'].includes(r))
+  if (isDriverOnly) {
+    redirect('/app/driver')
+  }
+
   const branding = await getEffectiveBranding(session.tenantId, session.branchId)
   const tenantName = branding.schoolName || 'PreOne'
   const campusName = branding.campusName || null
